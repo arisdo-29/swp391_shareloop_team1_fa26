@@ -41,6 +41,11 @@ public enum RequestErrorCode implements ErrorCode {
     REQUEST_FORBIDDEN(HttpStatus.FORBIDDEN, "Bạn không có quyền thao tác trên yêu cầu này."),
     REQUEST_REPUTATION_BLOCKED(HttpStatus.FORBIDDEN, "Tài khoản có 0 sao uy tín, không thể gửi yêu cầu giao dịch."),
     REQUEST_ADMIN_BLOCKED(HttpStatus.FORBIDDEN, "Quản trị viên không được gửi yêu cầu giao dịch."),
+    REQUEST_BEFORE_MEETING_TIME(
+            HttpStatus.CONFLICT, "Chưa tới giờ hẹn. Bạn có thể đề nghị dời lịch hoặc đề nghị huỷ giao dịch."),
+    REQUEST_CANCEL_REQUEST_PENDING(HttpStatus.CONFLICT, "Đã có một đề nghị huỷ đang chờ phản hồi."),
+    REQUEST_CANCEL_REQUEST_NOT_FOUND(HttpStatus.CONFLICT, "Không có đề nghị huỷ nào đang chờ phản hồi."),
+    REQUEST_CANCEL_REASON_INVALID(HttpStatus.BAD_REQUEST, "Lý do huỷ không hợp lệ ở thời điểm này."),
     REQUEST_OFFER_CHANGE_NOT_ALLOWED(
             HttpStatus.CONFLICT,
             "Chỉ giao dịch Cho đang chờ chốt lịch mới được chuyển sang Trao đổi bằng món đề nghị.");

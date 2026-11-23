@@ -93,6 +93,20 @@ public class Request extends BaseEntity {
     @Column(name = "cancel_reason", length = CANCEL_REASON_MAX_LENGTH)
     private String cancelReason;
 
+    // Đề nghị huỷ giao dịch đã chốt lịch đang chờ bên kia phản hồi (GN-06). Null khi không có đề nghị nào.
+    @Column(name = "cancel_requested_by")
+    private Long cancelRequestedBy;
+
+    @Column(name = "cancel_requested_at")
+    private Instant cancelRequestedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cancel_request_code", length = 30)
+    private CancelRequestCode cancelRequestCode;
+
+    @Column(name = "cancel_request_reason", length = 500)
+    private String cancelRequestReason;
+
     protected Request() {}
 
     public Request(Long itemId, Long receiverId, Long offeredItemId, String type) {
@@ -120,6 +134,13 @@ public class Request extends BaseEntity {
      * Huỷ yêu cầu khi còn PENDING (YC-05).
      */
     public void cancel(String reason) {
+        // Huỷ vì lý do khác thì đề nghị huỷ còn dang dở không còn ý nghĩa (chỉ giữ lại khi huỷ vì chính đề nghị đó)
+        clearCancelRequest();
+        cancelKeepingCancelRequest(reason);
+    }
+
+    // Đường ghi cancel_reason duy nhất: dùng riêng khi huỷ vì đề nghị huỷ để giữ lại dấu vết cho màn Giám sát
+    private void cancelKeepingCancelRequest(String reason) {
         transitionTo(RequestStatus.CANCELLED);
         this.cancelReason = fitCancelReason(reason);
     }
@@ -359,6 +380,103 @@ public class Request extends BaseEntity {
         transitionTo(RequestStatus.DISPUTED);
     }
 
+    // ===== Đề nghị huỷ có xác nhận của bên kia (GN-06) =====
+
+    /** GN-06: có đề nghị huỷ đang chờ bên kia phản hồi (chỉ tính khi giao dịch còn đang chờ giao nhận). */
+    public boolean hasPendingCancelRequest() {
+        return this.cancelRequestedAt != null && isHandoverOpen();
+    }
+
+    /** GN-06: chưa tới giờ hẹn thì chỉ được "Đề nghị huỷ", từ giờ hẹn trở đi mới có "Giao nhận không thành công". */
+    public boolean isBeforeMeetingTime(Instant now) {
+        return this.meetingTime != null && now.isBefore(this.meetingTime);
+    }
+
+    /**
+     * GN-06: một bên đề nghị huỷ. Giao dịch chưa huỷ, chỉ lưu đề nghị để bên kia phản hồi.
+     *
+     * @throws BusinessException REQUEST_INVALID_STATE_TRANSITION khi sai trạng thái hoặc một bên đã bấm hoàn tất
+     *     (khi đó phải đi đường khiếu nại), REQUEST_CANCEL_REQUEST_PENDING khi đã có đề nghị đang chờ
+     */
+    public void requestCancel(Long requesterId, boolean isDonor, CancelRequestCode code, String reason, Instant now) {
+        if (!isHandoverOpen() || hasConfirmedHandover(isDonor) || hasOtherPartyConfirmedHandover(isDonor)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+        if (hasPendingCancelRequest()) {
+            throw new BusinessException(RequestErrorCode.REQUEST_CANCEL_REQUEST_PENDING);
+        }
+        this.cancelRequestedBy = requesterId;
+        this.cancelRequestedAt = now;
+        this.cancelRequestCode = code;
+        this.cancelRequestReason = reason;
+    }
+
+    /** GN-06: người đề nghị rút lại trước khi bên kia phản hồi. */
+    public void withdrawCancelRequest(Long userId) {
+        requirePendingCancelRequest();
+        if (!userId.equals(this.cancelRequestedBy)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+        clearCancelRequest();
+    }
+
+    /**
+     * GN-06: bên kia đồng ý, giao dịch huỷ như luật cũ (không phạt). Giữ lại dấu vết đề nghị để Admin đếm số lần huỷ.
+     *
+     * @param accepterIsDonor true nếu người đồng ý là chủ bài
+     */
+    public void acceptCancelRequest(Long accepterId, boolean accepterIsDonor) {
+        requirePendingCancelRequest();
+        if (accepterId.equals(this.cancelRequestedBy)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+        // Người đề nghị là bên còn lại nên tiền tố ghi theo người đề nghị
+        String prefix = accepterIsDonor ? CANCEL_BY_RECEIVER : CANCEL_BY_DONOR;
+        cancelKeepingCancelRequest(prefix + "Bên kia đồng ý huỷ. " + cancelRequestSummary());
+    }
+
+    /** GN-06: bên kia im lặng quá hạn phản hồi thì huỷ như "Đồng ý". Hệ thống là bên huỷ. */
+    public void expireCancelRequest(String silenceSentence) {
+        requirePendingCancelRequest();
+        cancelKeepingCancelRequest(CANCEL_BY_SYSTEM + silenceSentence + " " + cancelRequestSummary());
+    }
+
+    /**
+     * GN-06: bên kia không đồng ý nên giao dịch sang DISPUTED để Admin xử lý. Đây là đường duy nhất được đi cạnh
+     * LOGISTICS_CONFIRMED sang DISPUTED (xem RequestStatus.canTransition).
+     */
+    public void rejectCancelRequest(Long rejecterId) {
+        requirePendingCancelRequest();
+        if (rejecterId.equals(this.cancelRequestedBy)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+        transitionTo(RequestStatus.DISPUTED);
+    }
+
+    /** Câu mô tả lý do đề nghị để ghép vào lý do huỷ và thông báo, ví dụ "bạn không đến điểm hẹn". */
+    public String cancelRequestSummary() {
+        if (this.cancelRequestCode == null) {
+            return "";
+        }
+        return "Lý do: " + this.cancelRequestCode.label()
+                + (this.cancelRequestReason == null || this.cancelRequestReason.isBlank()
+                        ? ""
+                        : ". " + this.cancelRequestReason);
+    }
+
+    private void requirePendingCancelRequest() {
+        if (!hasPendingCancelRequest()) {
+            throw new BusinessException(RequestErrorCode.REQUEST_CANCEL_REQUEST_NOT_FOUND);
+        }
+    }
+
+    private void clearCancelRequest() {
+        this.cancelRequestedBy = null;
+        this.cancelRequestedAt = null;
+        this.cancelRequestCode = null;
+        this.cancelRequestReason = null;
+    }
+
     /**
      * Admin bác bỏ khiếu nại: giao dịch DISPUTED được công nhận hoàn tất như bình thường.
      *
@@ -457,5 +575,21 @@ public class Request extends BaseEntity {
 
     public String getCancelReason() {
         return cancelReason;
+    }
+
+    public Long getCancelRequestedBy() {
+        return cancelRequestedBy;
+    }
+
+    public Instant getCancelRequestedAt() {
+        return cancelRequestedAt;
+    }
+
+    public CancelRequestCode getCancelRequestCode() {
+        return cancelRequestCode;
+    }
+
+    public String getCancelRequestReason() {
+        return cancelRequestReason;
     }
 }

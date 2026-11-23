@@ -14,6 +14,14 @@ export interface RequestDispute {
   canRespond: boolean;
 }
 
+export type CancelRequestCode =
+  | 'BUSY'
+  | 'NO_LONGER_NEEDED'
+  | 'OTHER'
+  | 'COUNTERPART_NO_SHOW'
+  | 'COUNTERPART_NOT_SHIPPED'
+  | 'CANNOT_CONTACT';
+
 // Theo docs/api/request.md
 export interface RequestResponse {
   id: number;
@@ -69,6 +77,14 @@ export interface RequestResponse {
   conversionFee?: number | null;
   // Cờ cảnh báo backend tính cho chủ bài: OFFERED_ITEM_BUSY, RECEIVER_TOO_BUSY, ITEM_UNDER_REVIEW.
   flags?: string[] | null;
+  // Đề nghị huỷ đang chờ bên kia phản hồi (GN-06). Mọi trường null khi không có đề nghị nào.
+  cancelRequestedBy?: number | null;
+  cancelRequestedAt?: string | null;
+  cancelRequestCode?: CancelRequestCode | null;
+  cancelRequestLabel?: string | null;
+  cancelRequestReason?: string | null;
+  // Mốc hạn do backend tính, FE chỉ hiện.
+  cancelRequestExpiresAt?: string | null;
 }
 
 export interface CreateRequestBody {
@@ -92,7 +108,20 @@ export interface HandoverConfirmRequestBody {
 
 // Dùng chung cho "Giao nhận không thành công" (5 đến 500 ký tự) và "Từ chối giao nhận" (5 đến 1000 ký tự).
 export interface HandoverOutcomeBody {
-  reason: string;
+  // Mã lý do chọn trong danh sách (chỉ dùng cho Giao nhận không thành công); bỏ trống thì backend coi là OTHER.
+  code?: CancelRequestCode;
+  reason?: string;
+  evidenceMediaIds?: number[];
+}
+
+export interface CancelRequestBody {
+  code: CancelRequestCode;
+  // Bắt buộc từ 5 ký tự khi code là OTHER.
+  reason?: string;
+}
+
+export interface RejectCancelRequestBody {
+  explanation: string;
   evidenceMediaIds?: number[];
 }
 
@@ -259,6 +288,35 @@ export const requestApi = {
       body,
       { params: { currentUserId } },
     );
+    return data;
+  },
+  // Đề nghị huỷ trước giờ hẹn. Giao dịch chưa huỷ cho tới khi bên kia phản hồi (docs/api/request.md).
+  async requestCancel(id: number, currentUserId: number, body: CancelRequestBody) {
+    const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/cancel-request`, body, {
+      params: { currentUserId },
+    });
+    return data;
+  },
+  async acceptCancelRequest(id: number, currentUserId: number) {
+    const { data } = await http.post<RequestResponse>(
+      `/api/v1/requests/${id}/cancel-request/accept`,
+      {},
+      { params: { currentUserId } },
+    );
+    return data;
+  },
+  async rejectCancelRequest(id: number, currentUserId: number, body: RejectCancelRequestBody) {
+    const { data } = await http.post<RequestResponse>(
+      `/api/v1/requests/${id}/cancel-request/reject`,
+      body,
+      { params: { currentUserId } },
+    );
+    return data;
+  },
+  async withdrawCancelRequest(id: number, currentUserId: number) {
+    const { data } = await http.delete<RequestResponse>(`/api/v1/requests/${id}/cancel-request`, {
+      params: { currentUserId },
+    });
     return data;
   },
   async getContact(id: number, currentUserId: number) {

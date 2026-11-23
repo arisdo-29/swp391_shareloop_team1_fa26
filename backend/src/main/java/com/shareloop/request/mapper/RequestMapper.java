@@ -1,7 +1,9 @@
 package com.shareloop.request.mapper;
 
+import com.shareloop.request.dto.CancelRequestInfo;
 import com.shareloop.request.dto.RequestItemInfo;
 import com.shareloop.request.dto.RequestResponse;
+import com.shareloop.request.entity.CancelRequestCode;
 import com.shareloop.request.entity.Request;
 
 /**
@@ -114,6 +116,26 @@ public final class RequestMapper {
                 // Khiếu nại theo vai và báo cáo từ chối nhận cần biết người xem nên RequestService gắn sau bằng
                 // withReports.
                 null,
+                null,
+                // Cờ do RequestService gắn sau; đề nghị huỷ đang chờ lấy thẳng từ giao dịch (GN-06).
+                null,
+                toCancelRequestInfo(request),
+                null,
+                null,
                 null);
+    }
+
+    // Đề nghị huỷ đang chờ bên kia phản hồi; mọi trường null khi không có.
+    private static CancelRequestInfo toCancelRequestInfo(Request request) {
+        if (!request.hasPendingCancelRequest()) {
+            return CancelRequestInfo.EMPTY;
+        }
+        CancelRequestCode code = request.getCancelRequestCode();
+        return new CancelRequestInfo(
+                request.getCancelRequestedBy(),
+                request.getCancelRequestedAt(),
+                code == null ? null : code.name(),
+                code == null ? null : code.label(),
+                request.getCancelRequestReason());
     }
 }

@@ -18,6 +18,46 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
     @Query("SELECT r FROM Request r WHERE r.id = :id")
     Optional<Request> findByIdForScheduleUpdate(@Param("id") long id);
 
+    /** Khoá dòng khi đổi trạng thái giao dịch đã chốt lịch (đề nghị huỷ, dời lịch, gửi hàng, nhận hàng, job). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM Request r WHERE r.id = :id")
+    Optional<Request> findByIdForUpdate(@Param("id") long id);
+
+    /**
+     * Đề nghị huỷ đã quá hạn phản hồi (GN-06). Phân trang kiểu keyset theo id như các việc nền khác.
+     */
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.cancelRequestedAt IS NOT NULL
+        AND r.cancelRequestedAt < :cutoff
+        AND r.status IN (com.shareloop.request.entity.RequestStatus.LOGISTICS_CONFIRMED,
+                         com.shareloop.request.entity.RequestStatus.AWAITING_HANDOVER)
+        AND r.id > :afterId
+        ORDER BY r.id ASC
+    """)
+    List<Request> findExpiredCancelRequests(
+            @Param("cutoff") Instant cutoff,
+            @Param("afterId") long afterId,
+            org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Người đề nghị huỷ từ threshold giao dịch trở lên (đã huỷ vì chính đề nghị đó, đã thấy liên hệ) kể từ since.
+     */
+    @Query("""
+        SELECT new com.shareloop.request.dto.RepeatedCancelerRow(
+            r.cancelRequestedBy, COUNT(r), MAX(r.cancelRequestedAt))
+        FROM Request r
+        WHERE r.status = com.shareloop.request.entity.RequestStatus.CANCELLED
+        AND r.cancelRequestedBy IS NOT NULL
+        AND r.contactRevealedAt IS NOT NULL
+        AND r.cancelRequestedAt >= :since
+        GROUP BY r.cancelRequestedBy
+        HAVING COUNT(r) >= :threshold
+        ORDER BY COUNT(r) DESC
+    """)
+    List<com.shareloop.request.dto.RepeatedCancelerRow> findRepeatedCancelers(
+            @Param("since") Instant since, @Param("threshold") long threshold);
+
     /**
      * Đếm số lượng yêu cầu đang ở trạng thái PENDING của một người (YC-03: tối đa 5).
      */

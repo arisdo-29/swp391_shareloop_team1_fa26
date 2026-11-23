@@ -1,0 +1,366 @@
+package com.shareloop.request;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.shareloop.auth.service.JwtService;
+import com.shareloop.request.dto.RepeatedCancelerRow;
+import com.shareloop.request.dto.ScheduleRequest;
+import com.shareloop.request.service.RequestDeadlineJobService;
+import com.shareloop.request.service.RequestQueryService;
+import com.shareloop.support.IntegrationTest;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import tools.jackson.databind.ObjectMapper;
+
+/**
+ * Đề nghị huỷ có xác nhận (GN-06) chạy thật trên PostgreSQL: các nhánh đồng ý, không đồng ý, im lặng, hai thao tác
+ * đồng thời và câu đếm huỷ nhiều lần cho màn Giám sát bất thường.
+ */
+@AutoConfigureMockMvc
+class RequestCancelRequestIT extends IntegrationTest {
+    private static final AtomicInteger SEQ = new AtomicInteger();
+
+    @Autowired
+    MockMvc mockMvc;
+
+    @Autowired
+    JwtService jwtService;
+
+    @Autowired
+    JdbcTemplate jdbc;
+
+    @Autowired
+    ObjectMapper objectMapper;
+
+    @Autowired
+    RequestDeadlineJobService deadlineJobService;
+
+    @Autowired
+    RequestQueryService requestQueryService;
+
+    private final List<Long> requestIds = new ArrayList<>();
+    private final List<Long> itemIds = new ArrayList<>();
+    private final List<Long> userIds = new ArrayList<>();
+
+    @AfterEach
+    void cleanUp() {
+        for (Long requestId : requestIds) {
+            jdbc.update("DELETE FROM reports WHERE request_id = ?", requestId);
+            jdbc.update("DELETE FROM request_media_mappings WHERE request_id = ?", requestId);
+            jdbc.update("DELETE FROM messages WHERE request_id = ?", requestId);
+            jdbc.update("DELETE FROM requests WHERE id = ?", requestId);
+        }
+        for (Long itemId : itemIds) {
+            jdbc.update("DELETE FROM items WHERE id = ?", itemId);
+        }
+        for (Long userId : userIds) {
+            jdbc.update("DELETE FROM notifications WHERE user_id = ?", userId);
+            jdbc.update("DELETE FROM activity_logs WHERE actor_id = ?", userId);
+            jdbc.update("DELETE FROM users WHERE id = ?", userId);
+        }
+        requestIds.clear();
+        itemIds.clear();
+        userIds.clear();
+    }
+
+    @Test
+    void acceptCancelRequest_whenDonorRequestedBeforeMeeting_cancelsAndReopensItem() throws Exception {
+        // given
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId);
+        long requestId = createLogisticsConfirmedRequest(itemId, donorId, receiverId, 24);
+        mockMvc.perform(post("/api/v1/requests/{id}/cancel-request", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"BUSY\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("LOGISTICS_CONFIRMED"));
+
+        // when
+        mockMvc.perform(post("/api/v1/requests/{id}/cancel-request/accept", requestId)
+                        .header("Authorization", token(receiverId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+
+        // then
+        assertThat(statusOf(requestId)).isEqualTo("CANCELLED");
+        assertThat(itemStatusOf(itemId)).isEqualTo("APPROVED");
+        assertThat(trustStarsOf(donorId)).isEqualTo(trustStarsOf(receiverId));
+    }
+
+    @Test
+    void rejectCancelRequest_whenReceiverDisagrees_movesToDisputedAndOpensReport() throws Exception {
+        // given
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId);
+        long requestId = createLogisticsConfirmedRequest(itemId, donorId, receiverId, 24);
+        mockMvc.perform(post("/api/v1/requests/{id}/cancel-request", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"NO_LONGER_NEEDED\"}"))
+                .andExpect(status().isOk());
+
+        // when
+        mockMvc.perform(post("/api/v1/requests/{id}/cancel-request/reject", requestId)
+                        .header("Authorization", token(receiverId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"explanation\":\"Tôi vẫn muốn nhận món đồ này\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DISPUTED"));
+
+        // then
+        assertThat(statusOf(requestId)).isEqualTo("DISPUTED");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM reports WHERE request_id = ?", Integer.class, requestId))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT description FROM reports WHERE request_id = ?", String.class, requestId))
+                .contains("Tôi vẫn muốn nhận món đồ này");
+    }
+
+    @Test
+    void withdrawCancelRequest_whenRequesterWithdraws_keepsTransactionRunning() throws Exception {
+        // given
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId);
+        long requestId = createLogisticsConfirmedRequest(itemId, donorId, receiverId, 24);
+        mockMvc.perform(post("/api/v1/requests/{id}/cancel-request", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"BUSY\"}"))
+                .andExpect(status().isOk());
+
+        // when
+        mockMvc.perform(delete("/api/v1/requests/{id}/cancel-request", requestId)
+                        .header("Authorization", token(donorId)))
+                .andExpect(status().isOk());
+
+        // then
+        assertThat(statusOf(requestId)).isEqualTo("LOGISTICS_CONFIRMED");
+        assertThat(jdbc.queryForObject("SELECT cancel_requested_by FROM requests WHERE id = ?", Long.class, requestId))
+                .isNull();
+    }
+
+    @Test
+    void expireCancelRequests_whenSilentPastDeadlineWithNoShowReason_cancelsAndOpensNoShowReport() throws Exception {
+        // given: giờ hẹn đã qua, người nhận báo người cho không đến điểm hẹn rồi bên kia im lặng
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId);
+        long requestId = createLogisticsConfirmedRequest(itemId, donorId, receiverId, 24);
+        jdbc.update("UPDATE requests SET meeting_time = now() - interval '2 hours' WHERE id = ?", requestId);
+        mockMvc.perform(post("/api/v1/requests/{id}/handover-failed", requestId)
+                        .header("Authorization", token(receiverId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"COUNTERPART_NO_SHOW\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("LOGISTICS_CONFIRMED"));
+        jdbc.update("UPDATE requests SET cancel_requested_at = now() - interval '25 hours' WHERE id = ?", requestId);
+
+        // when
+        int expired = deadlineJobService.expireCancelRequests(Instant.now());
+
+        // then
+        assertThat(expired).isGreaterThanOrEqualTo(1);
+        assertThat(statusOf(requestId)).isEqualTo("CANCELLED");
+        assertThat(itemStatusOf(itemId)).isEqualTo("APPROVED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT reason FROM reports WHERE request_id = ? AND target_user_id = ?",
+                        String.class,
+                        requestId,
+                        donorId))
+                .isEqualTo("NO_SHOW");
+        assertThat(trustStarsOf(donorId)).isEqualTo(trustStarsOf(receiverId));
+    }
+
+    @Test
+    void acceptAndConfirmHandover_whenRunAtTheSameTime_endInOneConsistentState() throws Exception {
+        // given: người cho đề nghị huỷ, người nhận vừa bấm đồng ý vừa bấm đã giao nhận xong cùng lúc
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId);
+        long requestId = createLogisticsConfirmedRequest(itemId, donorId, receiverId, 24);
+        mockMvc.perform(post("/api/v1/requests/{id}/cancel-request", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"BUSY\"}"))
+                .andExpect(status().isOk());
+
+        // when
+        List<Integer> statuses = runAtTheSameTime(
+                () -> mockMvc.perform(post("/api/v1/requests/{id}/cancel-request/accept", requestId)
+                                .header("Authorization", token(receiverId)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus(),
+                () -> mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
+                                .header("Authorization", token(receiverId)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus());
+
+        // then: đúng một thao tác thắng, thao tác còn lại bị 409
+        assertThat(statuses).containsExactlyInAnyOrder(200, 409);
+        String finalStatus = statusOf(requestId);
+        assertThat(finalStatus).isIn("CANCELLED", "DISPUTED");
+        assertThat(itemStatusOf(itemId)).isEqualTo("CANCELLED".equals(finalStatus) ? "APPROVED" : "RESERVED");
+    }
+
+    @Test
+    void findRepeatedCancelers_whenUserCancelledThreeAfterSeeingContact_returnsThatUser() {
+        // given
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        for (int index = 0; index < 3; index++) {
+            long itemId = insertItem(donorId);
+            insertCancelledRequest(itemId, receiverId, donorId, true);
+        }
+        // giao dịch huỷ khi chưa thấy liên hệ thì không tính
+        insertCancelledRequest(insertItem(donorId), receiverId, donorId, false);
+
+        // when
+        List<RepeatedCancelerRow> rows =
+                requestQueryService.findRepeatedCancelers(Instant.now().minus(30, ChronoUnit.DAYS), 3);
+
+        // then
+        assertThat(rows).extracting(RepeatedCancelerRow::userId).contains(donorId);
+        assertThat(rows.stream()
+                        .filter(row -> row.userId().equals(donorId))
+                        .findFirst()
+                        .orElseThrow()
+                        .cancelCount())
+                .isEqualTo(3);
+    }
+
+    @SafeVarargs
+    private List<Integer> runAtTheSameTime(Callable<Integer>... actions) throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(actions.length);
+        CountDownLatch ready = new CountDownLatch(actions.length);
+        CountDownLatch go = new CountDownLatch(1);
+        List<Future<Integer>> futures = new ArrayList<>();
+        for (Callable<Integer> action : actions) {
+            futures.add(executor.submit(() -> {
+                ready.countDown();
+                go.await();
+                return action.call();
+            }));
+        }
+        ready.await();
+        go.countDown();
+        List<Integer> results = new ArrayList<>();
+        for (Future<Integer> future : futures) {
+            results.add(future.get());
+        }
+        executor.shutdown();
+        return results;
+    }
+
+    /** Đi qua API: gửi yêu cầu, chọn người, chốt lịch. Giờ hẹn cách bây giờ meetingHoursAhead giờ. */
+    private long createLogisticsConfirmedRequest(long itemId, long donorId, long receiverId, int meetingHoursAhead)
+            throws Exception {
+        MvcResult created = mockMvc.perform(
+                        post("/api/v1/items/{itemId}/requests", itemId).header("Authorization", token(receiverId)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        long requestId = objectMapper
+                .readTree(created.getResponse().getContentAsString())
+                .get("id")
+                .asLong();
+        requestIds.add(requestId);
+        mockMvc.perform(post("/api/v1/requests/{id}/select", requestId).header("Authorization", token(donorId)))
+                .andExpect(status().isOk());
+        Instant meetingTime =
+                Instant.now().plus(meetingHoursAhead, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS);
+        mockMvc.perform(post("/api/v1/requests/{id}/schedule", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new ScheduleRequest("IN_PERSON", "FPT Park", meetingTime, true))))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
+                        .header("Authorization", token(receiverId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"agreeToWaiver\":true}"))
+                .andExpect(status().isOk());
+        return requestId;
+    }
+
+    private void insertCancelledRequest(long itemId, long receiverId, long requesterId, boolean contactRevealed) {
+        Long requestId = jdbc.queryForObject(
+                "INSERT INTO requests (item_id, receiver_id, type, status, contact_revealed_at, cancel_requested_by,"
+                        + " cancel_requested_at, cancel_request_code)"
+                        + " VALUES (?, ?, 'GIVE', 'CANCELLED', ?, ?, now(), 'BUSY') RETURNING id",
+                Long.class,
+                itemId,
+                receiverId,
+                contactRevealed ? java.sql.Timestamp.from(Instant.now()) : null,
+                requesterId);
+        requestIds.add(requestId);
+    }
+
+    private String statusOf(long requestId) {
+        return jdbc.queryForObject("SELECT status FROM requests WHERE id = ?", String.class, requestId);
+    }
+
+    private String itemStatusOf(long itemId) {
+        return jdbc.queryForObject("SELECT status FROM items WHERE id = ?", String.class, itemId);
+    }
+
+    private int trustStarsOf(long userId) {
+        return jdbc.queryForObject("SELECT trust_stars FROM users WHERE id = ?", Integer.class, userId);
+    }
+
+    private String token(long userId) {
+        return "Bearer " + jwtService.issue(userId, false);
+    }
+
+    private long insertUser(String name) {
+        int seq = SEQ.incrementAndGet();
+        Long userId = jdbc.queryForObject(
+                "INSERT INTO users (email, password_hash, full_name, phone, status, credit_balance, held_credit)"
+                        + " VALUES (?, 'hash', ?, ?, 'ACTIVE', 20, 0) RETURNING id",
+                Long.class,
+                "cancel-request-" + seq + "-" + System.nanoTime() + "@test.local",
+                name,
+                String.format("0996%06d", seq));
+        userIds.add(userId);
+        return userId;
+    }
+
+    private long insertItem(long donorId) {
+        long categoryId = jdbc.queryForObject("SELECT id FROM item_categories ORDER BY id LIMIT 1", Long.class);
+        long areaId = jdbc.queryForObject("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1", Long.class);
+        Long itemId = jdbc.queryForObject(
+                "INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, condition, status,"
+                        + " fee_state, pending_fee, pending_fee_type)"
+                        + " VALUES (?, ?, ?, 'GIVE', 'Máy cũ', 'Mô tả', 'GOOD', 'APPROVED', 'CHARGED', 0, NULL)"
+                        + " RETURNING id",
+                Long.class,
+                donorId,
+                categoryId,
+                areaId);
+        itemIds.add(itemId);
+        return itemId;
+    }
+}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Avatar, Button, ItemImage, StatusBadge, TypeBadge } from '../ui';
 import { ReputationBadge } from '../ReputationBadge';
-import { requestStatusLabel } from '../../utils/request';
+import { formatDeadline, requestStatusLabel } from '../../utils/request';
 import { transactionProgressPath, userProfilePath } from '../../utils/chatMessages';
 import { conditionLabel } from '../../utils/formatting';
 import { productDetailFromRequestPath } from '../../utils/productDetailNavigation';
@@ -246,6 +246,12 @@ export function ChatHeader({
         >
           Xem tiến trình
         </Button>
+        {request.cancelRequestedAt ? (
+          <p className="w-full text-xs font-semibold text-warning">
+            Đang có đề nghị huỷ chờ phản hồi
+            {request.cancelRequestExpiresAt ? `, hạn ${formatDeadline(request.cancelRequestExpiresAt)}` : ''}.
+          </p>
+        ) : null}
       </div>
     </div>
   );

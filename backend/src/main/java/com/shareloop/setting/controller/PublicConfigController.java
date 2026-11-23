@@ -32,6 +32,7 @@ public class PublicConfigController {
             ConfigKey.AUTO_CONFIRM_DAYS_SHIPPING,
             ConfigKey.COMPLAINT_WINDOW_HOURS,
             ConfigKey.RESPONSE_WINDOW_HOURS,
+            ConfigKey.CANCEL_REQUEST_RESPONSE_HOURS,
             ConfigKey.REPORT_HIDE_THRESHOLD,
             ConfigKey.REPUTATION_CLEAN_STREAK_FOR_STAR,
             ConfigKey.STAR_RESTORE_MIN_DISTINCT_PARTNERS,

@@ -1,6 +1,7 @@
 package com.shareloop.request.controller;
 
 import com.shareloop.common.security.CurrentUserId;
+import com.shareloop.request.dto.CancelRequestRequest;
 import com.shareloop.request.dto.CancelTransactionRequest;
 import com.shareloop.request.dto.ChangeOfferedItemRequest;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
@@ -8,6 +9,7 @@ import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.HandoverConfirmRequest;
 import com.shareloop.request.dto.HandoverFailedRequest;
 import com.shareloop.request.dto.RefuseHandoverRequest;
+import com.shareloop.request.dto.RejectCancelRequest;
 import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.dto.ScheduleRequest;
@@ -17,6 +19,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -181,6 +184,40 @@ public class RequestController {
             @CurrentUserId Long currentUserId,
             @Valid @RequestBody HandoverFailedRequest request) {
         return requestService.handoverFailed(id, currentUserId, request);
+    }
+
+    /**
+     * Đề nghị huỷ giao dịch đã chốt lịch trước giờ hẹn; giao dịch chưa huỷ cho tới khi bên kia phản hồi (GN-06).
+     */
+    @Operation(summary = "Đề nghị huỷ giao dịch trước giờ hẹn")
+    @PostMapping("/api/v1/requests/{id}/cancel-request")
+    public RequestResponse requestCancel(
+            @PathVariable long id,
+            @CurrentUserId Long currentUserId,
+            @Valid @RequestBody CancelRequestRequest request) {
+        return requestService.requestCancel(id, currentUserId, request);
+    }
+
+    /** Bên kia đồng ý đề nghị huỷ: giao dịch huỷ, không phạt ai (GN-06). */
+    @Operation(summary = "Đồng ý đề nghị huỷ")
+    @PostMapping("/api/v1/requests/{id}/cancel-request/accept")
+    public RequestResponse acceptCancelRequest(@PathVariable long id, @CurrentUserId Long currentUserId) {
+        return requestService.acceptCancelRequest(id, currentUserId);
+    }
+
+    /** Bên kia không đồng ý đề nghị huỷ: giao dịch sang sự cố giao nhận, giải trình bắt buộc (GN-06). */
+    @Operation(summary = "Không đồng ý đề nghị huỷ")
+    @PostMapping("/api/v1/requests/{id}/cancel-request/reject")
+    public RequestResponse rejectCancelRequest(
+            @PathVariable long id, @CurrentUserId Long currentUserId, @Valid @RequestBody RejectCancelRequest request) {
+        return requestService.rejectCancelRequest(id, currentUserId, request);
+    }
+
+    /** Người đề nghị rút lại đề nghị huỷ trước khi bên kia phản hồi (GN-06). */
+    @Operation(summary = "Rút lại đề nghị huỷ")
+    @DeleteMapping("/api/v1/requests/{id}/cancel-request")
+    public RequestResponse withdrawCancelRequest(@PathVariable long id, @CurrentUserId Long currentUserId) {
+        return requestService.withdrawCancelRequest(id, currentUserId);
     }
 
     /**

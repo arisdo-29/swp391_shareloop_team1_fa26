@@ -4,6 +4,7 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.AdminRequestCore;
 import com.shareloop.request.dto.ItemRequestBrief;
+import com.shareloop.request.dto.RepeatedCancelerRow;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.repository.RequestRepository;
@@ -23,6 +24,15 @@ public class RequestQueryService {
 
     public RequestQueryService(RequestRepository repository) {
         this.repository = repository;
+    }
+
+    /**
+     * Người đề nghị huỷ từ threshold giao dịch trở lên sau khi đã thấy liên hệ, kể từ since (GN-06), cho màn Giám sát
+     * bất thường của Admin. Chỉ tính giao dịch đã huỷ vì chính đề nghị đó.
+     */
+    @Transactional(readOnly = true)
+    public List<RepeatedCancelerRow> findRepeatedCancelers(Instant since, int threshold) {
+        return repository.findRepeatedCancelers(since, threshold);
     }
 
     @Transactional(readOnly = true)

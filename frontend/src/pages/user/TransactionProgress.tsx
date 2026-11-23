@@ -12,10 +12,12 @@ import { HandoverMediaCard } from '../../components/transaction/HandoverMediaCar
 import { ItemSideCard, PartnerCard } from '../../components/transaction/SideCards';
 import { PendingCard } from '../../components/transaction/PendingCard';
 import {
+  CancelRequestDialog,
   CancelTransactionDialog,
   DisputeDialog,
   HandoverFailedDialog,
   RefuseHandoverDialog,
+  RejectCancelRequestDialog,
 } from '../../components/transaction/TransactionDialogs';
 import {
   conversationImage,
@@ -40,7 +42,15 @@ import { requestConversationPath } from '../../utils/chatMessages';
 import { useTransactionDetail } from './useTransactionDetail';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
-type OpenDialog = 'cancel' | 'failed' | 'refuse' | 'dispute' | 'report' | null;
+type OpenDialog =
+  | 'cancel'
+  | 'failed'
+  | 'refuse'
+  | 'cancelRequest'
+  | 'rejectCancel'
+  | 'dispute'
+  | 'report'
+  | null;
 
 /** Trang Tiến trình giao dịch (route /messages/:conversationId/progress, conversationId là id Request). */
 export function TransactionProgress() {
@@ -193,6 +203,8 @@ function TransactionProgressView({
             onUpdated={applyUpdate}
             onOpenFailed={() => setOpenDialog('failed')}
             onOpenRefuse={() => setOpenDialog('refuse')}
+            onOpenCancelRequest={() => setOpenDialog('cancelRequest')}
+            onOpenRejectCancel={() => setOpenDialog('rejectCancel')}
           />
           <HandoverMediaCard request={request} />
           {canCancelTransaction(request.status) ? (
@@ -249,10 +261,38 @@ function TransactionProgressView({
           onDone={(updated) =>
             finishAction(
               updated,
-              updated.status === 'CANCELLED'
-                ? 'Đã hủy giao dịch. Bài đăng được mở lại cho người khác.'
-                : 'Đã báo sự cố giao nhận. Admin sẽ xác minh.',
+              updated.status === 'DISPUTED'
+                ? 'Đã báo sự cố giao nhận. Admin sẽ xác minh.'
+                : `Đã gửi đề nghị huỷ. Đang chờ ${partnerName} phản hồi.`,
             )
+          }
+        />
+      ) : null}
+      {openDialog === 'cancelRequest' ? (
+        <CancelRequestDialog
+          request={request}
+          currentUserId={currentUserId}
+          itemTitle={title}
+          partnerName={partnerName}
+          viewerIsDonor={viewerIsDonor}
+          onClose={() => setOpenDialog(null)}
+          onStale={reload}
+          onDone={(updated) =>
+            finishAction(updated, `Đã gửi đề nghị huỷ. Đang chờ ${partnerName} phản hồi.`)
+          }
+        />
+      ) : null}
+      {openDialog === 'rejectCancel' ? (
+        <RejectCancelRequestDialog
+          request={request}
+          currentUserId={currentUserId}
+          itemTitle={title}
+          partnerName={partnerName}
+          viewerIsDonor={viewerIsDonor}
+          onClose={() => setOpenDialog(null)}
+          onStale={reload}
+          onDone={(updated) =>
+            finishAction(updated, 'Đã gửi giải trình. Giao dịch chuyển sang sự cố giao nhận, chờ Admin xác minh.')
           }
         />
       ) : null}

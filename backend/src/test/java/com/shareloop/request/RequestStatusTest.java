@@ -19,11 +19,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * Unit test kiểm thử toàn diện máy trạng thái RequestStatus (SRS mục 3.9; Spike S8; Issue #127).
- * Kiểm tra đầy đủ 14 mũi tên hợp lệ và toàn bộ các chuyển trạng thái không hợp lệ trong ma trận 81 ô.
+ * Kiểm tra đầy đủ 15 mũi tên hợp lệ và toàn bộ các chuyển trạng thái không hợp lệ trong ma trận 81 ô.
  */
 class RequestStatusTest {
 
-    // Tập hợp 14 mũi tên hợp lệ theo sơ đồ vòng đời Request (SRS mục 3.9)
+    // Tập hợp 15 mũi tên hợp lệ theo sơ đồ vòng đời Request (SRS mục 3.9)
     private static final Set<String> VALID_TRANSITION_KEYS = Set.of(
             "PENDING->RESERVED",
             "PENDING->REJECTED",
@@ -34,6 +34,8 @@ class RequestStatusTest {
             "AWAITING_LOGISTICS->CANCELLED",
             "LOGISTICS_CONFIRMED->AWAITING_HANDOVER",
             "LOGISTICS_CONFIRMED->CANCELLED",
+            // Cạnh thứ 15: chỉ dành cho "không đồng ý đề nghị huỷ" (GN-06)
+            "LOGISTICS_CONFIRMED->DISPUTED",
             "AWAITING_HANDOVER->COMPLETED",
             "AWAITING_HANDOVER->DISPUTED",
             "AWAITING_HANDOVER->CANCELLED",
@@ -176,6 +178,13 @@ class RequestStatusTest {
 
         @Test
         @DisplayName(
+                "Mũi tên 15: LOGISTICS_CONFIRMED -> DISPUTED chỉ dành cho không đồng ý đề nghị huỷ (GN-06), xem RequestCancelRequestTest")
+        void transition_LogisticsConfirmed_To_Disputed() {
+            assertTrue(RequestStatus.canTransition(RequestStatus.LOGISTICS_CONFIRMED, RequestStatus.DISPUTED));
+        }
+
+        @Test
+        @DisplayName(
                 "Mũi tên 10: AWAITING_HANDOVER -> COMPLETED khi cả 2 bên xác nhận hoặc tự hoàn tất sau 3 ngày (GN-06, GN-08, GN-09)")
         void transition_AwaitingHandover_To_Completed() {
             assertTrue(RequestStatus.canTransition(RequestStatus.AWAITING_HANDOVER, RequestStatus.COMPLETED));
@@ -209,7 +218,7 @@ class RequestStatusTest {
 
         @ParameterizedTest(name = "[{index}] {0} -> {1}: {2}")
         @MethodSource("com.shareloop.request.RequestStatusTest#provideValidTransitions")
-        @DisplayName("Tất cả 14 mũi tên hợp lệ đều trả về true")
+        @DisplayName("Tất cả 15 mũi tên hợp lệ đều trả về true")
         void allValidTransitionsReturnTrue(RequestStatus from, RequestStatus to, String description) {
             assertThat(RequestStatus.canTransition(from, to))
                     .as("Chuyển từ %s sang %s phải hợp lệ (%s)", from, to, description)
@@ -223,7 +232,7 @@ class RequestStatusTest {
 
         @ParameterizedTest(name = "[{index}] {0} -> {1} phải bị từ chối")
         @MethodSource("com.shareloop.request.RequestStatusTest#provideInvalidTransitions")
-        @DisplayName("Tất cả 67 ô không hợp lệ (gồm 9 ô chuyển sang chính nó) đều trả về false")
+        @DisplayName("Tất cả 66 ô không hợp lệ (gồm 9 ô chuyển sang chính nó) đều trả về false")
         void allInvalidTransitionsReturnFalse(RequestStatus from, RequestStatus to) {
             assertThat(RequestStatus.canTransition(from, to))
                     .as("Chuyển từ %s sang %s không hợp lệ và phải trả về false", from, to)
@@ -231,7 +240,7 @@ class RequestStatusTest {
         }
 
         @Test
-        @DisplayName("Tổng số mũi tên hợp lệ phải đúng bằng 14 và số ô không hợp lệ là 67")
+        @DisplayName("Tổng số mũi tên hợp lệ phải đúng bằng 15 và số ô không hợp lệ là 66")
         void transitionMatrixTotals() {
             int validCount = 0;
             int invalidCount = 0;
@@ -244,10 +253,10 @@ class RequestStatusTest {
                     }
                 }
             }
-            assertThat(validCount).as("Số mũi tên hợp lệ phải đúng bằng 14").isEqualTo(14);
+            assertThat(validCount).as("Số mũi tên hợp lệ phải đúng bằng 15").isEqualTo(15);
             assertThat(invalidCount)
-                    .as("Số ô không hợp lệ phải đúng bằng 81 - 14 = 67")
-                    .isEqualTo(67);
+                    .as("Số ô không hợp lệ phải đúng bằng 81 - 15 = 66")
+                    .isEqualTo(66);
         }
     }
 

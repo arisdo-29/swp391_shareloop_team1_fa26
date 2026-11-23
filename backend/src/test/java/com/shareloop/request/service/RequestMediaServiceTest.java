@@ -138,7 +138,7 @@ class RequestMediaServiceTest {
     @Test
     @DisplayName("Thành công: Đính kèm minh chứng trực tiếp trong confirmHandover")
     void confirmHandover_withMediaIds_attachesMedia() {
-        when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(REQUEST_ID)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
 
         List<Long> mediaIds = List.of(701L);

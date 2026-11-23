@@ -571,6 +571,40 @@ public class ReportService {
      */
     @Transactional
     public void openHandoverIssueReport(Long reporterId, Long requestId, String note, List<Long> evidenceMediaIds) {
+        openNoShowDispute(reporterId, requestId, note, evidenceMediaIds, null);
+    }
+
+    /**
+     * Mở khiếu nại khi bên kia không đồng ý đề nghị huỷ (GN-06). Người đề nghị là người khiếu nại, người không đồng ý
+     * là bên bị khiếu nại và đã giải trình trong nội dung nên không cần báo thêm.
+     */
+    @Transactional
+    public void openCancelRejectedDispute(Long reporterId, Long requestId, String note) {
+        openNoShowDispute(reporterId, requestId, note, null, CancelNotice.NONE);
+    }
+
+    /**
+     * Mở báo cáo không đến hẹn sau khi giao dịch đã huỷ vì bên kia im lặng trước đề nghị huỷ (GN-06). Admin xem và tự
+     * quyết, hệ thống không tự trừ sao.
+     *
+     * @param issuePhrase mô tả vấn đề cho người bị báo, ví dụ "không đến điểm hẹn"
+     */
+    @Transactional
+    public void openSilentCancelReport(Long reporterId, Long requestId, String issuePhrase, String note) {
+        openNoShowDispute(reporterId, requestId, note, null, CancelNotice.silent(issuePhrase));
+    }
+
+    // Cách báo cho bên bị khiếu nại: null là câu của sự cố giao nhận (bên kia đã bấm hoàn tất), NONE là không báo.
+    private record CancelNotice(String issuePhrase) {
+        static final CancelNotice NONE = new CancelNotice(null);
+
+        static CancelNotice silent(String issuePhrase) {
+            return new CancelNotice(issuePhrase);
+        }
+    }
+
+    private void openNoShowDispute(
+            Long reporterId, Long requestId, String note, List<Long> evidenceMediaIds, CancelNotice notice) {
         if (reportRepository.existsByReporterIdAndTargetTypeAndRequestId(reporterId, TargetType.REQUEST, requestId)) {
             return;
         }
@@ -606,16 +640,37 @@ public class ReportService {
         Report saved = reportRepository.save(report);
         publishDisputeOpened(saved, responseHours);
 
-        if (notificationService != null) {
-            String issue = reporterIsReceiver ? "chưa nhận được đồ" : "chưa giao được đồ";
+        if (notificationService != null && notice != CancelNotice.NONE) {
+            notifyRespondentOfNoShow(saved, respondentId, reporterIsReceiver, notice, responseHours, responseDueAt);
+        }
+    }
+
+    private void notifyRespondentOfNoShow(
+            Report saved,
+            Long respondentId,
+            boolean reporterIsReceiver,
+            CancelNotice notice,
+            int responseHours,
+            Instant responseDueAt) {
+        String windowSentence = responseWindowSentence(responseHours, responseDueAt);
+        String link = "/me/disputes/" + saved.getId();
+        if (notice != null) {
             notificationService.notify(
                     respondentId,
                     "DISPUTE_OPENED",
-                    "Đối phương báo " + issue,
-                    "Đối phương báo " + issue + " dù bạn đã xác nhận bàn giao. "
-                            + responseWindowSentence(responseHours, responseDueAt),
-                    "/me/disputes/" + saved.getId());
+                    "Đối phương báo bạn " + notice.issuePhrase(),
+                    "Giao dịch đã huỷ vì bạn không phản hồi đề nghị huỷ. Đối phương báo bạn " + notice.issuePhrase()
+                            + ". " + windowSentence,
+                    link);
+            return;
         }
+        String issue = reporterIsReceiver ? "chưa nhận được đồ" : "chưa giao được đồ";
+        notificationService.notify(
+                respondentId,
+                "DISPUTE_OPENED",
+                "Đối phương báo " + issue,
+                "Đối phương báo " + issue + " dù bạn đã xác nhận bàn giao. " + windowSentence,
+                link);
     }
 
     // Báo module chat thêm dòng tin hệ thống "giao dịch đang có khiếu nại" (D-04). Không có publisher ở unit test rút

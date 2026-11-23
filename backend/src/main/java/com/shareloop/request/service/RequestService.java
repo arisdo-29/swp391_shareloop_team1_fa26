@@ -19,6 +19,7 @@ import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.RequestErrorCode;
+import com.shareloop.request.dto.CancelRequestRequest;
 import com.shareloop.request.dto.CancelTransactionRequest;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
@@ -26,18 +27,22 @@ import com.shareloop.request.dto.HandoverConfirmRequest;
 import com.shareloop.request.dto.HandoverFailedRequest;
 import com.shareloop.request.dto.OpenItemTransaction;
 import com.shareloop.request.dto.RefuseHandoverRequest;
+import com.shareloop.request.dto.RejectCancelRequest;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestItemInfo;
 import com.shareloop.request.dto.RequestMediaResponse;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.dto.ScheduleRequest;
+import com.shareloop.request.entity.CancelRequestCode;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestMediaMapping;
 import com.shareloop.request.entity.RequestStatus;
+import com.shareloop.request.event.CancelRequestRejectedEvent;
 import com.shareloop.request.event.HandoverIssueReportedEvent;
 import com.shareloop.request.event.NotAsDescribedReportedEvent;
 import com.shareloop.request.event.RequestNegotiationEndedEvent;
+import com.shareloop.request.event.SilentCancelRequestReportedEvent;
 import com.shareloop.request.mapper.RequestMapper;
 import com.shareloop.request.repository.RequestMediaRepository;
 import com.shareloop.request.repository.RequestRepository;
@@ -136,6 +141,7 @@ public class RequestService {
     private final ReportService reportService;
     private final CreditService creditService;
     private final ItemReopenedNotifier itemReopenedNotifier;
+    private final RequestDeadlineCalculator deadlineCalculator;
 
     @Autowired
     public RequestService(
@@ -169,6 +175,7 @@ public class RequestService {
         this.reportService = reportService;
         this.creditService = creditService;
         this.itemReopenedNotifier = itemReopenedNotifier;
+        this.deadlineCalculator = new RequestDeadlineCalculator(configService);
     }
 
     public RequestService(
@@ -426,7 +433,7 @@ public class RequestService {
                             complaintDeadline,
                             lastMessageAt,
                             disputeResponseDueAt);
-                    return addExtraInfo(response, null)
+                    return addExtraInfo(request, response, null)
                             .withReports(disputesOf(disputesMap, request), refusalOf(refusalMap, request))
                             .withFlags(flagsOf(request));
                 })
@@ -471,7 +478,7 @@ public class RequestService {
                             complaintDeadline,
                             lastMessageAt,
                             disputeResponseDueAt);
-                    return addExtraInfo(response, null)
+                    return addExtraInfo(request, response, null)
                             .withReports(disputesOf(disputesMap, request), refusalOf(refusalMap, request))
                             .withFlags(flagsOf(request));
                 })
@@ -990,28 +997,35 @@ public class RequestService {
     /**
      * Một bên báo giao nhận không thành công khi giao dịch đã chốt lịch (GN-06, GN-07).
      *
-     * <p>Bên kia chưa bấm hoàn tất: giao dịch bị huỷ, bài và món đổi mở lại, không phạt, báo bên kia. Bên kia đã bấm
-     * hoàn tất: giao dịch sang DISPUTED và mở khiếu nại NO_SHOW qua event cho module report; giao dịch DISPUTED không
-     * bị job tự hoàn tất vì job chỉ xử lý AWAITING_HANDOVER.
+     * <p>Bên kia chưa bấm hoàn tất: giao dịch chưa huỷ, chỉ tạo đề nghị huỷ để bên kia đồng ý, không đồng ý hoặc im
+     * lặng (xem {@link #acceptCancelRequest}). Trước giờ hẹn thì không dùng được, hai bên dùng "Đề nghị huỷ". Bên kia
+     * đã bấm hoàn tất: giao dịch sang DISPUTED và mở khiếu nại NO_SHOW qua event cho module report; giao dịch DISPUTED
+     * không bị job tự hoàn tất vì job chỉ xử lý AWAITING_HANDOVER.
      *
      * @throws BusinessException REQUEST_NOT_FOUND, REQUEST_FORBIDDEN khi không phải một trong hai bên,
-     *     REQUEST_INVALID_STATE_TRANSITION khi sai trạng thái hoặc người báo đã bấm hoàn tất
+     *     REQUEST_INVALID_STATE_TRANSITION khi sai trạng thái hoặc người báo đã bấm hoàn tất,
+     *     REQUEST_BEFORE_MEETING_TIME khi chưa tới giờ hẹn, REQUEST_CANCEL_REASON_INVALID khi mã lý do không hợp lệ
      */
     @Transactional
     public RequestResponse handoverFailed(long requestId, long currentUserId, HandoverFailedRequest requestDto) {
-        Request request = loadRequest(requestId);
+        Request request = loadRequestForUpdate(requestId);
         ItemSnapshot item = loadItemSnapshot(request);
         boolean isDonor = requireParty(request, item, currentUserId);
         if (!request.isHandoverOpen() || request.hasConfirmedHandover(isDonor)) {
             throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
         }
 
-        String reason = requestDto.reason().trim();
+        CancelRequestCode code = requestDto.code() != null ? requestDto.code() : CancelRequestCode.OTHER;
+        String typedReason =
+                requestDto.reason() == null ? "" : requestDto.reason().trim();
         if (!request.hasOtherPartyConfirmedHandover(isDonor)) {
-            attachHandoverEvidence(request, currentUserId, requestDto.evidenceMediaIds());
-            return toResponse(cancelByParty(request, item, currentUserId, isDonor, reason));
+            return toResponse(startCancelRequestAfterMeeting(
+                    request, item, currentUserId, isDonor, code, typedReason, requestDto.evidenceMediaIds()));
         }
 
+        // Bên kia đã bấm hoàn tất: giữ nhánh cũ, khiếu nại ngay. Không mã lý do thì nội dung là đúng chữ người nhập.
+        String reason =
+                requestDto.code() == null ? requireTypedReason(typedReason) : describeFailure(code, typedReason);
         request.openHandoverIssue(isDonor);
         Request saved = requestRepository.save(request);
         // Listener của module report chạy ngay trong transaction này để report và DISPUTED cùng thành công hoặc cùng
@@ -1039,6 +1053,10 @@ public class RequestService {
         boolean isSwap = request.getOfferedItemId() != null;
         if (isDonor && !isSwap) {
             throw new BusinessException(RequestErrorCode.REQUEST_REFUSE_NOT_ALLOWED);
+        }
+        // GN-07: chưa tới giờ hẹn thì chưa ai nhận món nào để mà từ chối
+        if (request.isBeforeMeetingTime(Instant.now())) {
+            throw new BusinessException(RequestErrorCode.REQUEST_BEFORE_MEETING_TIME);
         }
 
         String reason = requestDto.reason().trim();
@@ -1085,6 +1103,291 @@ public class RequestService {
                 "Đối phương đã từ chối nhận vì món không đúng mô tả. Giao dịch đã huỷ, món của bạn đang tạm ẩn chờ"
                         + " Admin xem xét. Bạn có thể gửi giải trình ở trang Tiến trình giao dịch.",
                 link);
+    }
+
+    // ===== Đề nghị huỷ có xác nhận của bên kia (GN-06) =====
+
+    /**
+     * Một bên đề nghị huỷ giao dịch đã chốt lịch khi chưa tới giờ hẹn (GN-06). Giao dịch chưa huỷ: bên kia được báo và
+     * có cancel_request_response_hours giờ để đồng ý, không đồng ý hoặc im lặng.
+     *
+     * @throws BusinessException REQUEST_INVALID_STATE_TRANSITION khi đã
+     *     tới giờ hẹn hoặc sai trạng thái, REQUEST_CANCEL_REQUEST_PENDING khi đã có đề nghị, REQUEST_CANCEL_REASON_INVALID
+     *     khi mã lý do không dùng được trước giờ hẹn hoặc thiếu chữ cho "Lý do khác"
+     */
+    @Transactional
+    public RequestResponse requestCancel(long requestId, long currentUserId, CancelRequestRequest requestDto) {
+        Request request = loadRequestForUpdate(requestId);
+        ItemSnapshot item = loadItemSnapshot(request);
+        boolean isDonor = requireParty(request, item, currentUserId);
+        Instant now = Instant.now();
+        // Từ giờ hẹn trở đi hai bên dùng "Giao nhận không thành công"
+        if (!request.isBeforeMeetingTime(now)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+        if (!requestDto.code().isAllowedBeforeMeeting()) {
+            throw new BusinessException(RequestErrorCode.REQUEST_CANCEL_REASON_INVALID);
+        }
+        String reason = cleanCancelReason(requestDto.code(), requestDto.reason());
+        return toResponse(createCancelRequest(request, item, currentUserId, isDonor, requestDto.code(), reason, now));
+    }
+
+    // "Giao nhận không thành công" khi bên kia chưa bấm hoàn tất: chưa huỷ, chỉ tạo đề nghị (GN-06).
+    private Request startCancelRequestAfterMeeting(
+            Request request,
+            ItemSnapshot item,
+            long userId,
+            boolean isDonor,
+            CancelRequestCode code,
+            String typedReason,
+            List<Long> evidenceMediaIds) {
+        Instant now = Instant.now();
+        if (request.isBeforeMeetingTime(now)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_BEFORE_MEETING_TIME);
+        }
+        boolean shipping = "SHIPPING".equals(request.getDeliveryMethod());
+        if (!code.isAllowedAfterMeeting(shipping)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_CANCEL_REASON_INVALID);
+        }
+        String reason = cleanCancelReason(code, typedReason);
+        Request saved = createCancelRequest(request, item, userId, isDonor, code, reason, now);
+        attachHandoverEvidence(saved, userId, evidenceMediaIds);
+        return saved;
+    }
+
+    private Request createCancelRequest(
+            Request request,
+            ItemSnapshot item,
+            long userId,
+            boolean isDonor,
+            CancelRequestCode code,
+            String reason,
+            Instant now) {
+        request.requestCancel(userId, isDonor, code, reason, now);
+        Request saved = requestRepository.save(request);
+
+        int responseHours = configService.getInt(ConfigKey.CANCEL_REQUEST_RESPONSE_HOURS);
+        Instant dueAt = now.plus(responseHours, ChronoUnit.HOURS);
+        long otherUserId = isDonor ? saved.getReceiverId() : item.donorId();
+        notificationService.notify(
+                otherUserId,
+                "CANCEL_REQUESTED",
+                "Đề nghị huỷ giao dịch",
+                nameOrDefault(userId) + " đề nghị huỷ giao dịch vì " + code.phraseForOtherParty(reason)
+                        + ". Bạn có đồng ý không? Hạn phản hồi " + VietnamTime.format(dueAt) + ".",
+                "/requests/" + saved.getId());
+        return saved;
+    }
+
+    // Lý do "Lý do khác" bắt buộc có chữ từ 5 ký tự; các mã còn lại chữ là phần ghi thêm, có thể bỏ trống.
+    private String cleanCancelReason(CancelRequestCode code, String reason) {
+        String text = reason == null ? "" : reason.trim();
+        if (code == CancelRequestCode.OTHER && text.length() < 5) {
+            throw new BusinessException(RequestErrorCode.REQUEST_CANCEL_REASON_INVALID);
+        }
+        return text.isEmpty() ? null : text;
+    }
+
+    private String requireTypedReason(String typedReason) {
+        if (typedReason.length() < 5) {
+            throw new BusinessException(RequestErrorCode.REQUEST_CANCEL_REASON_INVALID);
+        }
+        return typedReason;
+    }
+
+    // Nội dung khiếu nại khi có mã lý do: nhãn của mã, kèm chữ người dùng nhập nếu có.
+    private String describeFailure(CancelRequestCode code, String typedReason) {
+        if (code == CancelRequestCode.OTHER) {
+            return requireTypedReason(typedReason);
+        }
+        return typedReason.isEmpty() ? code.label() : code.label() + ". " + typedReason;
+    }
+
+    private String nameOrDefault(long userId) {
+        String name = findUserName(userId);
+        return name == null || name.isBlank() ? "Đối phương" : name;
+    }
+
+    /**
+     * Người đề nghị rút lại đề nghị huỷ trước khi bên kia phản hồi (GN-06).
+     *
+     * @throws BusinessException REQUEST_CANCEL_REQUEST_NOT_FOUND khi không có đề nghị đang chờ, REQUEST_FORBIDDEN khi
+     *     không phải người đề nghị
+     */
+    @Transactional
+    public RequestResponse withdrawCancelRequest(long requestId, long currentUserId) {
+        Request request = loadRequestForUpdate(requestId);
+        ItemSnapshot item = loadItemSnapshot(request);
+        boolean isDonor = requireParty(request, item, currentUserId);
+        request.withdrawCancelRequest(currentUserId);
+        Request saved = requestRepository.save(request);
+
+        long otherUserId = isDonor ? saved.getReceiverId() : item.donorId();
+        notificationService.notify(
+                otherUserId,
+                "CANCEL_REQUEST_WITHDRAWN",
+                "Đề nghị huỷ đã được rút lại",
+                nameOrDefault(currentUserId) + " đã rút lại đề nghị huỷ. Giao dịch tiếp tục như thường.",
+                "/requests/" + saved.getId());
+        return toResponse(saved);
+    }
+
+    /**
+     * Bên kia đồng ý đề nghị huỷ (GN-06): giao dịch huỷ, không phạt ai, bài chính và món đổi được nhả, báo hai bên.
+     *
+     * @throws BusinessException REQUEST_CANCEL_REQUEST_NOT_FOUND khi không có đề nghị đang chờ, REQUEST_FORBIDDEN khi
+     *     người gọi chính là người đề nghị
+     */
+    @Transactional
+    public RequestResponse acceptCancelRequest(long requestId, long currentUserId) {
+        Request request = loadRequestForUpdate(requestId);
+        ItemSnapshot item = loadItemSnapshot(request);
+        boolean isDonor = requireParty(request, item, currentUserId);
+        request.acceptCancelRequest(currentUserId, isDonor);
+
+        Request saved = finishCancelByAgreement(request, currentUserId);
+        String link = "/requests/" + saved.getId();
+        notificationService.notify(
+                saved.getCancelRequestedBy(),
+                "TRANSACTION_CANCELLED",
+                "Giao dịch đã được huỷ",
+                nameOrDefault(currentUserId)
+                        + " đã đồng ý huỷ giao dịch. Bài đăng được mở lại và không bên nào bị trừ sao.",
+                link);
+        notificationService.notify(
+                currentUserId,
+                "TRANSACTION_CANCELLED",
+                "Giao dịch đã được huỷ",
+                "Bạn đã đồng ý huỷ giao dịch. Bài đăng được mở lại và không bên nào bị trừ sao.",
+                link);
+        return toResponse(saved);
+    }
+
+    // Phần chung của huỷ theo đề nghị: lưu, nhả bài chính và món đổi (releaseReservedItems trả lại thời gian hiển thị),
+    // báo bài mở lại, ghi nhật ký.
+    private Request finishCancelByAgreement(Request request, long actorUserId) {
+        Request saved = requestRepository.save(request);
+        publishNegotiationEnded(saved);
+        releaseReservedItems(saved);
+        notifyItemReopened(saved);
+        if (activityLogService != null) {
+            activityLogService.log(
+                    ActivityType.REQUEST_CANCEL.name(),
+                    actorUserId,
+                    "REQUEST",
+                    saved.getId(),
+                    (String) null,
+                    saved.getCancelReason());
+        }
+        return saved;
+    }
+
+    /**
+     * Bên kia không đồng ý đề nghị huỷ (GN-06): giao dịch sang DISPUTED và mở khiếu nại sự cố giao nhận gồm lý do của
+     * hai bên. Giải trình là bắt buộc, ảnh không bắt buộc.
+     *
+     * @throws BusinessException REQUEST_CANCEL_REQUEST_NOT_FOUND khi không có đề nghị đang chờ, REQUEST_FORBIDDEN khi
+     *     người gọi chính là người đề nghị
+     */
+    @Transactional
+    public RequestResponse rejectCancelRequest(long requestId, long currentUserId, RejectCancelRequest requestDto) {
+        Request request = loadRequestForUpdate(requestId);
+        ItemSnapshot item = loadItemSnapshot(request);
+        requireParty(request, item, currentUserId);
+        Request saved = disputeCancelRequest(
+                request, currentUserId, requestDto.explanation().trim(), requestDto.evidenceMediaIds());
+        return withReports(toResponse(saved), requestId, currentUserId);
+    }
+
+    // Chuyển DISPUTED và báo module report mở khiếu nại. Dùng cho "Không đồng ý" và cho việc bên kia bấm hoàn tất khi
+    // có đề nghị huỷ đang chờ (GN-06).
+    private Request disputeCancelRequest(
+            Request request, long rejecterId, String explanation, List<Long> evidenceMediaIds) {
+        long requesterId = request.getCancelRequestedBy() == null ? 0 : request.getCancelRequestedBy();
+        String summary = request.cancelRequestSummary();
+        request.rejectCancelRequest(rejecterId);
+        attachMediaInternal(request.getId(), rejecterId, evidenceMediaIds, "DISPUTE");
+        Request saved = requestRepository.save(request);
+
+        String note = nameOrDefault(requesterId) + " đề nghị huỷ giao dịch. " + summary
+                + ". Bên kia không đồng ý và giải trình: " + explanation;
+        // Listener của module report chạy ngay trong transaction này để khiếu nại và DISPUTED cùng thành công hoặc
+        // cùng rollback.
+        eventPublisher.publishEvent(new CancelRequestRejectedEvent(saved.getId(), requesterId, note));
+        notificationService.notify(
+                requesterId,
+                "CANCEL_REQUEST_REJECTED",
+                "Đề nghị huỷ không được đồng ý",
+                nameOrDefault(rejecterId) + " không đồng ý huỷ giao dịch và đã giải trình. Giao dịch chuyển sang sự cố"
+                        + " giao nhận, chờ Admin xem xét.",
+                "/requests/" + saved.getId());
+        return saved;
+    }
+
+    /**
+     * Việc nền: đề nghị huỷ quá cancel_request_response_hours giờ mà bên kia im lặng thì huỷ như "Đồng ý" (GN-06).
+     * Lý do "bên kia không đến điểm hẹn" hoặc "chưa gửi hàng" thì mở thêm báo cáo không đến hẹn nhắm vào bên im lặng để
+     * Admin xem. Không tự trừ sao.
+     *
+     * @return true nếu đã huỷ, false nếu đề nghị đã được xử lý hoặc chưa tới hạn
+     */
+    @Transactional
+    public boolean expireCancelRequest(long requestId, Instant now) {
+        Request request = requestRepository.findByIdForUpdate(requestId).orElse(null);
+        int responseHours = configService.getInt(ConfigKey.CANCEL_REQUEST_RESPONSE_HOURS);
+        if (request == null
+                || !request.hasPendingCancelRequest()
+                || request.getCancelRequestedAt()
+                        .plus(responseHours, ChronoUnit.HOURS)
+                        .isAfter(now)) {
+            return false;
+        }
+
+        long requesterId = request.getCancelRequestedBy();
+        CancelRequestCode code = request.getCancelRequestCode();
+        String note = request.cancelRequestSummary();
+        request.expireCancelRequest("Bên kia không phản hồi đề nghị huỷ trong " + responseHours + " giờ.");
+        Request saved = finishCancelByAgreement(request, requesterId);
+
+        long silentUserId = findOtherPartyId(saved, requesterId);
+        String link = "/requests/" + saved.getId();
+        notificationService.notify(
+                requesterId,
+                "TRANSACTION_CANCELLED",
+                "Giao dịch đã được huỷ",
+                "Giao dịch đã huỷ vì bên kia không phản hồi đề nghị huỷ trong " + responseHours
+                        + " giờ. Bài đăng được mở lại và không bên nào bị trừ sao.",
+                link);
+        notificationService.notify(
+                silentUserId,
+                "TRANSACTION_CANCELLED",
+                "Giao dịch đã được huỷ",
+                "Giao dịch đã huỷ vì bạn không phản hồi đề nghị huỷ trong " + responseHours
+                        + " giờ. Bài đăng được mở lại và không bên nào bị trừ sao.",
+                link);
+
+        if (code == CancelRequestCode.COUNTERPART_NO_SHOW || code == CancelRequestCode.COUNTERPART_NOT_SHIPPED) {
+            String issue = code == CancelRequestCode.COUNTERPART_NO_SHOW ? "không đến điểm hẹn" : "chưa gửi hàng";
+            eventPublisher.publishEvent(
+                    new SilentCancelRequestReportedEvent(saved.getId(), requesterId, silentUserId, issue, note));
+        }
+        return true;
+    }
+
+    // Bên còn lại của giao dịch so với một người đã biết (chủ bài hoặc người nhận).
+    private long findOtherPartyId(Request request, long userId) {
+        if (request.getReceiverId() == userId) {
+            return loadItemSnapshot(request).donorId();
+        }
+        return request.getReceiverId();
+    }
+
+    // Khoá dòng giao dịch: dùng cho các thao tác đổi trạng thái sau khi chốt lịch để hai bên bấm cùng lúc không đè
+    // nhau.
+    private Request loadRequestForUpdate(long requestId) {
+        return requestRepository
+                .findByIdForUpdate(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
     }
 
     private Request loadRequest(long requestId) {
@@ -1515,13 +1818,13 @@ public class RequestService {
                     complaintDeadline,
                     lastMessageAt,
                     disputeResponseDueAt);
-            return withReports(addExtraInfo(response, handoverMedia), request.getId(), currentUserId)
+            return withReports(addExtraInfo(request, response, handoverMedia), request.getId(), currentUserId)
                     .withFlags(detailFlagsOf(request, request.getItemId()));
         }
 
         RequestResponse response = RequestMapper.toResponse(
                 request, receiverName, null, null, itemInfo, complaintDeadline, lastMessageAt, disputeResponseDueAt);
-        return withReports(addExtraInfo(response, handoverMedia), request.getId(), currentUserId)
+        return withReports(addExtraInfo(request, response, handoverMedia), request.getId(), currentUserId)
                 .withFlags(detailFlagsOf(request, request.getItemId()));
     }
 
@@ -1663,7 +1966,8 @@ public class RequestService {
      */
     @Transactional
     public RequestResponse confirmHandover(long requestId, long currentUserId, HandoverConfirmRequest requestDto) {
-        Request request = loadRequest(requestId);
+        // Khoá dòng để việc bấm hoàn tất và việc đồng ý đề nghị huỷ cùng lúc không đè nhau (GN-06)
+        Request request = loadRequestForUpdate(requestId);
         ItemSnapshot item = loadItemSnapshot(request);
         boolean isDonor = requireParty(request, item, currentUserId);
 
@@ -1672,7 +1976,19 @@ public class RequestService {
             attachHandoverEvidence(request, currentUserId, requestDto.mediaIds());
         }
 
+        boolean answersCancelRequest = request.hasPendingCancelRequest();
+        if (answersCancelRequest && Long.valueOf(currentUserId).equals(request.getCancelRequestedBy())) {
+            // Người đề nghị huỷ không thể vừa chờ huỷ vừa báo đã giao nhận xong: phải rút đề nghị trước
+            throw new BusinessException(RequestErrorCode.REQUEST_CANCEL_REQUEST_PENDING);
+        }
+
         request.confirmHandover(isDonor, Instant.now());
+        if (answersCancelRequest) {
+            // GN-06: bên kia bấm "Đã giao nhận xong" khi có đề nghị huỷ đang chờ thì coi như không đồng ý
+            Request disputed = disputeCancelRequest(
+                    request, currentUserId, "Tôi đã bấm đã giao nhận xong nên không đồng ý huỷ giao dịch.", null);
+            return withReports(toResponse(disputed), requestId, currentUserId);
+        }
         Request saved = requestRepository.save(request);
 
         long otherUserId = isDonor ? request.getReceiverId() : item.donorId();
@@ -1967,12 +2283,13 @@ public class RequestService {
                 complaintDeadline,
                 lastMessageAt,
                 disputeResponseDueAt);
-        return addExtraInfo(response, null);
+        return addExtraInfo(request, response, null);
     }
 
     // Gắn ảnh đại diện hai bên, cờ hết hạn khiếu nại và phí chuyển sang Trao đổi; handoverMedia chỉ truyền ở chi tiết,
     // danh sách để null.
-    private RequestResponse addExtraInfo(RequestResponse response, List<RequestMediaResponse> handoverMedia) {
+    private RequestResponse addExtraInfo(
+            Request request, RequestResponse response, List<RequestMediaResponse> handoverMedia) {
         if (response == null) {
             return null;
         }
@@ -1980,7 +2297,8 @@ public class RequestService {
         String receiverAvatarUrl = findAvatarUrl(response.receiverId());
         boolean disputeExpired = isComplaintWindowClosed(response.complaintDeadline());
         Integer conversionFee = conversionFeeOf(response.itemOfferType());
-        return response.withExtraInfo(donorAvatarUrl, receiverAvatarUrl, disputeExpired, handoverMedia, conversionFee);
+        return response.withExtraInfo(donorAvatarUrl, receiverAvatarUrl, disputeExpired, handoverMedia, conversionFee)
+                .withDeadlines(deadlineCalculator.of(request));
     }
 
     // Phí chủ bài trả nếu giao dịch chuyển sang Trao đổi (CD-02): bài đang GIVE thì trả POST_FEE như khi đăng bài

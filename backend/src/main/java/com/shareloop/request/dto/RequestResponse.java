@@ -1,5 +1,6 @@
 package com.shareloop.request.dto;
 
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.shareloop.report.dto.RequestDisputeSummary;
 import java.time.Instant;
 import java.util.List;
@@ -64,7 +65,166 @@ public record RequestResponse(
         RequestDisputeSummary refusalReport,
         // Cờ cảnh báo cho FE hiện nhãn trên thẻ yêu cầu và trang tiến trình: OFFERED_ITEM_BUSY, RECEIVER_TOO_BUSY,
         // ITEM_UNDER_REVIEW. null khi không có cờ nào.
-        List<String> flags) {
+        List<String> flags,
+        // Bốn nhóm trường mới của luật huỷ có xác nhận, dời lịch, giao hàng hai chiều và mốc hạn. JsonUnwrapped giữ
+        // JSON
+        // phẳng: tên trường nằm cùng cấp với các trường cũ, trường cũ không đổi. Không bao giờ null (xem constructor).
+        @JsonUnwrapped CancelRequestInfo cancelRequest,
+        @JsonUnwrapped RescheduleInfo reschedule,
+        @JsonUnwrapped ShippingInfo shipping,
+        @JsonUnwrapped RequestDeadlines deadlines) {
+
+    // Thay nhóm null bằng nhóm rỗng để JSON luôn có đủ tên trường (giá trị null) và code gọi không phải kiểm null.
+    public RequestResponse {
+        cancelRequest = cancelRequest == null ? CancelRequestInfo.EMPTY : cancelRequest;
+        reschedule = reschedule == null ? RescheduleInfo.EMPTY : reschedule;
+        shipping = shipping == null ? ShippingInfo.EMPTY : shipping;
+        deadlines = deadlines == null ? RequestDeadlines.EMPTY : deadlines;
+    }
+
+    /** Gắn các mốc hạn do backend tính (GN-13); các trường khác giữ nguyên. */
+    public RequestResponse withDeadlines(RequestDeadlines newDeadlines) {
+        return withExtras(cancelRequest, reschedule, shipping, newDeadlines);
+    }
+
+    /** Thay bốn nhóm trường mới cùng lúc; các trường khác giữ nguyên. */
+    public RequestResponse withExtras(
+            CancelRequestInfo newCancelRequest,
+            RescheduleInfo newReschedule,
+            ShippingInfo newShipping,
+            RequestDeadlines newDeadlines) {
+        return new RequestResponse(
+                id,
+                itemId,
+                receiverId,
+                offeredItemId,
+                type,
+                status,
+                deliveryMethod,
+                meetingPlace,
+                meetingTime,
+                donorScheduleOkAt,
+                receiverScheduleOkAt,
+                donorWaiverAt,
+                receiverWaiverAt,
+                contactRevealedAt,
+                donorHandoverAt,
+                receiverHandoverAt,
+                completedAt,
+                createdAt,
+                receiverName,
+                receiverTrustStars,
+                receiverRank,
+                itemTitle,
+                itemImage,
+                donorId,
+                donorName,
+                offeredItemTitle,
+                cancelReason,
+                complaintDeadline,
+                lastMessageAt,
+                disputeResponseDueAt,
+                donorAvatarUrl,
+                receiverAvatarUrl,
+                disputeExpired,
+                handoverMedia,
+                itemOfferType,
+                conversionFee,
+                disputes,
+                refusalReport,
+                flags,
+                newCancelRequest,
+                newReschedule,
+                newShipping,
+                newDeadlines);
+    }
+
+    // Dạng 39 tham số (chưa có bốn nhóm trường mới) để code và test đang gọi vẫn compile.
+    public RequestResponse(
+            Long id,
+            Long itemId,
+            Long receiverId,
+            Long offeredItemId,
+            String type,
+            String status,
+            String deliveryMethod,
+            String meetingPlace,
+            Instant meetingTime,
+            Instant donorScheduleOkAt,
+            Instant receiverScheduleOkAt,
+            Instant donorWaiverAt,
+            Instant receiverWaiverAt,
+            Instant contactRevealedAt,
+            Instant donorHandoverAt,
+            Instant receiverHandoverAt,
+            Instant completedAt,
+            Instant createdAt,
+            String receiverName,
+            Integer receiverTrustStars,
+            String receiverRank,
+            String itemTitle,
+            String itemImage,
+            Long donorId,
+            String donorName,
+            String offeredItemTitle,
+            String cancelReason,
+            Instant complaintDeadline,
+            Instant lastMessageAt,
+            Instant disputeResponseDueAt,
+            String donorAvatarUrl,
+            String receiverAvatarUrl,
+            Boolean disputeExpired,
+            List<RequestMediaResponse> handoverMedia,
+            String itemOfferType,
+            Integer conversionFee,
+            List<RequestDisputeSummary> disputes,
+            RequestDisputeSummary refusalReport,
+            List<String> flags) {
+        this(
+                id,
+                itemId,
+                receiverId,
+                offeredItemId,
+                type,
+                status,
+                deliveryMethod,
+                meetingPlace,
+                meetingTime,
+                donorScheduleOkAt,
+                receiverScheduleOkAt,
+                donorWaiverAt,
+                receiverWaiverAt,
+                contactRevealedAt,
+                donorHandoverAt,
+                receiverHandoverAt,
+                completedAt,
+                createdAt,
+                receiverName,
+                receiverTrustStars,
+                receiverRank,
+                itemTitle,
+                itemImage,
+                donorId,
+                donorName,
+                offeredItemTitle,
+                cancelReason,
+                complaintDeadline,
+                lastMessageAt,
+                disputeResponseDueAt,
+                donorAvatarUrl,
+                receiverAvatarUrl,
+                disputeExpired,
+                handoverMedia,
+                itemOfferType,
+                conversionFee,
+                disputes,
+                refusalReport,
+                flags,
+                null,
+                null,
+                null,
+                null);
+    }
 
     // Dạng 38 tham số (chưa có flags) để code và test đang gọi vẫn compile.
     public RequestResponse(
@@ -270,7 +430,11 @@ public record RequestResponse(
                 newConversionFee,
                 disputes,
                 refusalReport,
-                flags);
+                flags,
+                cancelRequest,
+                reschedule,
+                shipping,
+                deadlines);
     }
 
     /** Gắn danh sách khiếu nại theo vai của người xem (D-04); các trường khác giữ nguyên. */
@@ -322,7 +486,11 @@ public record RequestResponse(
                 conversionFee,
                 newDisputes,
                 newRefusalReport,
-                flags);
+                flags,
+                cancelRequest,
+                reschedule,
+                shipping,
+                deadlines);
     }
 
     /** Gắn cờ cảnh báo; các trường khác giữ nguyên. */
@@ -366,7 +534,11 @@ public record RequestResponse(
                 conversionFee,
                 disputes,
                 refusalReport,
-                newFlags);
+                newFlags,
+                cancelRequest,
+                reschedule,
+                shipping,
+                deadlines);
     }
 
     // Dạng 28 tham số (chưa có disputeResponseDueAt) để code và test đang gọi vẫn compile.

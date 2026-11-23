@@ -15,6 +15,7 @@ export const DEFAULT_PUBLIC_CONFIG: PublicConfig = {
   auto_confirm_days_shipping: 7,
   complaint_window_hours: 24,
   response_window_hours: 48,
+  cancel_request_response_hours: 24,
   report_hide_threshold: 3,
   reputation_clean_streak_for_star: 10,
   star_restore_min_distinct_partners: 5,

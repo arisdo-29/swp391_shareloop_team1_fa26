@@ -41,6 +41,8 @@ class RequestStateMachineTest {
             "AWAITING_LOGISTICS->CANCELLED",
             "LOGISTICS_CONFIRMED->AWAITING_HANDOVER",
             "LOGISTICS_CONFIRMED->CANCELLED",
+            // Cạnh thứ 15: chỉ dành cho "không đồng ý đề nghị huỷ" (GN-06)
+            "LOGISTICS_CONFIRMED->DISPUTED",
             "AWAITING_HANDOVER->COMPLETED",
             "AWAITING_HANDOVER->DISPUTED",
             "AWAITING_HANDOVER->CANCELLED",

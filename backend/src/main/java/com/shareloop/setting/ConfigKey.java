@@ -357,6 +357,24 @@ public enum ConfigKey {
             "Hạn tự động hoàn tất khi giao hàng",
             "Giao hàng: một bên đã xác nhận mà bên kia im lặng quá số ngày này thì giao dịch tự hoàn tất. Dài hơn gặp"
                     + " trực tiếp vì cần thời gian vận chuyển."),
+    CANCEL_REQUEST_RESPONSE_HOURS(
+            "cancel_request_response_hours",
+            "24",
+            ConfigGroup.TRANSACTION,
+            "Hạn phản hồi đề nghị huỷ",
+            "Số giờ bên kia được phản hồi một đề nghị huỷ giao dịch đã chốt lịch. Im lặng quá hạn thì giao dịch tự huỷ, không phạt ai."),
+    CANCEL_AFTER_CONTACT_ALERT_COUNT(
+            "cancel_after_contact_alert_count",
+            "3",
+            ConfigGroup.TRANSACTION,
+            "Ngưỡng cảnh báo huỷ nhiều lần sau khi thấy liên hệ",
+            "Một người đề nghị huỷ giao dịch đã huỷ từ số lần này trở lên trong khoảng theo dõi thì hiện ở trang Giám sát bất thường. Không tự phạt."),
+    CANCEL_AFTER_CONTACT_WINDOW_DAYS(
+            "cancel_after_contact_window_days",
+            "30",
+            ConfigGroup.TRANSACTION,
+            "Số ngày theo dõi huỷ sau khi thấy liên hệ",
+            "Số ngày gần nhất dùng để đếm các lần đề nghị huỷ sau khi đã thấy thông tin liên hệ."),
     STUCK_REQUEST_HOURS(
             "stuck_request_hours",
             "48",

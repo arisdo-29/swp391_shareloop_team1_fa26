@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -112,7 +113,9 @@ class RequestHandoverOutcomeTest {
         ReflectionTestUtils.setField(request, "status", status);
         ReflectionTestUtils.setField(request, "donorHandoverAt", donorHandoverAt);
         ReflectionTestUtils.setField(request, "receiverHandoverAt", receiverHandoverAt);
-        when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request));
+        lenient().when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request));
+        // handoverFailed khoá dòng khi đọc (GN-06) nên cần stub cả đường findByIdForUpdate
+        lenient().when(requestRepository.findByIdForUpdate(REQUEST_ID)).thenReturn(Optional.of(request));
         return request;
     }
 
@@ -123,8 +126,9 @@ class RequestHandoverOutcomeTest {
     // ---------- handover-failed ----------
 
     @Test
-    @DisplayName("Giao nhận không thành công khi bên kia chưa bấm hoàn tất: huỷ giao dịch, mở lại bài, báo bên kia")
-    void handoverFailed_whenOtherPartyNotConfirmed_cancelsAndReleasesItem() {
+    @DisplayName(
+            "Giao nhận không thành công khi bên kia chưa bấm hoàn tất: chưa huỷ, chỉ tạo đề nghị huỷ chờ bên kia (luật mới thay luật 21/11)")
+    void handoverFailed_whenOtherPartyNotConfirmed_createsCancelRequestInsteadOfCancelling() {
         // given
         Request request = giveRequest(RequestStatus.LOGISTICS_CONFIRMED, null, null);
         saveReturnsArgument();
@@ -134,11 +138,11 @@ class RequestHandoverOutcomeTest {
                 REQUEST_ID, RECEIVER_ID, new HandoverFailedRequest("  Không đến điểm hẹn  ", null));
 
         // then
-        assertThat(response.status()).isEqualTo("CANCELLED");
-        assertThat(request.getCancelReason()).isEqualTo(Request.CANCEL_BY_RECEIVER + "Không đến điểm hẹn");
-        verify(itemService).releaseAfterCancel(eq(ITEM_ID), any());
-        verify(notificationService)
-                .notify(eq(DONOR_ID), eq("TRANSACTION_CANCELLED"), anyString(), anyString(), anyString());
+        assertThat(response.status()).isEqualTo("LOGISTICS_CONFIRMED");
+        assertThat(request.getCancelRequestedBy()).isEqualTo(RECEIVER_ID);
+        assertThat(request.getCancelRequestReason()).isEqualTo("Không đến điểm hẹn");
+        verify(itemService, never()).releaseAfterCancel(eq(ITEM_ID), any());
+        verify(notificationService).notify(eq(DONOR_ID), eq("CANCEL_REQUESTED"), anyString(), anyString(), anyString());
         verify(eventPublisher, never()).publishEvent(any(HandoverIssueReportedEvent.class));
     }
 
