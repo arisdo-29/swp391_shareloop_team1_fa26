@@ -184,13 +184,12 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       .then(async ([sentRequests, ownedItems]) => {
         if (!active) return;
         setShareableItems(ownedItems.filter((item) => item.status === 'APPROVED'));
-        const receivedGroups = await Promise.all(
-          ownedItems.map((item) => requestApi.forItem(item.id, currentUserId)),
-        );
+        // Một lần gọi cho mọi yêu cầu tới các bài của mình (G2), không còn vòng gọi theo từng bài
+        const receivedRequests = await requestApi.received(currentUserId);
         const loadedAt = Date.now();
         ownedItems.forEach((item) => requestGroupsLoadedAt.current.set(item.id, loadedAt));
         const requestById = new Map<number, RequestResponse>();
-        [...sentRequests, ...receivedGroups.flat()].forEach((request) => {
+        [...sentRequests, ...receivedRequests].forEach((request) => {
           requestById.set(request.id, request);
         });
         if (requestedId !== null) {

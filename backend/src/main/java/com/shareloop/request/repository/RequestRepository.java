@@ -3,6 +3,7 @@ package com.shareloop.request.repository;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -75,6 +76,21 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
      * Mọi yêu cầu, mới nhất trước, cho danh sách giao dịch của Admin.
      */
     List<Request> findAllByOrderByCreatedAtDesc();
+
+    /**
+     * Trang giao dịch cho Admin, lọc và chia trang ngay trong câu truy vấn (G2). type và delivery truyền chuỗi rỗng là không lọc,
+     * from và to luôn có giá trị (người gọi truyền mốc rất xa khi không lọc ngày). Thứ tự do Pageable quyết định.
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "select r from Request r where r.status in :statuses and (:type = '' or r.type = :type)"
+                    + " and (:delivery = '' or r.deliveryMethod = :delivery) and r.createdAt >= :from and r.createdAt < :to")
+    org.springframework.data.domain.Page<Request> findForAdmin(
+            @org.springframework.data.repository.query.Param("statuses") Collection<RequestStatus> statuses,
+            @org.springframework.data.repository.query.Param("type") String type,
+            @org.springframework.data.repository.query.Param("delivery") String delivery,
+            @org.springframework.data.repository.query.Param("from") Instant from,
+            @org.springframework.data.repository.query.Param("to") Instant to,
+            org.springframework.data.domain.Pageable pageable);
 
     /**
      * Yêu cầu theo trạng thái, mới nhất trước, cho danh sách giao dịch của Admin.

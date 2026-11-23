@@ -717,3 +717,8 @@ Khoá cấu hình `max_active_transactions` (mặc định 5) đếm giao dịch
 ## Độ dài lý do huỷ (E2)
 
 Cột `requests.cancel_reason` dài 600 ký tự (đủ cho lý do 500 ký tự của huỷ giao dịch, huỷ của Admin và sự cố giao nhận cộng tiền tố người huỷ). Lý do "Từ chối giao nhận" vẫn cho nhập tới 1000 ký tự: toàn văn lưu ở báo cáo (cột `reports.description`), còn `cancel_reason` chỉ lưu bản rút gọn ở ranh giới từ kèm "…". Việc rút gọn nằm ở `Request.cancel`, nên mọi đường ghi lý do huỷ đều được bảo vệ.
+
+## Giảm số lượt gọi API (G2)
+
+- `GET /api/v1/me/received-requests?status=A,B` (cần đăng nhập): mọi yêu cầu gửi tới các bài của người gọi trong một lần, mới nhất trước, cùng dạng `RequestResponse` như `GET /items/{id}/requests` (tên và uy tín người xin tra một lần cho mỗi người). `status` tuỳ chọn, nhiều giá trị cách nhau bằng dấu phẩy hoặc lặp tham số, bỏ trống là mọi trạng thái. Trang Tin nhắn dùng endpoint này thay cho gọi từng bài.
+- `GET /admin/requests`: các bộ lọc `status`, `type`, `deliveryMethod`, `from`, `to` và việc sắp xếp, chia trang chạy trong SQL, chỉ dựng dòng cho trang hiện tại. Riêng `q` (khớp tên bài, tên người) và `stuck` (khoá tài khoản, giờ hẹn) vẫn lọc trong bộ nhớ vì dữ liệu nằm ở module khác. Contract và kết quả không đổi.

@@ -181,6 +181,13 @@ export const requestApi = {
     });
     return data;
   },
+  /** Mọi yêu cầu tới các bài của mình trong một lần (G2), thay cho gọi forItem từng bài. */
+  async received(currentUserId: number, statuses?: ItemRequestStatus[]) {
+    const { data } = await http.get<RequestResponse[]>('/api/v1/me/received-requests', {
+      params: { currentUserId, status: statuses?.length ? statuses.join(',') : undefined },
+    });
+    return data;
+  },
   async mine(currentUserId: number) {
     const { data } = await http.get<RequestResponse[]>('/api/v1/me/requests', {
       params: { currentUserId },

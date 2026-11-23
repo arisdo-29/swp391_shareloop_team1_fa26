@@ -360,9 +360,36 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
         }
 
-        // Mọi yêu cầu trong danh sách cùng một bài nên tra thẻ bài đăng một lần rồi dùng lại.
-        Map<Long, ItemCardDto> itemCards = new HashMap<>();
         List<Request> requests = requestRepository.findByItemIdOrderByCreatedAtDesc(itemId);
+        return buildOwnerView(requests, currentUserId);
+    }
+
+    /**
+     * Mọi yêu cầu tới các bài của người gọi trong một lần (G2), có lọc theo trạng thái, mới nhất trước. Thay cho việc gọi
+     * {@link #listByItem} từng bài ở trang Tin nhắn.
+     *
+     * @param statuses chỉ lấy các trạng thái này; null hoặc rỗng là lấy mọi trạng thái
+     */
+    @Transactional(readOnly = true)
+    public List<RequestResponse> listReceivedRequests(long currentUserId, Set<RequestStatus> statuses) {
+        List<Long> ownItemIds = itemQueryService.findItemIdsByDonor(currentUserId);
+        if (ownItemIds.isEmpty()) {
+            return List.of();
+        }
+        Set<RequestStatus> wanted = statuses == null || statuses.isEmpty() ? Set.of(RequestStatus.values()) : statuses;
+        List<Request> requests = new ArrayList<>(requestRepository.findByItemIdInAndStatusIn(ownItemIds, wanted));
+        requests.sort(java.util.Comparator.comparing(
+                Request::getCreatedAt, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
+        return buildOwnerView(requests, currentUserId);
+    }
+
+    // Dựng danh sách yêu cầu nhìn từ chủ bài. Tên và uy tín người xin tra một lần cho mỗi người (G2), thẻ bài tra một
+    // lần cho mỗi bài.
+    private List<RequestResponse> buildOwnerView(List<Request> requests, long currentUserId) {
+        Map<Long, ItemCardDto> itemCards = new HashMap<>();
+        // Một người xin gửi nhiều yêu cầu thì chỉ tra tên và uy tín một lần
+        Map<Long, String> receiverNames = new HashMap<>();
+        Map<Long, ReputationSummary> receiverReputations = new HashMap<>();
         List<Long> requestIds = requests.stream().map(Request::getId).toList();
         Map<Long, Instant> lastMessageMap = findLastMessageAtMap(requestIds);
         Map<Long, List<RequestDisputeSummary>> disputesMap = findDisputesMap(requestIds, currentUserId);
@@ -376,8 +403,12 @@ public class RequestService {
         int complaintHours = complaintWindowHours();
         return requests.stream()
                 .map(request -> {
-                    String receiverName = findUserName(request.getReceiverId());
-                    ReputationSummary rep = findReceiverReputation(request.getReceiverId());
+                    String receiverName = receiverNames.computeIfAbsent(request.getReceiverId(), this::findUserName);
+                    if (!receiverReputations.containsKey(request.getReceiverId())) {
+                        receiverReputations.put(
+                                request.getReceiverId(), findReceiverReputation(request.getReceiverId()));
+                    }
+                    ReputationSummary rep = receiverReputations.get(request.getReceiverId());
                     Integer trustStars = rep != null ? rep.trustStars() : 5;
                     String rank = rep != null && rep.rank() != null ? rep.rank().name() : Rank.BRONZE.name();
                     Instant complaintDeadline = ComplaintWindow.deadline(request.getCompletedAt(), complaintHours);

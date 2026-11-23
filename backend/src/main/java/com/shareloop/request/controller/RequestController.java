@@ -69,6 +69,18 @@ public class RequestController {
     }
 
     /**
+     * Mọi yêu cầu tới các bài của người gọi trong một lần (G2), có lọc theo trạng thái.
+     */
+    @Operation(summary = "Xem mọi yêu cầu gửi tới các bài của mình trong một lần, lọc theo trạng thái")
+    @GetMapping("/api/v1/me/received-requests")
+    public List<RequestResponse> listReceivedRequests(
+            @CurrentUserId Long currentUserId,
+            @org.springframework.web.bind.annotation.RequestParam(required = false)
+                    java.util.Set<com.shareloop.request.entity.RequestStatus> status) {
+        return requestService.listReceivedRequests(currentUserId, status);
+    }
+
+    /**
      * Người gửi tự huỷ yêu cầu khi còn ở trạng thái PENDING.
      */
     @Operation(summary = "Người gửi tự huỷ yêu cầu khi còn ở trạng thái PENDING")
