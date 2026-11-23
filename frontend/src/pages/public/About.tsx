@@ -12,29 +12,35 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import { ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
 import { itemApi, type ListingFeeConfigResponse } from '../../services/itemApi';
+import type { PublicConfig } from '../../services/publicConfigApi';
+import { usePublicConfig } from '../../utils/usePublicConfig';
 import { BOOST_BENEFITS, BOOST_REFUND_POLICY } from '../../utils/boostMessages';
 import './about.css';
 
-/** Các con số là luật cố định (Business Rule v12 / SRS Final Report 09/11) nên ghi thẳng trong text. Gom một chỗ để dễ rà soát. */
-const RULES = {
-  giveLimit: 5,
-  pendingRequests: 5,
-  requestPendingDays: 3,
-  chatOpenDays: 10,
-  autoConfirmDays: 3,
-  autoConfirmDaysShipping: 7,
-  complaintHours: 24,
-  responseHours: 48,
-  reportHideThreshold: 3,
-  cleanStreakForStar: 10,
-  aiFreePerDay: 5,
-  aiFeePerUse: 2,
-  boostCooldownDays: 3,
-  boostMaxPerUser: 3,
-  boostMaxActive: 30,
-  boostMaxPerPage: 3,
-  boostRotateMinutes: 3,
-} as const;
+/** Các con số đọc từ backend (GET /api/v1/configs/public), có giá trị dự phòng khi gọi lỗi. */
+function toRules(config: PublicConfig) {
+  return {
+    giveLimit: config.max_active_give_items,
+    pendingRequests: config.max_pending_requests,
+    requestPendingDays: config.request_pending_days,
+    chatOpenDays: config.chat_open_days,
+    autoConfirmDays: config.auto_confirm_days,
+    autoConfirmDaysShipping: config.auto_confirm_days_shipping,
+    complaintHours: config.complaint_window_hours,
+    responseHours: config.response_window_hours,
+    reportHideThreshold: config.report_hide_threshold,
+    cleanStreakForStar: config.reputation_clean_streak_for_star,
+    aiFreePerDay: config.ai_free_per_day,
+    aiFeePerUse: config.ai_search_fee,
+    boostCooldownDays: config.boost_cooldown_days,
+    boostMaxPerUser: config.boost_max_per_user,
+    boostMaxActive: config.boost_max_active,
+    boostMaxPerPage: config.boost_max_per_page,
+    boostRotateMinutes: Math.round(config.boost_rotate_seconds / 60),
+  };
+}
+
+type Rules = ReturnType<typeof toRules>;
 
 const reasons = [
   [
@@ -50,7 +56,7 @@ const reasons = [
 
 const reasonIcons = [MapPin, ShieldCheck, SealCheck] as const;
 
-const receiverSteps = [
+const receiverSteps = (RULES: Rules) => [
   [
     'Tìm món',
     'Khách chưa đăng nhập vẫn xem, tìm và lọc bài được. Muốn làm thêm thì đăng nhập. Bạn cũng có thể mô tả món cần cho Trợ lý AI.',
@@ -69,7 +75,7 @@ const receiverSteps = [
   ],
 ] as const;
 
-const giverSteps = [
+const giverSteps = (RULES: Rules) => [
   [
     'Đăng bài',
     `Chụp từ ${ITEM_IMAGES_MIN} đến ${ITEM_IMAGES_MAX} ảnh thật của chính bạn, mỗi ảnh tối đa 5 MB. Bài Trao đổi ghi rõ món mong muốn. Đồ có lỗi thì mô tả lỗi và chụp ảnh lỗi. Bài Cho tặng đăng miễn phí.`,
@@ -88,7 +94,7 @@ const giverSteps = [
   ],
 ] as const;
 
-const safetyTips = [
+const safetyTips = (RULES: Rules) => [
   'Hẹn ở chỗ đông người: cổng chợ, quán cà phê, sảnh chung cư.',
   'Nếu gửi qua đơn vị vận chuyển, hai bên tự gửi và đều phải bấm cam kết tự chịu trách nhiệm.',
   'ShareLoop không bồi thường tiền hàng hay phí gửi. Hãy kiểm đồ kỹ trước khi bấm "Hoàn tất giao nhận".',
@@ -98,7 +104,7 @@ const safetyTips = [
   `Khiếu nại giao dịch trong ${RULES.complaintHours} giờ sau khi hoàn tất. Bên bị khiếu nại có ${RULES.responseHours} giờ giải trình, Admin chỉ kết luận khi đã có giải trình hoặc hết hạn giải trình.`,
 ];
 
-const faqs = [
+const faqs = (RULES: Rules) => [
   [
     'Tôi có phải trả tiền cho người cho đồ không?',
     'Không. ShareLoop không có mua bán và hai người dùng không trả tiền cho nhau qua hệ thống. Ai đòi tiền hay tiền cọc, hãy báo cáo người dùng đó.',
@@ -181,6 +187,7 @@ const faqs = [
 export function About() {
   const user = useAppSelector(selectCurrentUser);
   const fees = useListingFees(Boolean(user));
+  const RULES = toRules(usePublicConfig());
 
   return (
     <div className="about-page">
@@ -228,8 +235,8 @@ export function About() {
             description="Hai hành trình rõ ràng cho người nhận và người đăng đồ."
           />
           <div className="about-step-grid">
-            <StepCard title="Khi bạn muốn nhận hoặc đổi đồ" steps={receiverSteps} />
-            <StepCard title="Khi bạn muốn cho hoặc đổi đồ" steps={giverSteps} />
+            <StepCard title="Khi bạn muốn nhận hoặc đổi đồ" steps={receiverSteps(RULES)} />
+            <StepCard title="Khi bạn muốn cho hoặc đổi đồ" steps={giverSteps(RULES)} />
           </div>
         </section>
 
@@ -307,9 +314,9 @@ export function About() {
               title="An toàn khi giao nhận"
               id="safety-title"
             />
-            <SafetyGroup title="Gặp và giao đồ" tips={safetyTips.slice(0, 3)} />
-            <SafetyGroup title="Thông tin và thanh toán" tips={safetyTips.slice(3, 5)} />
-            <SafetyGroup title="Báo cáo và khiếu nại" tips={safetyTips.slice(5)} />
+            <SafetyGroup title="Gặp và giao đồ" tips={safetyTips(RULES).slice(0, 3)} />
+            <SafetyGroup title="Thông tin và thanh toán" tips={safetyTips(RULES).slice(3, 5)} />
+            <SafetyGroup title="Báo cáo và khiếu nại" tips={safetyTips(RULES).slice(5)} />
           </section>
         </div>
 
@@ -323,7 +330,7 @@ export function About() {
             description="Những điều cần biết trước khi bắt đầu cho tặng hoặc trao đổi."
           />
           <div className="about-faq-list">
-            {faqs.map(([question, answer], index) => (
+            {faqs(RULES).map(([question, answer], index) => (
               <details key={question} open={index === 0}>
                 <summary>
                   <span>{question}</span>
@@ -353,6 +360,7 @@ export function About() {
 }
 
 function BoostRulesSection({ fees }: { fees: ListingFeeConfigResponse | null }) {
+  const RULES = toRules(usePublicConfig());
   return (
     <section id="day-bai" aria-labelledby="boost-rules-title" className="about-section scroll-mt-24">
       <SectionHeading
@@ -495,6 +503,7 @@ function CreditSection({ fees }: { fees: ListingFeeConfigResponse | null }) {
 }
 
 function FeeList({ fees }: { fees: ListingFeeConfigResponse }) {
+  const RULES = toRules(usePublicConfig());
   const overQuotaText =
     fees.postFeeSwapOverQuota === undefined
       ? 'Đăng vượt hạn mức: phí cao hơn, hệ thống báo trước khi đăng'
@@ -534,6 +543,7 @@ function FeeList({ fees }: { fees: ListingFeeConfigResponse }) {
 }
 
 function GenericFeeList() {
+  const RULES = toRules(usePublicConfig());
   return (
     <ul className="about-compact-list">
       <li>Đăng bài Trao đổi, kể cả khi vượt hạn mức</li>

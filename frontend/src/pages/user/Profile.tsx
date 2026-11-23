@@ -150,7 +150,7 @@ function phoneChangeErrorMessage(error: ApiError) {
   if (code === 'USER_PHONE_CHANGE_COOLDOWN') {
     return typeof retryAfterDays === 'number'
       ? `Bạn có thể đổi số điện thoại sau ${retryAfterDays} ngày nữa.`
-      : 'Bạn chưa thể đổi số điện thoại do chưa hết thời gian chờ 30 ngày.';
+      : 'Bạn chưa thể đổi số điện thoại do chưa hết thời gian chờ.';
   }
   if (code === 'USER_PHONE_CHANGE_ACTIVE_DELIVERY') {
     return 'Không thể đổi số điện thoại khi đang có giao dịch chưa hoàn tất.';

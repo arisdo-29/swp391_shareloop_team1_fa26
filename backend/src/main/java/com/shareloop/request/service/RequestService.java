@@ -276,7 +276,11 @@ public class RequestService {
         int maxPending = configService.getInt(ConfigKey.MAX_PENDING_REQUESTS);
         long pendingCount = requestRepository.countByReceiverIdAndStatus(receiverId, RequestStatus.PENDING);
         if (pendingCount >= maxPending) {
-            throw new BusinessException(RequestErrorCode.REQUEST_LIMIT_EXCEEDED);
+            throw new BusinessException(
+                    RequestErrorCode.REQUEST_LIMIT_EXCEEDED,
+                    "Bạn đã đạt giới hạn tối đa " + maxPending + " yêu cầu đang chờ xử lý.",
+                    null,
+                    null);
         }
 
         // 1a. Vừa tự huỷ yêu cầu cho đúng bài này thì phải chờ đủ giờ mới gửi lại (C5)

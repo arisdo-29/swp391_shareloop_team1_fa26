@@ -447,7 +447,9 @@ class VnPayCallbackIT extends IntegrationTest {
                 .startsWith("VNPay báo đã thu tiền sau khi đơn đã đóng. Đơn chờ Admin đối soát")
                 .doesNotContain(";")
                 .contains("123456");
-        assertThat(payment.getOwnOrder(userId, orderCode).failureReason()).contains("đối soát");
+        assertThat(payment.getOwnOrder(userId, orderCode).failureReason())
+                .isEqualTo(
+                        "VNPay đã báo thu tiền sau khi đơn hết hạn. Admin sẽ kiểm tra và cộng Credit hoặc hoàn tiền cho bạn.");
         assertPaidEvidenceRecorded();
     }
 

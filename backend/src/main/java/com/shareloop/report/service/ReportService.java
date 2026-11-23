@@ -481,7 +481,11 @@ public class ReportService {
         Instant completedAt = reqSnapshot.completedAt() != null ? reqSnapshot.completedAt() : Instant.now(clock);
         Instant deadline = completedAt.plus(Duration.ofHours(windowHours));
         if (Instant.now(clock).isAfter(deadline)) {
-            throw new BusinessException(ReportErrorCode.DISPUTE_WINDOW_EXPIRED);
+            throw new BusinessException(
+                    ReportErrorCode.DISPUTE_WINDOW_EXPIRED,
+                    "Đã quá thời hạn " + windowHours + " giờ để khiếu nại giao dịch.",
+                    null,
+                    null);
         }
 
         // 5. Mỗi người chỉ khiếu nại giao dịch này một lần
@@ -793,7 +797,11 @@ public class ReportService {
 
         // Quá hạn giải trình 48 giờ
         if (dispute.getResponseDueAt() != null && Instant.now(clock).isAfter(dispute.getResponseDueAt())) {
-            throw new BusinessException(ReportErrorCode.DISPUTE_RESPONSE_WINDOW_EXPIRED);
+            throw new BusinessException(
+                    ReportErrorCode.DISPUTE_RESPONSE_WINDOW_EXPIRED,
+                    "Đã quá thời hạn " + windowHours(ConfigKey.RESPONSE_WINDOW_HOURS) + " giờ để gửi giải trình.",
+                    null,
+                    null);
         }
 
         // Đính kèm bằng chứng nếu có

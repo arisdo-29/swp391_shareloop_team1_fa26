@@ -1,9 +1,13 @@
 // Câu chữ cho ba nút kết quả giao nhận (docs/api/request.md mục 10, 14, 15). Backend vẫn là nơi quyết định nhánh.
 
 // Hậu quả của "Giao nhận không thành công" phụ thuộc việc bên kia đã bấm hoàn tất hay chưa.
-export function handoverFailedConsequence(partnerConfirmed: boolean, partnerName: string) {
+export function handoverFailedConsequence(
+  partnerConfirmed: boolean,
+  partnerName: string,
+  responseHours: number,
+) {
   return partnerConfirmed
-    ? `${partnerName} đã xác nhận hoàn tất nên giao dịch chuyển sang sự cố giao nhận, chờ Admin xác minh. ${partnerName} có 48 giờ để giải trình.`
+    ? `${partnerName} đã xác nhận hoàn tất nên giao dịch chuyển sang sự cố giao nhận, chờ Admin xác minh. ${partnerName} có ${responseHours} giờ để giải trình.`
     : 'Giao dịch bị hủy, bài đăng và món đổi (nếu có) được mở lại. Không bên nào bị trừ uy tín.';
 }
 

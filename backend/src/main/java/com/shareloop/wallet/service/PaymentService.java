@@ -329,7 +329,18 @@ public class PaymentService {
      * Lý do đơn FAILED / CANCELLED cho người dùng đọc. Ghi chú xử lý (tự hủy, hủy để tạo đơn mới, cần hoàn tiền) ưu
      * tiên trước; không có thì suy từ vnp_ResponseCode trong callback_data. Trạng thái khác trả null.
      */
+    private static final String PAID_AFTER_CLOSED_MESSAGE =
+            "VNPay đã báo thu tiền sau khi đơn hết hạn. Admin sẽ kiểm tra và cộng Credit hoặc hoàn tiền cho bạn.";
+
     static String failureReason(PaymentOrder order) {
+        // Đơn đã đóng nhưng VNPay báo đã thu tiền và Admin chưa đối soát: người dùng đọc câu cố định, không đọc ghi chú
+        // nội bộ
+        if (order.getPaidAt() != null
+                && order.getReviewedAt() == null
+                && order.getStatus() != PaymentOrderStatus.PENDING
+                && order.getStatus() != PaymentOrderStatus.SUCCESS) {
+            return PAID_AFTER_CLOSED_MESSAGE;
+        }
         if (order.getStatus() != PaymentOrderStatus.FAILED && order.getStatus() != PaymentOrderStatus.CANCELLED) {
             return null;
         }

@@ -355,3 +355,9 @@ Thành công trả về danh sách toàn bộ mục sau khi đã cập nhật l�
 - `400 SETTING_CHECKLIST_AT_LEAST_ONE_REQUIRED`: vi phạm KD-04 khi cố ẩn mục active duy nhất.
 - `403 FORBIDDEN`: tài khoản không phải Admin.
 - `404 SETTING_CHECKLIST_NOT_FOUND`: id câu hỏi không tồn tại.
+
+## GET /api/v1/configs/public (G1)
+
+Công khai, không cần đăng nhập. Trả map khoá cấu hình sang số nguyên cho một danh sách khoá chọn lọc (`PublicConfigController.PUBLIC_KEYS`): hạn mức yêu cầu và giao dịch, số ngày chờ, cửa sổ khiếu nại và giải trình, ngưỡng báo cáo, điểm và sao, lượt AI miễn phí, các giới hạn đẩy bài, số ngày hiển thị bài. Không trả khoá nội bộ (phí, từ khoá cấm, lý do nghiêm trọng...). Đây là đường duy nhất được thêm vào danh sách công khai của `SecurityConfig`, các đường `/api/v1/configs/**` khác vẫn cần đăng nhập. Frontend dùng cho trang Giới thiệu và các câu có số ngày, số giờ, có giá trị dự phòng khi gọi lỗi.
+
+Câu lỗi nghiệp vụ có số (yêu cầu chờ tối đa, hạn khiếu nại, hạn giải trình, đổi số điện thoại, huỷ tự động) được dựng từ cấu hình lúc ném lỗi. Câu mặc định của `ErrorCode` không còn ghi số cứng.

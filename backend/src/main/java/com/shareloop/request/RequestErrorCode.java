@@ -10,7 +10,7 @@ public enum RequestErrorCode implements ErrorCode {
             HttpStatus.CONFLICT, "Chỉ xem được tin nhắn khi giao dịch có báo cáo hoặc khiếu nại."),
     REQUEST_INVALID_STATE_TRANSITION(HttpStatus.CONFLICT, "Chuyển trạng thái yêu cầu không hợp lệ."),
     REQUEST_ALREADY_EXISTS(HttpStatus.CONFLICT, "Bạn đã có một yêu cầu đang hoạt động cho bài đăng này."),
-    REQUEST_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "Bạn đã đạt giới hạn tối đa 5 yêu cầu đang chờ xử lý."),
+    REQUEST_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "Bạn đã đạt giới hạn số yêu cầu đang chờ xử lý."),
     REQUEST_SELF_OFFER_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "Không thể gửi yêu cầu cho bài đăng của chính mình."),
     REQUEST_OFFERED_ITEM_IN_OTHER_TRANSACTION(
             HttpStatus.CONFLICT, "Món người này mang đổi đang nằm trong một giao dịch khác."),

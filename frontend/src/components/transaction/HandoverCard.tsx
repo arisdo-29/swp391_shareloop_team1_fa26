@@ -3,6 +3,7 @@ import { Alert, Button } from '../ui';
 import { requestApi, type RequestResponse } from '../../services/requestApi';
 import type { ApiError } from '../../services/http';
 import { canConfirmHandover, canRefuseHandover } from '../../utils/request';
+import { usePublicConfig } from '../../utils/usePublicConfig';
 import { handoverFailedConsequence, REFUSE_HANDOVER_CONSEQUENCE } from '../../utils/handoverOutcome';
 
 interface HandoverCardProps {
@@ -37,6 +38,7 @@ export function HandoverCard({
 }: HandoverCardProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const config = usePublicConfig();
 
   if (!canConfirmHandover(request.status) || !request.contactRevealedAt) return null;
 
@@ -78,7 +80,7 @@ export function HandoverCard({
       ) : (
         <>
           <p className="text-xs font-semibold text-warning">
-            Sau khi hoàn tất, bạn chỉ có 24 giờ để khiếu nại.
+            Sau khi hoàn tất, bạn chỉ có {config.complaint_window_hours} giờ để khiếu nại.
           </p>
           <ul className="space-y-3">
             <li className="space-y-1">
@@ -94,7 +96,7 @@ export function HandoverCard({
                 Giao nhận không thành công
               </Button>
               <p className="text-xs leading-5 text-text-secondary">
-                {handoverFailedConsequence(Boolean(otherHandoverAt), partnerName)}
+                {handoverFailedConsequence(Boolean(otherHandoverAt), partnerName, config.response_window_hours)}
               </p>
             </li>
             {showRefuse ? (
