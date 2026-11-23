@@ -1028,6 +1028,8 @@ public class ReportService {
                     report.getRequestId(), decision == ReportDecision.UPHOLD, report.getTargetUserId());
         }
 
+        notifyConcluded(report, decision, note, about);
+
         Report saved = reportRepository.save(report);
 
         return new ReportConclusionResponse(
@@ -1042,6 +1044,38 @@ public class ReportService {
                 saved.getResolution(),
                 saved.getStarsDeducted(),
                 saved.getResolvedAt());
+    }
+
+    /**
+     * Báo kết quả cho người báo cáo (kèm ghi chú của Admin) và, khi bác bỏ, báo người bị báo cáo là không có vi phạm (F6). Không lộ
+     * thông tin cá nhân của người bị báo. Khiếu nại giao dịch giữ cách báo riêng của giao dịch nên không gửi trùng ở đây.
+     */
+    private void notifyConcluded(Report report, ReportDecision decision, String note, String about) {
+        if (notificationService == null || report.getTargetType() == TargetType.REQUEST) {
+            return;
+        }
+        String link = "/activities?tab=complaints";
+        String noteText = note == null || note.isBlank() ? "" : " Ghi chú của Admin: " + note;
+        String result = decision == ReportDecision.UPHOLD
+                ? "đã được chấp thuận. Cảm ơn bạn đã giúp cộng đồng an toàn hơn."
+                : "đã được xem xét và chưa thấy vi phạm.";
+        notificationService.notify(
+                report.getReporterId(),
+                "REPORT_CONCLUDED",
+                "Báo cáo của bạn đã có kết quả",
+                "Báo cáo của bạn" + about + " " + result + noteText,
+                link);
+        if (decision == ReportDecision.DISMISS) {
+            Long reportedUserId = resolveViolator(report);
+            if (reportedUserId != null && !reportedUserId.equals(report.getReporterId())) {
+                notificationService.notify(
+                        reportedUserId,
+                        "REPORT_CONCLUDED",
+                        "Báo cáo đã được xem xét",
+                        "Báo cáo về bài hoặc tài khoản của bạn đã được xem xét và không có vi phạm.",
+                        link);
+            }
+        }
     }
 
     // Chỉ giao dịch COMPLETED mới đã cộng điểm. Giao dịch đang DISPUTED thì bị huỷ khi kết luận nên chưa có điểm nào.

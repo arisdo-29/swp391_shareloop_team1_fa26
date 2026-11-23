@@ -594,3 +594,7 @@ Chỉ báo cáo của người đủ tin cậy mới được tính vào `report
 ## Khiếu nại thắng sau khi giao dịch hoàn tất thì thu hồi điểm (F3)
 
 Chấp thuận khiếu nại của giao dịch đã `COMPLETED`: trừ lại đúng số điểm nhật ký `POINTS` đã ghi cho người vi phạm (bên bị khiếu nại, hoặc người Admin chọn khi có) từ giao dịch đó, không để điểm âm, tính lại hạng, ghi nhật ký `POINTS_REVOKED` ("Thu hồi điểm") và báo người đó (`POINTS_REVOKED`). Người khiếu nại giữ điểm. Kết luận gọi lại không trừ hai lần.
+
+## Thông báo kết quả báo cáo (F6)
+
+Admin kết luận báo cáo bài hoặc người dùng thì người báo nhận thông báo `REPORT_CONCLUDED` ("Báo cáo của bạn đã có kết quả", kèm kết quả và ghi chú của Admin, không lộ thông tin cá nhân người bị báo). Kết luận bác bỏ thì người bị báo cũng nhận `REPORT_CONCLUDED` ("Báo cáo về bài hoặc tài khoản của bạn đã được xem xét và không có vi phạm."). Link dẫn tới `/activities?tab=complaints`. Khiếu nại giao dịch giữ cách báo riêng của giao dịch nên không gửi thêm.

@@ -938,6 +938,9 @@ class ReportServiceTest {
                 100L, TargetType.REQUEST, 105L, 200L, 77L, ReportReason.NO_SHOW, "Chưa nhận được", ReportStage.AFTER);
         ReflectionTestUtils.setField(report, "id", 14L);
         when(reportRepository.findByIdForUpdate(14L)).thenReturn(Optional.of(report));
+        doReturn(new ReportService.RequestSnapshot(77L, 105L, 200L, "DISPUTED", null))
+                .when(reportService)
+                .findRequest(77L);
         when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // when
@@ -1157,6 +1160,9 @@ class ReportServiceTest {
                 ReportStage.BEFORE);
         ReflectionTestUtils.setField(report, "id", reportId);
 
+        doReturn(new ReportService.RequestSnapshot(requestId, 1L, reporterId, "DISPUTED", null))
+                .when(reportService)
+                .findRequest(requestId);
         when(reportRepository.findByIdForUpdate(reportId)).thenReturn(Optional.of(report));
         when(requestService.getChatContext(requestId))
                 .thenReturn(

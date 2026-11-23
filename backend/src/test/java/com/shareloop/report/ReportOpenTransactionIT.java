@@ -148,6 +148,61 @@ class ReportOpenTransactionIT extends IntegrationTest {
         assertThat(noticeCount(receiverId, "TRANSACTION_ITEM_UNDER_REVIEW")).isEqualTo(1);
     }
 
+    @Test
+    void conclude_whenUpheld_notifiesReporterWithAdminNote() throws Exception {
+        // given
+        long donorId = insertUser("Donor", false);
+        long reporterId = insertUser("Reporter", false);
+        long adminId = insertUser("Admin", true);
+        long itemId = insertItem(donorId);
+        long reportId = insertReport(reporterId, itemId, donorId, "OTHER");
+
+        // when
+        concludeWith(reportId, adminId, "UPHOLD", "Đã xác minh");
+
+        // then
+        assertThat(noticeCount(reporterId, "REPORT_CONCLUDED")).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                        "SELECT body FROM notifications WHERE user_id = ? AND type = 'REPORT_CONCLUDED'",
+                        String.class,
+                        reporterId))
+                .contains("chấp thuận")
+                .contains("Đã xác minh");
+        assertThat(noticeCount(donorId, "REPORT_CONCLUDED")).isZero();
+    }
+
+    @Test
+    void conclude_whenDismissed_notifiesReporterAndReportedOwner() throws Exception {
+        // given
+        long donorId = insertUser("Donor", false);
+        long reporterId = insertUser("Reporter", false);
+        long adminId = insertUser("Admin", true);
+        long itemId = insertItem(donorId);
+        long reportId = insertReport(reporterId, itemId, donorId, "OTHER");
+
+        // when
+        concludeWith(reportId, adminId, "DISMISS", null);
+
+        // then
+        assertThat(noticeCount(reporterId, "REPORT_CONCLUDED")).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                        "SELECT body FROM notifications WHERE user_id = ? AND type = 'REPORT_CONCLUDED'",
+                        String.class,
+                        donorId))
+                .isEqualTo("Báo cáo về bài hoặc tài khoản của bạn đã được xem xét và không có vi phạm.");
+    }
+
+    private void concludeWith(long reportId, long adminId, String decision, String note) throws Exception {
+        String body = note == null
+                ? "{\"decision\":\"" + decision + "\"}"
+                : "{\"decision\":\"" + decision + "\",\"note\":\"" + note + "\"}";
+        mockMvc.perform(post("/api/v1/admin/reports/{reportId}/conclude", reportId)
+                        .header("Authorization", "Bearer " + jwtService.issue(adminId, true))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
+    }
+
     // ---------- Helper ----------
 
     private void conclude(long reportId, long adminId) throws Exception {
