@@ -151,6 +151,69 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
             @Param("afterId") long afterId,
             org.springframework.data.domain.Pageable pageable);
 
+    /** Giao dịch chưa chốt lịch (RESERVED, AWAITING_LOGISTICS) được chọn trước cutoff, cho việc nhắc trước khi tự huỷ. */
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.status IN (com.shareloop.request.entity.RequestStatus.RESERVED,
+                           com.shareloop.request.entity.RequestStatus.AWAITING_LOGISTICS)
+        AND r.reservedAt < :cutoff
+        AND r.id > :afterId
+        ORDER BY r.id ASC
+    """)
+    List<Request> findReservedBefore(
+            @Param("cutoff") Instant cutoff,
+            @Param("afterId") long afterId,
+            org.springframework.data.domain.Pageable pageable);
+
+    /** Giao dịch có đề nghị huỷ đang chờ phản hồi, cho việc nhắc trước hạn. */
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.cancelRequestedAt IS NOT NULL
+        AND r.status IN (com.shareloop.request.entity.RequestStatus.LOGISTICS_CONFIRMED,
+                         com.shareloop.request.entity.RequestStatus.AWAITING_HANDOVER)
+        AND r.id > :afterId
+        ORDER BY r.id ASC
+    """)
+    List<Request> findWithPendingCancelRequest(
+            @Param("afterId") long afterId, org.springframework.data.domain.Pageable pageable);
+
+    /** Giao dịch có đề nghị dời lịch đang chờ phản hồi, cho việc nhắc trước hạn. */
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.rescheduleProposedAt IS NOT NULL
+        AND r.status IN (com.shareloop.request.entity.RequestStatus.LOGISTICS_CONFIRMED,
+                         com.shareloop.request.entity.RequestStatus.AWAITING_HANDOVER)
+        AND r.id > :afterId
+        ORDER BY r.id ASC
+    """)
+    List<Request> findWithPendingReschedule(
+            @Param("afterId") long afterId, org.springframework.data.domain.Pageable pageable);
+
+    /** Giao dịch Gặp trực tiếp đã chốt lịch có giờ hẹn trong khoảng [from, to), cho việc nhắc trước giờ hẹn. */
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.status = com.shareloop.request.entity.RequestStatus.LOGISTICS_CONFIRMED
+        AND (r.deliveryMethod IS NULL OR r.deliveryMethod <> 'SHIPPING')
+        AND r.meetingTime >= :from AND r.meetingTime < :to
+        AND r.id > :afterId
+        ORDER BY r.id ASC
+    """)
+    List<Request> findMeetingBetween(
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("afterId") long afterId,
+            org.springframework.data.domain.Pageable pageable);
+
+    /** Giao dịch đang chờ giao nhận, cho việc nhắc trước khi tự hoàn tất. */
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.status = com.shareloop.request.entity.RequestStatus.AWAITING_HANDOVER
+        AND r.id > :afterId
+        ORDER BY r.id ASC
+    """)
+    List<Request> findAwaitingHandover(
+            @Param("afterId") long afterId, org.springframework.data.domain.Pageable pageable);
+
     /**
      * Người đề nghị huỷ từ threshold giao dịch trở lên (đã huỷ vì chính đề nghị đó, đã thấy liên hệ) kể từ since.
      */

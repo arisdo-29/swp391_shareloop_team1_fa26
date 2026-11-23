@@ -20,6 +20,7 @@ export const DEFAULT_PUBLIC_CONFIG: PublicConfig = {
   reschedule_max_count: 2,
   confirmed_stale_cancel_days: 3,
   shipping_send_deadline_days: 3,
+  deadline_reminder_hours_before_response: 6,
   report_hide_threshold: 3,
   reputation_clean_streak_for_star: 10,
   star_restore_min_distinct_partners: 5,

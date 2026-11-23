@@ -101,6 +101,11 @@ export interface RequestResponse {
   receiverTrackingCode?: string | null;
   // Mốc hạn do backend tính, FE chỉ hiện.
   sendDeadlineAt?: string | null;
+  autoCancelAt?: string | null;
+  autoConfirmAt?: string | null;
+  // Giao hàng: lúc tự ghi nhận Đã nhận cho từng chiều đã gửi mà bên nhận im lặng.
+  leg1AutoReceiveAt?: string | null;
+  leg2AutoReceiveAt?: string | null;
   cancelRequestExpiresAt?: string | null;
   rescheduleExpiresAt?: string | null;
 }

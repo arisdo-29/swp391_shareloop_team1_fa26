@@ -9,6 +9,7 @@ import { productDetailFromRequestPath } from '../../utils/productDetailNavigatio
 import type { PinnedItemResponse } from '../../services/chatApi';
 import type { ItemResponse } from '../../services/itemApi';
 import { CompactProgress } from './CompactProgress';
+import { nearestDeadlineLine } from '../../utils/deadlines';
 import { RequestSummary } from './RequestSummary';
 import {
   avatarInitials,
@@ -246,6 +247,11 @@ export function ChatHeader({
         >
           Xem tiến trình
         </Button>
+        {nearestDeadlineLine(request, viewerIsDonor, participantName) ? (
+          <p className="w-full text-xs text-text-secondary" data-testid="chat-nearest-deadline">
+            {nearestDeadlineLine(request, viewerIsDonor, participantName)?.text}.
+          </p>
+        ) : null}
         {request.cancelRequestedAt ? (
           <p className="w-full text-xs font-semibold text-warning">
             Đang có đề nghị huỷ chờ phản hồi

@@ -178,6 +178,33 @@ class RequestRescheduleIT extends IntegrationTest {
                         jdbc.queryForObject("SELECT trust_stars FROM users WHERE id = ?", Integer.class, receiverId));
     }
 
+    @Test
+    void remindDeadlines_whenMeetingWithin24Hours_runsAllReminderQueriesAndSendsMeetingReminderOnce() throws Exception {
+        // given: giờ hẹn sau 20 giờ
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId);
+        long requestId = createConfirmedRequest(itemId, donorId, receiverId);
+        jdbc.update("UPDATE requests SET meeting_time = now() + interval '20 hours' WHERE id = ?", requestId);
+
+        // when: chạy hai lần, mọi câu truy vấn nhắc hạn đều phải chạy được trên PostgreSQL
+        deadlineJobService.remindDeadlines(Instant.now());
+        deadlineJobService.remindDeadlines(Instant.now());
+
+        // then
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = 'MEETING_REMINDER'",
+                        Integer.class,
+                        donorId))
+                .isEqualTo(1);
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                                "/api/v1/requests/{id}", requestId)
+                        .header("Authorization", token(donorId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.autoCancelAt").isNotEmpty())
+                .andExpect(jsonPath("$.autoConfirmAt").doesNotExist());
+    }
+
     private long createReservedRequest(long itemId, long donorId, long receiverId) throws Exception {
         MvcResult created = mockMvc.perform(
                         post("/api/v1/items/{itemId}/requests", itemId).header("Authorization", token(receiverId)))

@@ -315,6 +315,43 @@ class RequestJobServiceTest {
         }
 
         @Test
+        @DisplayName("Hoàn tất tự động gửi hai câu khác nhau cho bên đã bấm và bên im lặng (GN-13)")
+        void autoConfirmHandoverRequests_whenAutoCompleted_sendsDifferentSentencesToConfirmedAndSilentParty() {
+            when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
+            when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS)).thenReturn(24);
+            Instant cutoff = now.minus(3, ChronoUnit.DAYS);
+
+            Request request = new Request(1L, 10L, null, "GIVE");
+            ReflectionTestUtils.setField(request, "id", 305L);
+            request.select(now.minus(5, ChronoUnit.DAYS));
+            request.proposeSchedule(
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, true, now.minus(4, ChronoUnit.DAYS));
+            request.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS));
+            request.confirmHandover(true, cutoff.minus(2, ChronoUnit.HOURS)); // chủ bài đã bấm, người nhận im lặng
+
+            when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(request), List.of());
+            when(requestRepository.findById(305L)).thenReturn(Optional.of(request));
+            when(itemQueryService.getSummary(1L)).thenReturn(new ItemSummary(1L, 20L, null, null));
+
+            requestJobService.autoConfirmHandoverRequests(now);
+
+            org.mockito.ArgumentCaptor<String> silent = org.mockito.ArgumentCaptor.forClass(String.class);
+            org.mockito.ArgumentCaptor<String> confirmed = org.mockito.ArgumentCaptor.forClass(String.class);
+            verify(notificationService)
+                    .notify(eq(10L), eq("TRANSACTION_COMPLETED"), anyString(), silent.capture(), anyString());
+            verify(notificationService)
+                    .notify(eq(20L), eq("TRANSACTION_COMPLETED"), anyString(), confirmed.capture(), anyString());
+            assertThat(silent.getValue())
+                    .startsWith(
+                            "Giao dịch đã tự hoàn tất vì bạn không phản hồi trong 3 ngày. Bạn có thể khiếu nại tới");
+            assertThat(confirmed.getValue())
+                    .startsWith("Giao dịch đã hoàn tất vì")
+                    .contains("không phản hồi trong 3 ngày");
+            assertThat(confirmed.getValue()).doesNotContain("vì bạn không phản hồi");
+        }
+
+        @Test
         @DisplayName("Quét theo từng lô 100 bản ghi cho đến khi hết (Mục Q)")
         void autoConfirmHandoverRequests_whenMultipleBatches_processesAllUntilEmpty() {
             when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);

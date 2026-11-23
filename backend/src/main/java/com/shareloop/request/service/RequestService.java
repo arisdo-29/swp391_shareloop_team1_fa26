@@ -1148,7 +1148,11 @@ public class RequestService {
                 receiverOfLeg,
                 "SHIPMENT_SENT",
                 "Hàng đã được gửi",
-                "Hàng đã được gửi, mã vận đơn " + trackingCode + ". Khi nhận được hàng, hãy bấm Tôi đã nhận được hàng.",
+                "Hàng đã được gửi, mã vận đơn " + trackingCode
+                        + ". Khi nhận được hàng, hãy bấm Tôi đã nhận được hàng. Nếu bạn không phản hồi, hệ thống sẽ tự"
+                        + " ghi nhận bạn đã nhận lúc "
+                        + VietnamTime.format(deadlineCalculator.legAutoReceiveAt(saved, isDonor ? 1 : 2))
+                        + ".",
                 link);
         if (hadPendingCancel && !saved.hasPendingCancelRequest() && cancelRequester != null) {
             notificationService.notify(
@@ -1668,6 +1672,162 @@ public class RequestService {
     private Instant staleThreshold(Request request, int staleDays) {
         Instant base = request.isShipping() ? deadlineCalculator.sendDeadlineAt(request) : request.getMeetingTime();
         return base.plus(staleDays, ChronoUnit.DAYS);
+    }
+
+    // ===== Nhắc hạn (GN-13) =====
+
+    // Số giờ trước hạn thì nhắc bên được hỏi (deadline_reminder_hours_before_response).
+    private Instant reminderTime(Instant deadline) {
+        int hours = configService.getInt(ConfigKey.DEADLINE_REMINDER_HOURS_BEFORE_RESPONSE);
+        return deadline.minus(hours, ChronoUnit.HOURS);
+    }
+
+    /**
+     * Việc nền: nhắc lần hai khi còn 24 giờ nữa hệ thống tự hoàn tất vì bên kia im lặng (GN-13). Gặp trực tiếp nhắc bên
+     * chưa bấm, Giao hàng nhắc bên nhận của từng chiều. Mỗi nhắc chỉ gửi một lần.
+     *
+     * @return true nếu đã gửi ít nhất một nhắc
+     */
+    @Transactional
+    public boolean remindAutoConfirm(long requestId, Instant now) {
+        Request request = requestRepository.findById(requestId).orElse(null);
+        if (request == null || request.getStatus() != RequestStatus.AWAITING_HANDOVER) {
+            return false;
+        }
+        ItemSnapshot item = loadItemSnapshot(request);
+        String link = "/requests/" + request.getId();
+        boolean sent = false;
+        if (request.isShipping()) {
+            for (int leg = 1; leg <= request.requiredLegs(); leg++) {
+                Instant autoAt = deadlineCalculator.legAutoReceiveAt(request, leg);
+                Instant shippedAt = leg == 1 ? request.getDonorShippedAt() : request.getReceiverShippedAt();
+                if (autoAt != null && !autoAt.minus(1, ChronoUnit.DAYS).isAfter(now)) {
+                    sent |= remindOnce(
+                            receiverOfLeg(request, item, leg),
+                            "HANDOVER_AUTO_CONFIRM_REMINDER",
+                            link,
+                            shippedAt,
+                            "Hàng đã được gửi cho bạn. Nếu bạn không phản hồi, hệ thống sẽ tự ghi nhận bạn đã nhận lúc "
+                                    + VietnamTime.format(autoAt) + ".");
+                }
+            }
+            return sent;
+        }
+        Instant autoAt = deadlineCalculator.autoConfirmAt(request);
+        if (autoAt == null || autoAt.minus(1, ChronoUnit.DAYS).isAfter(now)) {
+            return false;
+        }
+        boolean donorConfirmed = request.getDonorHandoverAt() != null;
+        long silentUserId = donorConfirmed ? request.getReceiverId() : item.donorId();
+        Instant confirmedAt = donorConfirmed ? request.getDonorHandoverAt() : request.getReceiverHandoverAt();
+        return remindOnce(
+                silentUserId,
+                "HANDOVER_AUTO_CONFIRM_REMINDER",
+                link,
+                confirmedAt,
+                "Bên kia đã bấm hoàn tất giao nhận. Nếu bạn không phản hồi, hệ thống sẽ tự ghi nhận hoàn tất lúc "
+                        + VietnamTime.format(autoAt) + ".");
+    }
+
+    /**
+     * Việc nền: nhắc cả hai bên khi còn 24 giờ nữa giao dịch chưa chốt lịch bị tự huỷ (GN-13).
+     *
+     * @return true nếu đã gửi nhắc
+     */
+    @Transactional
+    public boolean remindScheduleAutoCancel(long requestId, Instant now) {
+        Request request = requestRepository.findById(requestId).orElse(null);
+        if (request == null) {
+            return false;
+        }
+        Instant cancelAt = deadlineCalculator.autoCancelAt(request);
+        boolean notConfirmedYet = request.getStatus() == RequestStatus.RESERVED
+                || request.getStatus() == RequestStatus.AWAITING_LOGISTICS;
+        if (!notConfirmedYet
+                || cancelAt == null
+                || request.getReservedAt() == null
+                || cancelAt.minus(1, ChronoUnit.DAYS).isAfter(now)
+                || !cancelAt.isAfter(now)) {
+            return false;
+        }
+        String message = "Giao dịch sẽ tự huỷ lúc " + VietnamTime.format(cancelAt)
+                + " nếu hai bên chưa chốt lịch. Hãy chốt lịch giao nhận sớm.";
+        String link = "/requests/" + request.getId();
+        boolean sent = remindOnce(
+                request.getReceiverId(), "SCHEDULE_AUTO_CANCEL_REMINDER", link, request.getReservedAt(), message);
+        sent |= remindOnce(
+                loadItemSnapshot(request).donorId(),
+                "SCHEDULE_AUTO_CANCEL_REMINDER",
+                link,
+                request.getReservedAt(),
+                message);
+        return sent;
+    }
+
+    /**
+     * Việc nền: nhắc bên được hỏi một lần khi còn deadline_reminder_hours_before_response giờ nữa hết hạn phản hồi đề
+     * nghị huỷ (GN-13). Im lặng thì giao dịch tự huỷ.
+     */
+    @Transactional
+    public boolean remindCancelRequest(long requestId, Instant now) {
+        Request request = requestRepository.findById(requestId).orElse(null);
+        if (request == null || !request.hasPendingCancelRequest()) {
+            return false;
+        }
+        Instant expiresAt = deadlineCalculator.cancelRequestExpiresAt(request);
+        if (reminderTime(expiresAt).isAfter(now) || !expiresAt.isAfter(now)) {
+            return false;
+        }
+        long requesterId = request.getCancelRequestedBy();
+        return remindOnce(
+                findOtherPartyId(request, requesterId),
+                "CANCEL_REQUEST_REMINDER",
+                "/requests/" + request.getId(),
+                request.getCancelRequestedAt(),
+                nameOrDefault(requesterId) + " đang chờ bạn trả lời đề nghị huỷ giao dịch. Hạn phản hồi là "
+                        + VietnamTime.format(expiresAt) + ", im lặng thì giao dịch tự huỷ.");
+    }
+
+    /** Việc nền: nhắc bên được hỏi một lần khi sắp hết hạn phản hồi đề nghị dời lịch (GN-13). */
+    @Transactional
+    public boolean remindReschedule(long requestId, Instant now) {
+        Request request = requestRepository.findById(requestId).orElse(null);
+        if (request == null || !request.hasPendingReschedule()) {
+            return false;
+        }
+        Instant expiresAt = deadlineCalculator.rescheduleExpiresAt(request);
+        if (reminderTime(expiresAt).isAfter(now) || !expiresAt.isAfter(now)) {
+            return false;
+        }
+        long proposerId = request.getRescheduleProposedBy();
+        return remindOnce(
+                findOtherPartyId(request, proposerId),
+                "RESCHEDULE_REMINDER",
+                "/requests/" + request.getId(),
+                request.getRescheduleProposedAt(),
+                nameOrDefault(proposerId) + " đang chờ bạn trả lời đề nghị dời lịch. Hạn phản hồi là "
+                        + VietnamTime.format(expiresAt) + ", hết hạn thì giữ lịch cũ.");
+    }
+
+    /** Việc nền: nhắc cả hai bên khi còn 24 giờ nữa tới giờ hẹn (GN-13), mỗi bên một lần. */
+    @Transactional
+    public boolean remindMeeting(long requestId, Instant now) {
+        Request request = requestRepository.findById(requestId).orElse(null);
+        if (request == null
+                || request.getStatus() != RequestStatus.LOGISTICS_CONFIRMED
+                || request.isShipping()
+                || request.getMeetingTime() == null
+                || request.getMeetingTime().minus(1, ChronoUnit.DAYS).isAfter(now)
+                || !request.getMeetingTime().isAfter(now)) {
+            return false;
+        }
+        Instant since = request.getMeetingTime().minus(1, ChronoUnit.DAYS);
+        String message = "Còn khoảng 24 giờ nữa tới giờ hẹn lúc " + VietnamTime.format(request.getMeetingTime())
+                + (request.getMeetingPlace() == null ? "" : " tại " + request.getMeetingPlace()) + ".";
+        String link = "/requests/" + request.getId();
+        boolean sent = remindOnce(request.getReceiverId(), "MEETING_REMINDER", link, since, message);
+        sent |= remindOnce(loadItemSnapshot(request).donorId(), "MEETING_REMINDER", link, since, message);
+        return sent;
     }
 
     /**
@@ -2586,7 +2746,10 @@ public class RequestService {
                     "Đối phương đã xác nhận giao nhận",
                     saved.isShipping()
                             ? nameOrDefault(currentUserId) + " đã nhận được hàng của bạn."
-                            : "Đối phương đã xác nhận giao nhận món đồ. Vui lòng kiểm tra và xác nhận.",
+                            : nameOrDefault(currentUserId)
+                                    + " đã xác nhận hoàn tất giao nhận. Vui lòng kiểm tra và xác nhận. Nếu bạn không"
+                                    + " phản hồi, hệ thống sẽ tự ghi nhận hoàn tất lúc "
+                                    + VietnamTime.format(deadlineCalculator.autoConfirmAt(saved)) + ".",
                     "/requests/" + targetRequestId);
         }
 

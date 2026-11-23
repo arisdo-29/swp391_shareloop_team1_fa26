@@ -12,6 +12,7 @@ import { ShipmentCard } from '../../components/transaction/ShipmentCard';
 import { HandoverMediaCard } from '../../components/transaction/HandoverMediaCard';
 import { ItemSideCard, PartnerCard } from '../../components/transaction/SideCards';
 import { PendingCard } from '../../components/transaction/PendingCard';
+import { DeadlinesCard } from '../../components/transaction/DeadlinesCard';
 import {
   CancelRequestDialog,
   CancelTransactionDialog,
@@ -168,6 +169,7 @@ function TransactionProgressView({
             onOpenDispute={() => setOpenDialog('dispute')}
             onRespondDispute={setRespondingDispute}
           />
+          <DeadlinesCard request={request} viewerIsDonor={viewerIsDonor} partnerName={partnerName} />
           <PendingCard
             request={request}
             conversation={conversation}

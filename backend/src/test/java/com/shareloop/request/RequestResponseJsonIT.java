@@ -55,7 +55,7 @@ class RequestResponseJsonIT extends IntegrationTest {
                         new CancelRequestInfo(20L, now, "BUSY", "Tôi bận đột xuất", null),
                         null,
                         null,
-                        new RequestDeadlines(null, null, now, null, null));
+                        new RequestDeadlines(null, null, now, null, null, null, null));
 
         // when
         JsonNode json = objectMapper.valueToTree(response);

@@ -11,7 +11,10 @@ public record RequestDeadlines(
         Instant autoConfirmAt,
         Instant cancelRequestExpiresAt,
         Instant rescheduleExpiresAt,
-        Instant sendDeadlineAt) {
+        Instant sendDeadlineAt,
+        // Giao hàng: lúc hệ thống tự ghi nhận Đã nhận cho từng chiều đã gửi mà bên nhận im lặng (GN-09, GN-12)
+        Instant leg1AutoReceiveAt,
+        Instant leg2AutoReceiveAt) {
 
-    public static final RequestDeadlines EMPTY = new RequestDeadlines(null, null, null, null, null);
+    public static final RequestDeadlines EMPTY = new RequestDeadlines(null, null, null, null, null, null, null);
 }

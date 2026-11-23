@@ -399,6 +399,12 @@ public enum ConfigKey {
             ConfigGroup.TRANSACTION,
             "Hạn gửi hàng",
             "Hạn gửi của mỗi chiều giao hàng là ngày gửi hàng dự kiến cộng thêm số ngày này. Quá hạn mà chưa gửi thì bên nhận được báo chưa nhận hàng."),
+    DEADLINE_REMINDER_HOURS_BEFORE_RESPONSE(
+            "deadline_reminder_hours_before_response",
+            "6",
+            ConfigGroup.TRANSACTION,
+            "Nhắc trước hạn phản hồi",
+            "Số giờ trước hạn phản hồi đề nghị huỷ hoặc đề nghị dời lịch thì hệ thống nhắc bên được hỏi một lần."),
     STUCK_REQUEST_HOURS(
             "stuck_request_hours",
             "48",

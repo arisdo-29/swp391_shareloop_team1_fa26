@@ -51,11 +51,12 @@ public class RequestJob {
         int shippingLegsAutoReceived = requestDeadlineJobService.autoReceiveShippingLegs(now);
         int shippingReminded = requestDeadlineJobService.remindShipping(now);
         int shippingStuck = requestDeadlineJobService.openShippingOneLegStuck(now);
+        int reminded = requestDeadlineJobService.remindDeadlines(now);
 
         log.info(
                 "RequestJob finished: {} pending expired, {} silent reserved expired, {} auto confirmed,"
                         + " {} cancel requests expired, {} reschedules expired, {} stale cancelled, {} stale reminded,"
-                        + " {} shipping legs auto received, {} shipping reminded, {} shipping stuck",
+                        + " {} shipping legs auto received, {} shipping reminded, {} shipping stuck, {} deadline reminders",
                 pendingExpired,
                 silentReservedExpired,
                 autoConfirmed,
@@ -65,6 +66,7 @@ public class RequestJob {
                 staleReminded,
                 shippingLegsAutoReceived,
                 shippingReminded,
-                shippingStuck);
+                shippingStuck,
+                reminded);
     }
 }

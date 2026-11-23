@@ -201,6 +201,32 @@ public class RequestDeadlineJobService {
         return count;
     }
 
+    /**
+     * Gửi mọi loại nhắc hạn (GN-13): trước khi tự huỷ vì chưa chốt lịch, trước giờ hẹn, trước hạn phản hồi đề nghị huỷ
+     * và dời lịch, trước khi tự hoàn tất. Mỗi nhắc chỉ gửi một lần nhờ kiểm thông báo cùng loại đã gửi.
+     *
+     * @return tổng số giao dịch đã gửi nhắc
+     */
+    public int remindDeadlines(Instant now) {
+        int chatDays = configService.getInt(ConfigKey.CHAT_OPEN_DAYS);
+        Instant reservedCutoff = now.minus(chatDays - 1L, ChronoUnit.DAYS);
+        int count = forEach(
+                (after, page) -> requestRepository.findReservedBefore(reservedCutoff, after, page),
+                requestId -> requestService.remindScheduleAutoCancel(requestId, now));
+        count += forEach(
+                (after, page) -> requestRepository.findMeetingBetween(now, now.plus(1, ChronoUnit.DAYS), after, page),
+                requestId -> requestService.remindMeeting(requestId, now));
+        count += forEach(
+                requestRepository::findWithPendingCancelRequest,
+                requestId -> requestService.remindCancelRequest(requestId, now));
+        count += forEach(
+                requestRepository::findWithPendingReschedule,
+                requestId -> requestService.remindReschedule(requestId, now));
+        count += forEach(
+                requestRepository::findAwaitingHandover, requestId -> requestService.remindAutoConfirm(requestId, now));
+        return count;
+    }
+
     private boolean processInOwnTransaction(long requestId, java.util.function.BooleanSupplier action) {
         try {
             Boolean result = transactionTemplate.execute(status -> action.getAsBoolean());
