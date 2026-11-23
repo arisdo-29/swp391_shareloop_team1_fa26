@@ -61,6 +61,7 @@ class ReportOpenTransactionIT extends IntegrationTest {
             jdbc.update("DELETE FROM items WHERE id = ?", itemId);
         }
         for (Long userId : userIds) {
+            jdbc.update("DELETE FROM reports WHERE reporter_id = ? OR target_user_id = ?", userId, userId);
             jdbc.update("DELETE FROM notifications WHERE user_id = ?", userId);
             jdbc.update("DELETE FROM activity_logs WHERE actor_id = ? OR target_id = ?", userId, userId);
             jdbc.update("DELETE FROM users WHERE id = ?", userId);
@@ -190,6 +191,75 @@ class ReportOpenTransactionIT extends IntegrationTest {
                         String.class,
                         donorId))
                 .isEqualTo("Báo cáo về bài hoặc tài khoản của bạn đã được xem xét và không có vi phạm.");
+    }
+
+    @Test
+    void create_whenReasonDoesNotMatchTargetType_returnsReasonNotAllowed() throws Exception {
+        long donorId = insertUser("Donor", false);
+        long reporterId = insertUser("Reporter", false);
+        long itemId = insertItem(donorId);
+
+        mockMvc.perform(post("/api/v1/reports")
+                        .header("Authorization", token(reporterId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetType\":\"ITEM\",\"itemId\":" + itemId
+                                + ",\"reason\":\"NO_SHOW\",\"description\":\"Sai loại\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REPORT_REASON_NOT_ALLOWED"));
+    }
+
+    @Test
+    void create_whenWrongContactInfoWithoutConfirmedSchedule_isRejectedAndAllowedAfterwards() throws Exception {
+        long donorId = insertUser("Donor", false);
+        long receiverId = insertUser("Receiver", false);
+        String body = "{\"targetType\":\"USER\",\"targetUserId\":" + donorId
+                + ",\"reason\":\"WRONG_CONTACT_INFO\",\"description\":\"Số sai\"}";
+
+        mockMvc.perform(post("/api/v1/reports")
+                        .header("Authorization", token(receiverId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REPORT_CONTACT_REASON_NOT_ALLOWED"));
+
+        long itemId = insertItem(donorId);
+        long requestId = createLogisticsConfirmedRequest(itemId, donorId, receiverId);
+        assertThat(requestId).isPositive();
+        mockMvc.perform(post("/api/v1/reports")
+                        .header("Authorization", token(receiverId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void conclude_whenDismissedAsDeliberateFalse_deductsOneStarFromReporterOnlyWhenTicked() throws Exception {
+        long donorId = insertUser("Donor", false);
+        long reporterId = insertUser("Reporter", false);
+        long otherReporterId = insertUser("Reporter2", false);
+        long adminId = insertUser("Admin", true);
+        long itemId = insertItem(donorId);
+        long plainReport = insertReport(otherReporterId, itemId, donorId, "OTHER");
+        long falseReport = insertReport(reporterId, itemId, donorId, "OTHER");
+        int before = starsOf(reporterId);
+
+        concludeRaw(plainReport, adminId, "{\"decision\":\"DISMISS\"}");
+        assertThat(starsOf(otherReporterId)).isEqualTo(before);
+
+        concludeRaw(falseReport, adminId, "{\"decision\":\"DISMISS\",\"deliberateFalseReport\":true}");
+        assertThat(starsOf(reporterId)).isEqualTo(before - 1);
+    }
+
+    private int starsOf(long userId) {
+        return jdbc.queryForObject("SELECT trust_stars FROM users WHERE id = ?", Integer.class, userId);
+    }
+
+    private void concludeRaw(long reportId, long adminId, String body) throws Exception {
+        mockMvc.perform(post("/api/v1/admin/reports/{reportId}/conclude", reportId)
+                        .header("Authorization", "Bearer " + jwtService.issue(adminId, true))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
     }
 
     private void concludeWith(long reportId, long adminId, String decision, String note) throws Exception {

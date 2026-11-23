@@ -195,7 +195,7 @@ export const reportApi = {
     });
     return data;
   },
-  async conclude(reportId: number, input: { decision: ReportDecision; note?: string }) {
+  async conclude(reportId: number, input: { decision: ReportDecision; note?: string; deliberateFalseReport?: boolean }) {
     const { data } = await http.post<ReportConclusionResponse>(`/api/v1/admin/reports/${reportId}/conclude`, input);
     return data;
   },

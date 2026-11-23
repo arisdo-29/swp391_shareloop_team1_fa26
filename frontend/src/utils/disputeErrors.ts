@@ -46,3 +46,10 @@ export function disputeErrorMessage(error: unknown) {
     return 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
   return 'Không thể gửi thông tin lúc này. Vui lòng thử lại.';
 }
+
+// Lý do hợp lệ theo loại đối tượng báo cáo, khớp ReportReason.allowedFor ở backend (F7).
+export const reportReasonsByTarget: Record<'ITEM' | 'USER' | 'REQUEST', ReportReason[]> = {
+  ITEM: ['NOT_AS_DESCRIBED', 'COUNTERFEIT', 'PROHIBITED_ITEM', 'OTHER'],
+  USER: ['NO_SHOW', 'WRONG_CONTACT_INFO', 'HARASSMENT', 'OTHER'],
+  REQUEST: ['NOT_AS_DESCRIBED', 'COUNTERFEIT', 'NO_SHOW', 'WRONG_CONTACT_INFO', 'HARASSMENT', 'OTHER'],
+};

@@ -13,6 +13,9 @@ public enum ReportErrorCode implements ErrorCode {
     REPORT_OWNER_LIMIT_REACHED(
             HttpStatus.CONFLICT, "Bạn đã báo cáo 3 bài của người này trong 30 ngày qua. Vui lòng thử lại sau."),
     REPORT_TARGET_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy đối tượng cần báo cáo."),
+    REPORT_REASON_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "Lý do không phù hợp với loại báo cáo."),
+    REPORT_CONTACT_REASON_NOT_ALLOWED(
+            HttpStatus.BAD_REQUEST, "Chỉ báo sai thông tin liên lạc khi hai bên đã từng chốt lịch giao dịch."),
     REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy báo cáo vi phạm."),
     DISPUTE_NOT_A_PARTY(HttpStatus.FORBIDDEN, "Bạn không phải là một bên trong giao dịch này."),
     DISPUTE_REQUEST_NOT_COMPLETED(HttpStatus.CONFLICT, "Chỉ có thể khiếu nại giao dịch đã hoàn thành."),

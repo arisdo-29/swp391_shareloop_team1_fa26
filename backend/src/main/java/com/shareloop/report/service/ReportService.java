@@ -133,6 +133,10 @@ public class ReportService {
         if (targetType == null) {
             throw new BusinessException(ReportErrorCode.REPORT_TARGET_REQUIRED);
         }
+        // F7: lý do phải phù hợp với loại đối tượng báo cáo
+        if (request.reason() != null && !ReportReason.allowedFor(targetType).contains(request.reason())) {
+            throw new BusinessException(ReportErrorCode.REPORT_REASON_NOT_ALLOWED);
+        }
 
         Long resolvedItemId = request.resolvedItemId();
         Long resolvedTargetUserId = request.resolvedTargetUserId();
@@ -180,6 +184,11 @@ public class ReportService {
                 }
                 if (reporterId.equals(resolvedTargetUserId)) {
                     throw new BusinessException(ReportErrorCode.REPORT_CANNOT_REPORT_SELF);
+                }
+                // F7: sai thông tin liên lạc chỉ báo được khi hai người từng chốt lịch với nhau
+                if (request.reason() == ReportReason.WRONG_CONTACT_INFO
+                        && !haveConfirmedScheduleTogether(reporterId, resolvedTargetUserId)) {
+                    throw new BusinessException(ReportErrorCode.REPORT_CONTACT_REASON_NOT_ALLOWED);
                 }
                 int userWindowDays = configService != null ? configService.getInt(ConfigKey.REPORT_WINDOW_DAYS) : 30;
                 if (userWindowDays <= 0) {
@@ -946,6 +955,24 @@ public class ReportService {
             if (report.getTargetType() == TargetType.ITEM && report.getItemId() != null) {
                 reopenItemIfNoPendingReports(report.getItemId(), reportId, title);
             }
+            // F7: Admin tích "Báo cáo sai có chủ ý" (không áp cho Từ chối giao nhận vì đã tự trừ sao ở dưới)
+            if (!report.isRefusalReport()
+                    && Boolean.TRUE.equals(request.deliberateFalseReport())
+                    && reputationService != null) {
+                reputationService.deductStar(
+                        report.getReporterId(),
+                        1,
+                        note != null ? note : "Báo cáo sai có chủ ý" + about + ", bị trừ 1 sao uy tín");
+                if (activityLogService != null) {
+                    activityLogService.log(
+                            ActivityType.STARS.name(),
+                            adminId,
+                            "REPORT",
+                            reportId,
+                            Map.of("reason", "DELIBERATE_FALSE_REPORT", "reporterId", report.getReporterId()),
+                            "Báo cáo sai có chủ ý, trừ 1 sao người báo");
+                }
+            }
             // GN-07: từ chối nhận không có cơ sở thì người báo cáo chịu cùng mức phạt như một vi phạm
             if (report.isRefusalReport() && reputationService != null) {
                 reputationService.deductStar(
@@ -1076,6 +1103,22 @@ public class ReportService {
                         link);
             }
         }
+    }
+
+    // Hai người từng có giao dịch đã chốt lịch (thông tin liên hệ đã được mở) ở bất kỳ vai nào (F7).
+    private boolean haveConfirmedScheduleTogether(long userA, long userB) {
+        if (jdbcClient == null) {
+            return false;
+        }
+        return Boolean.TRUE.equals(jdbcClient
+                .sql(
+                        "SELECT EXISTS (SELECT 1 FROM requests r JOIN items i ON i.id = r.item_id"
+                                + " WHERE r.contact_revealed_at IS NOT NULL AND r.is_deleted = false"
+                                + " AND ((r.receiver_id = :a AND i.donor_id = :b) OR (r.receiver_id = :b AND i.donor_id = :a)))")
+                .param("a", userA)
+                .param("b", userB)
+                .query(Boolean.class)
+                .single());
     }
 
     // Chỉ giao dịch COMPLETED mới đã cộng điểm. Giao dịch đang DISPUTED thì bị huỷ khi kết luận nên chưa có điểm nào.

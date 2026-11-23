@@ -598,3 +598,9 @@ Chấp thuận khiếu nại của giao dịch đã `COMPLETED`: trừ lại đ�
 ## Thông báo kết quả báo cáo (F6)
 
 Admin kết luận báo cáo bài hoặc người dùng thì người báo nhận thông báo `REPORT_CONCLUDED` ("Báo cáo của bạn đã có kết quả", kèm kết quả và ghi chú của Admin, không lộ thông tin cá nhân người bị báo). Kết luận bác bỏ thì người bị báo cũng nhận `REPORT_CONCLUDED` ("Báo cáo về bài hoặc tài khoản của bạn đã được xem xét và không có vi phạm."). Link dẫn tới `/activities?tab=complaints`. Khiếu nại giao dịch giữ cách báo riêng của giao dịch nên không gửi thêm.
+
+## Phạt báo sai và kiểm lý do theo loại (F7)
+
+- `POST /admin/reports/{id}/conclude` nhận thêm `deliberateFalseReport` (boolean, mặc định `false`). Bác bỏ mà tích cờ này thì trừ 1 sao người báo (`TRUST_STARS_DEDUCTED`) và ghi nhật ký `STARS`. Báo cáo "Từ chối giao nhận" bỏ qua cờ vì người báo đã bị trừ sao tự động.
+- `POST /reports` kiểm lý do theo loại đối tượng, sai trả `400 REPORT_REASON_NOT_ALLOWED` ("Lý do không phù hợp với loại báo cáo"). Bài (`ITEM`): `NOT_AS_DESCRIBED`, `COUNTERFEIT`, `PROHIBITED_ITEM`, `OTHER`. Người dùng (`USER`): `NO_SHOW`, `WRONG_CONTACT_INFO`, `HARASSMENT`, `OTHER`. Giao dịch (`REQUEST`): `NOT_AS_DESCRIBED`, `COUNTERFEIT`, `NO_SHOW`, `WRONG_CONTACT_INFO`, `HARASSMENT`, `OTHER`. Bảng này nằm ở `ReportReason.allowedFor` và khớp `reportReasonsByTarget` ở frontend.
+- `WRONG_CONTACT_INFO` với người dùng chỉ báo được khi hai người từng có giao dịch đã chốt lịch (`contact_revealed_at` khác null), nếu không trả `400 REPORT_CONTACT_REASON_NOT_ALLOWED`.
