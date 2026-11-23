@@ -192,6 +192,151 @@ class RequestCancelRequestIT extends IntegrationTest {
     }
 
     @Test
+    void concludeUphold_whenRejectedBusyCancelWithoutPenalty_cancelsAndDeductsNoStar() throws Exception {
+        // given: người cho đề nghị huỷ vì bận, người nhận không đồng ý
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId);
+        long requestId = rejectedCancelRequest(itemId, donorId, receiverId, "BUSY", false);
+        long reportId = reportOf(requestId);
+        int donorStars = trustStarsOf(donorId);
+        int receiverStars = trustStarsOf(receiverId);
+
+        // when: Admin chấp thuận, chọn Ẩn cho món và không chọn ai bị trừ sao
+        concludeAsAdmin(
+                        reportId,
+                        "{\"decision\":\"UPHOLD\",\"itemOutcomes\":[{\"itemId\":" + itemId + ",\"choice\":\"HIDE\"}]}")
+                .andExpect(status().isOk());
+
+        // then: lý do khiếu nại là chung, giao dịch huỷ, không ai bị trừ sao, món bị ẩn bằng cờ của Admin
+        assertThat(jdbc.queryForObject("SELECT reason FROM reports WHERE id = ?", String.class, reportId))
+                .isEqualTo("OTHER");
+        assertThat(statusOf(requestId)).isEqualTo("CANCELLED");
+        assertThat(trustStarsOf(receiverId)).isEqualTo(receiverStars);
+        assertThat(trustStarsOf(donorId)).isEqualTo(donorStars);
+        assertThat(jdbc.queryForObject("SELECT stars_deducted FROM reports WHERE id = ?", Integer.class, reportId))
+                .isZero();
+        assertThat(jdbc.queryForObject("SELECT hidden_by_admin FROM items WHERE id = ?", Boolean.class, itemId))
+                .isTrue();
+    }
+
+    @Test
+    void concludeUphold_whenRejectedBusyCancelAndAdminPicksRequester_deductsOnlyThatPartyOneStar() throws Exception {
+        // given
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId);
+        long requestId = rejectedCancelRequest(itemId, donorId, receiverId, "NO_LONGER_NEEDED", false);
+        long reportId = reportOf(requestId);
+        int donorStars = trustStarsOf(donorId);
+        int receiverStars = trustStarsOf(receiverId);
+
+        // when: Admin chọn trừ sao người đề nghị huỷ
+        concludeAsAdmin(
+                        reportId,
+                        "{\"decision\":\"UPHOLD\",\"penalizedUserId\":" + donorId + ",\"itemOutcomes\":[{\"itemId\":"
+                                + itemId + ",\"choice\":\"REOPEN\"}]}")
+                .andExpect(status().isOk());
+
+        // then: chỉ người đề nghị bị trừ, bên không đồng ý vẫn nguyên sao
+        assertThat(trustStarsOf(donorId)).isEqualTo(donorStars - 1);
+        assertThat(trustStarsOf(receiverId)).isEqualTo(receiverStars);
+        assertThat(statusOf(requestId)).isEqualTo("CANCELLED");
+        assertThat(itemStatusOf(itemId)).isEqualTo("APPROVED");
+    }
+
+    @Test
+    void concludeUphold_whenPenalizedUserIsNotAParty_returnsBadRequestAndKeepsDispute() throws Exception {
+        // given
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long strangerId = insertUser("Stranger");
+        long itemId = insertItem(donorId);
+        long requestId = rejectedCancelRequest(itemId, donorId, receiverId, "OTHER", false);
+
+        // when
+        concludeAsAdmin(
+                        reportOf(requestId),
+                        "{\"decision\":\"UPHOLD\",\"penalizedUserId\":" + strangerId + ",\"itemOutcomes\":[{\"itemId\":"
+                                + itemId + ",\"choice\":\"REOPEN\"}]}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REPORT_PENALIZED_USER_INVALID"));
+
+        // then
+        assertThat(statusOf(requestId)).isEqualTo("DISPUTED");
+    }
+
+    @Test
+    void concludeDismiss_whenRejectedBusyCancel_resumesTransactionAndClearsCancelRequest() throws Exception {
+        // given
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId);
+        long requestId = rejectedCancelRequest(itemId, donorId, receiverId, "BUSY", false);
+        int donorStars = trustStarsOf(donorId);
+        int receiverStars = trustStarsOf(receiverId);
+
+        // when: Admin bác khiếu nại
+        concludeAsAdmin(reportOf(requestId), "{\"decision\":\"DISMISS\"}").andExpect(status().isOk());
+
+        // then: giao dịch tiếp tục, đề nghị huỷ được xoá, món vẫn đang giữ chỗ, không ai bị trừ sao
+        assertThat(statusOf(requestId)).isEqualTo("LOGISTICS_CONFIRMED");
+        assertThat(jdbc.queryForObject("SELECT cancel_requested_by FROM requests WHERE id = ?", Long.class, requestId))
+                .isNull();
+        assertThat(itemStatusOf(itemId)).isEqualTo("RESERVED");
+        assertThat(trustStarsOf(donorId)).isEqualTo(donorStars);
+        assertThat(trustStarsOf(receiverId)).isEqualTo(receiverStars);
+    }
+
+    @Test
+    void concludeUphold_whenRejectedNoShowCancel_deductsOneStarFromAccusedParty() throws Exception {
+        // given: người nhận tố người cho không đến, người cho không đồng ý
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId);
+        long requestId = rejectedCancelRequest(itemId, receiverId, donorId, "COUNTERPART_NO_SHOW", true);
+        long reportId = reportOf(requestId);
+        int donorStars = trustStarsOf(donorId);
+        int receiverStars = trustStarsOf(receiverId);
+
+        // when
+        concludeAsAdmin(
+                        reportId,
+                        "{\"decision\":\"UPHOLD\",\"itemOutcomes\":[{\"itemId\":" + itemId
+                                + ",\"choice\":\"REOPEN\"}]}")
+                .andExpect(status().isOk());
+
+        // then: lý do khiếu nại là NO_SHOW và bên bị tố bị trừ 1 sao
+        assertThat(jdbc.queryForObject("SELECT reason FROM reports WHERE id = ?", String.class, reportId))
+                .isEqualTo("NO_SHOW");
+        assertThat(trustStarsOf(donorId)).isEqualTo(donorStars - 1);
+        assertThat(trustStarsOf(receiverId)).isEqualTo(receiverStars);
+        assertThat(statusOf(requestId)).isEqualTo("CANCELLED");
+    }
+
+    @Test
+    void concludeUphold_whenRejectedNoShowAndAdminNamesRequester_stillDeductsOnlyAccusedParty() throws Exception {
+        // given
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId);
+        long requestId = rejectedCancelRequest(itemId, receiverId, donorId, "COUNTERPART_NO_SHOW", true);
+        int donorStars = trustStarsOf(donorId);
+        int receiverStars = trustStarsOf(receiverId);
+
+        // when: penalizedUserId bị bỏ qua với khiếu nại có tố
+        concludeAsAdmin(
+                        reportOf(requestId),
+                        "{\"decision\":\"UPHOLD\",\"penalizedUserId\":" + receiverId + ",\"itemOutcomes\":[{\"itemId\":"
+                                + itemId + ",\"choice\":\"REOPEN\"}]}")
+                .andExpect(status().isOk());
+
+        // then
+        assertThat(trustStarsOf(donorId)).isEqualTo(donorStars - 1);
+        assertThat(trustStarsOf(receiverId)).isEqualTo(receiverStars);
+    }
+
+    @Test
     void withdrawCancelRequest_whenRequesterWithdraws_keepsTransactionRunning() throws Exception {
         // given
         long donorId = insertUser("Donor");
@@ -304,6 +449,49 @@ class RequestCancelRequestIT extends IntegrationTest {
                         .orElseThrow()
                         .cancelCount())
                 .isEqualTo(3);
+    }
+
+    /**
+     * Tạo giao dịch đã chốt lịch, một bên đề nghị huỷ với mã lý do rồi bên kia không đồng ý (giao dịch sang DISPUTED).
+     * Lý do tố bên kia chỉ dùng được từ giờ hẹn nên afterMeeting đưa giờ hẹn về quá khứ.
+     */
+    private long rejectedCancelRequest(
+            long itemId, long requesterId, long rejecterId, String code, boolean afterMeeting) throws Exception {
+        long donorId = jdbc.queryForObject("SELECT donor_id FROM items WHERE id = ?", Long.class, itemId);
+        long receiverId = requesterId == donorId ? rejecterId : requesterId;
+        long requestId = createLogisticsConfirmedRequest(itemId, donorId, receiverId, 24);
+        if (afterMeeting) {
+            jdbc.update("UPDATE requests SET meeting_time = now() - interval '2 hours' WHERE id = ?", requestId);
+        }
+        String endpoint = afterMeeting ? "handover-failed" : "cancel-request";
+        mockMvc.perform(post("/api/v1/requests/{id}/" + endpoint, requestId)
+                        .header("Authorization", token(requesterId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"" + code + "\",\"reason\":\"Tôi có việc riêng nên không thể\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/requests/{id}/cancel-request/reject", requestId)
+                        .header("Authorization", token(rejecterId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"explanation\":\"Tôi không đồng ý huỷ giao dịch này\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DISPUTED"));
+        return requestId;
+    }
+
+    private long reportOf(long requestId) {
+        long reportId = jdbc.queryForObject("SELECT id FROM reports WHERE request_id = ?", Long.class, requestId);
+        // hết hạn giải trình để Admin kết luận được ngay
+        jdbc.update("UPDATE reports SET response_due_at = now() - interval '1 hour' WHERE id = ?", reportId);
+        return reportId;
+    }
+
+    private org.springframework.test.web.servlet.ResultActions concludeAsAdmin(long reportId, String body)
+            throws Exception {
+        long adminId = insertUser("Admin");
+        return mockMvc.perform(post("/api/v1/admin/reports/{id}/conclude", reportId)
+                .header("Authorization", "Bearer " + jwtService.issue(adminId, true))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
     }
 
     @SafeVarargs

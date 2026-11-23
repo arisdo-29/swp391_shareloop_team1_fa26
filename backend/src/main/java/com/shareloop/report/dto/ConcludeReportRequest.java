@@ -29,15 +29,29 @@ public record ConcludeReportRequest(
         @Schema(
                 description =
                         "Khi chấp thuận khiếu nại sự cố giao nhận đang DISPUTED thì bắt buộc có đủ mọi món của giao dịch, mỗi món một lựa chọn REOPEN, HIDE hoặc TRANSFERRED")
-        List<ItemDisputeOutcome> itemOutcomes) {
+        List<ItemDisputeOutcome> itemOutcomes,
+
+        @Schema(
+                description =
+                        "Chỉ dùng khi chấp thuận khiếu nại do bên kia không đồng ý một đề nghị huỷ không tố ai (bận, hết nhu cầu, khác): người bị trừ 1 sao, phải là chủ bài hoặc người nhận. Bỏ trống thì huỷ không phạt ai")
+        Long penalizedUserId) {
+
+    // Dạng 4 tham số (chưa có penalizedUserId) cho code đang gọi.
+    public ConcludeReportRequest(
+            ReportDecision decision,
+            String note,
+            Boolean deliberateFalseReport,
+            List<ItemDisputeOutcome> itemOutcomes) {
+        this(decision, note, deliberateFalseReport, itemOutcomes, null);
+    }
 
     // Dạng 3 tham số (chưa có itemOutcomes) cho code đang gọi.
     public ConcludeReportRequest(ReportDecision decision, String note, Boolean deliberateFalseReport) {
-        this(decision, note, deliberateFalseReport, null);
+        this(decision, note, deliberateFalseReport, null, null);
     }
 
     // Dạng 2 tham số (chưa có deliberateFalseReport) cho code đang gọi; mặc định không phạt.
     public ConcludeReportRequest(ReportDecision decision, String note) {
-        this(decision, note, false, null);
+        this(decision, note, false, null, null);
     }
 }

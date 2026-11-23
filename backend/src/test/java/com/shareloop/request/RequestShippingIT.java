@@ -138,6 +138,49 @@ class RequestShippingIT extends IntegrationTest {
     }
 
     @Test
+    void jobs_whenSwapOneLegReceivedAndOtherNeverSentPastDeadlinePlusStaleDays_opensNoShowDisputeWithoutCancelOrStars()
+            throws Exception {
+        // given: Trao đổi, chiều 1 đã gửi và đã nhận, chiều 2 chưa gửi và đã quá hạn gửi cộng số ngày chờ
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId, "SWAP");
+        long offeredId = insertItem(receiverId, "SWAP");
+        long requestId = createSwapRequest(itemId, offeredId, donorId, receiverId);
+        propose(requestId, receiverId, "12 Lê Lợi");
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"agreeToWaiver\":true,\"shippingAddress\":\"34 Trần Phú\"}"))
+                .andExpect(status().isOk());
+        ship(requestId, donorId, "GHN1111");
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
+                        .header("Authorization", token(receiverId)))
+                .andExpect(status().isOk());
+        jdbc.update("UPDATE requests SET meeting_time = now() - interval '10 days' WHERE id = ?", requestId);
+        int donorStars = trustStarsOf(donorId);
+        int receiverStars = trustStarsOf(receiverId);
+
+        // when: các việc nền chạy, gồm cả việc tự huỷ giao dịch kẹt
+        deadlineJobService.cancelStaleConfirmed(Instant.now());
+        deadlineJobService.openShippingOneLegStuck(Instant.now());
+
+        // then: sang DISPUTED với khiếu nại NO_SHOW, không tự huỷ và không tự trừ sao
+        assertThat(jdbc.queryForObject("SELECT status FROM requests WHERE id = ?", String.class, requestId))
+                .isEqualTo("DISPUTED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM reports WHERE request_id = ? AND reason = 'NO_SHOW'",
+                        Integer.class,
+                        requestId))
+                .isEqualTo(1);
+        assertThat(trustStarsOf(donorId)).isEqualTo(donorStars);
+        assertThat(trustStarsOf(receiverId)).isEqualTo(receiverStars);
+    }
+
+    private int trustStarsOf(long userId) {
+        return jdbc.queryForObject("SELECT trust_stars FROM users WHERE id = ?", Integer.class, userId);
+    }
+
+    @Test
     void shipment_whenSameSenderPostsTwiceAtTheSameTime_exactlyOneSucceeds() throws Exception {
         // given
         long donorId = insertUser("Donor");

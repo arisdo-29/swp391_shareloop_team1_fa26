@@ -203,6 +203,8 @@ export const reportApi = {
       note?: string;
       deliberateFalseReport?: boolean;
       itemOutcomes?: { itemId: number; choice: 'REOPEN' | 'HIDE' | 'TRANSFERRED' }[];
+      // Chỉ khi chấp thuận khiếu nại đề nghị huỷ không tố ai: bên bị trừ 1 sao, bỏ trống thì không trừ ai
+      penalizedUserId?: number;
     },
   ) {
     const { data } = await http.post<ReportConclusionResponse>(`/api/v1/admin/reports/${reportId}/conclude`, input);

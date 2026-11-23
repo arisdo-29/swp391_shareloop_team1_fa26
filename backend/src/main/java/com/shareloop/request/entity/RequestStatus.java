@@ -35,7 +35,9 @@ public enum RequestStatus {
             case LOGISTICS_CONFIRMED -> to == AWAITING_HANDOVER || to == CANCELLED || to == DISPUTED;
             // Huỷ ở AWAITING_HANDOVER dành cho huỷ giao dịch sau khi chọn người và khoá tài khoản
             case AWAITING_HANDOVER -> to == COMPLETED || to == DISPUTED || to == CANCELLED;
-            case DISPUTED -> to == COMPLETED || to == CANCELLED;
+            // Hai cạnh quay lại chỉ dành cho Admin bác khiếu nại "không đồng ý đề nghị huỷ" không tố ai
+            // (Request.resumeAfterRejectedCancel), để giao dịch tiếp tục thay vì bị coi là đã giao nhận xong
+            case DISPUTED -> to == COMPLETED || to == CANCELLED || to == LOGISTICS_CONFIRMED || to == AWAITING_HANDOVER;
             case COMPLETED, REJECTED, CANCELLED -> false;
         };
     }

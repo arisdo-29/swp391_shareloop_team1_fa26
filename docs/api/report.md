@@ -619,3 +619,16 @@ Khi Admin chấp thuận (`UPHOLD`) khiếu nại sự cố giao nhận mà giao
 - Thiếu món, thừa món lạ, trùng món hoặc thiếu `choice` trả `400 REQUEST_ITEM_OUTCOMES_REQUIRED` ("Cần chọn cách xử lý cho từng món của giao dịch trước khi chấp thuận khiếu nại.") và không đổi gì.
 - Bác bỏ (`DISMISS`) không cần `itemOutcomes`: giao dịch `COMPLETED`, các món sang `TRADED` như cũ. Giao dịch không còn `DISPUTED` (khiếu nại mở sau khi hoàn tất) thì bỏ qua `itemOutcomes`.
 - Mỗi món ghi một dòng nhật ký: `ADMIN_ITEM_HIDDEN` cho `HIDE` và `TRANSFERRED`, `REQUEST_CANCEL` cho `REOPEN`.
+
+### Khiếu nại từ đề nghị huỷ bị bên kia không đồng ý (GN-06)
+
+Bên không đồng ý một đề nghị huỷ **không bao giờ bị trừ sao chỉ vì từ chối**. Lý do khiếu nại phụ thuộc mã lý do của người đề nghị:
+
+| Mã lý do đề nghị | Lý do khiếu nại | Admin chấp thuận (`UPHOLD`) | Admin bác (`DISMISS`) |
+|---|---|---|---|
+| `COUNTERPART_NO_SHOW`, `COUNTERPART_NOT_SHIPPED`, `CANNOT_CONTACT` | `NO_SHOW` | Huỷ giao dịch, trừ 1 sao bên bị tố (bên không đồng ý) | Giao dịch `COMPLETED` như khiếu nại sự cố giao nhận |
+| `BUSY`, `NO_LONGER_NEEDED`, `OTHER` | `OTHER` | Huỷ giao dịch, **không trừ sao ai**, hoặc trừ 1 sao đúng bên Admin chọn qua `penalizedUserId` | Giao dịch **tiếp tục** (`DISPUTED` về `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER`), xoá đề nghị huỷ, báo `TRANSACTION_RESUMED` |
+
+- `POST /admin/reports/{id}/conclude` có thêm `penalizedUserId` (số, tuỳ chọn). Chỉ có tác dụng khi chấp thuận khiếu nại không tố ai. Phải là chủ bài hoặc người nhận của giao dịch, nếu không trả `400 REPORT_PENALIZED_USER_INVALID` và không đổi gì. Bỏ trống thì không trừ sao ai (`starsDeducted = 0`). Với khiếu nại có tố bên kia thì bỏ qua trường này.
+- Mặc định ở giao diện cho khiếu nại không tố ai: ô "Bên bị trừ 1 sao" là "Không trừ sao ai", cả hai món là `REOPEN`.
+- Giao hàng: món đang ở chỗ nào lấy theo từng chiều (chiều đã nhận thì món ở chỗ người nhận chiều đó và mặc định `TRANSFERRED`), Admin vẫn đổi được.

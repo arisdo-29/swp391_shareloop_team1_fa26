@@ -832,6 +832,25 @@ public class Request extends BaseEntity {
         transitionTo(RequestStatus.DISPUTED);
     }
 
+    /** GN-06: lý do đề nghị huỷ còn lưu có tố bên kia không (bận, hết nhu cầu, khác thì không tố ai). */
+    public boolean isCancelRequestAccusation() {
+        return this.cancelRequestCode != null && this.cancelRequestCode.isAccusation();
+    }
+
+    /**
+     * GN-06: Admin bác khiếu nại "không đồng ý đề nghị huỷ" mà đề nghị không tố ai thì giao dịch tiếp tục như trước khi
+     * có đề nghị. Đã có bên bấm hoàn tất (bên kia trả lời bằng cách bấm hoàn tất) thì về AWAITING_HANDOVER, còn lại về
+     * LOGISTICS_CONFIRMED. Dấu vết đề nghị được xoá.
+     */
+    public void resumeAfterRejectedCancel() {
+        if (this.status != RequestStatus.DISPUTED || this.cancelRequestedBy == null || isCancelRequestAccusation()) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+        boolean someoneConfirmed = this.donorHandoverAt != null || this.receiverHandoverAt != null;
+        transitionTo(someoneConfirmed ? RequestStatus.AWAITING_HANDOVER : RequestStatus.LOGISTICS_CONFIRMED);
+        clearCancelRequest();
+    }
+
     /** Câu mô tả lý do đề nghị để ghép vào lý do huỷ và thông báo, ví dụ "bạn không đến điểm hẹn". */
     public String cancelRequestSummary() {
         if (this.cancelRequestCode == null) {

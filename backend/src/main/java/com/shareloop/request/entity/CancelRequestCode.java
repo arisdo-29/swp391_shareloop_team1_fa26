@@ -24,6 +24,14 @@ public enum CancelRequestCode {
         return label;
     }
 
+    /**
+     * Lý do tố bên kia (không đến, chưa gửi hàng, không liên hệ được). Khi bên kia không đồng ý thì khiếu nại là tố
+     * cáo và Admin chấp thuận sẽ trừ sao bên bị tố. Ba lý do còn lại không tố ai nên không bao giờ trừ sao bên từ chối.
+     */
+    public boolean isAccusation() {
+        return this == COUNTERPART_NO_SHOW || this == COUNTERPART_NOT_SHIPPED || this == CANNOT_CONTACT;
+    }
+
     /** Ba lý do dùng trước giờ hẹn (nút "Đề nghị huỷ giao dịch"). */
     public boolean isAllowedBeforeMeeting() {
         return this == BUSY || this == NO_LONGER_NEEDED || this == OTHER;

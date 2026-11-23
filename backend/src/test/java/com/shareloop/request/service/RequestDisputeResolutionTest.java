@@ -243,6 +243,77 @@ class RequestDisputeResolutionTest {
                 .notify(eq(DONOR_ID), eq("TRANSACTION_COMPLETED"), anyString(), anyString(), anyString());
     }
 
+    private Request disputedAfterRejectedCancel(com.shareloop.request.entity.CancelRequestCode code) {
+        Request request = disputedSwapRequest();
+        ReflectionTestUtils.setField(request, "cancelRequestedBy", DONOR_ID);
+        ReflectionTestUtils.setField(request, "cancelRequestedAt", java.time.Instant.now());
+        ReflectionTestUtils.setField(request, "cancelRequestCode", code);
+        return request;
+    }
+
+    @Test
+    @DisplayName(
+            "Bác khiếu nại đề nghị huỷ không tố ai: giao dịch quay lại LOGISTICS_CONFIRMED, xoá đề nghị, không hoàn tất")
+    void resolveDisputedRequest_whenDismissedAndCancelWasBusy_resumesTransaction() {
+        // given
+        Request request = disputedAfterRejectedCancel(com.shareloop.request.entity.CancelRequestCode.BUSY);
+
+        // when
+        boolean resolved = requestService.resolveDisputedRequest(REQUEST_ID, false, ADMIN_ID, null);
+
+        // then
+        assertThat(resolved).isTrue();
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
+        assertThat(request.getCancelRequestedBy()).isNull();
+        verify(itemService, never()).markTraded(org.mockito.ArgumentMatchers.anyLong());
+        verify(reputationService, never()).onCompleted(org.mockito.ArgumentMatchers.anyLong());
+        verify(notificationService)
+                .notify(eq(RECEIVER_ID), eq("TRANSACTION_RESUMED"), anyString(), anyString(), anyString());
+        verify(notificationService)
+                .notify(eq(DONOR_ID), eq("TRANSACTION_RESUMED"), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Bác khiếu nại đề nghị huỷ không tố ai mà đã có bên bấm hoàn tất: quay lại AWAITING_HANDOVER")
+    void resolveDisputedRequest_whenDismissedAndSomeoneAlreadyConfirmed_resumesAsAwaitingHandover() {
+        // given
+        Request request = disputedAfterRejectedCancel(com.shareloop.request.entity.CancelRequestCode.OTHER);
+        ReflectionTestUtils.setField(request, "receiverHandoverAt", java.time.Instant.now());
+
+        // when
+        requestService.resolveDisputedRequest(REQUEST_ID, false, ADMIN_ID, null);
+
+        // then
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
+    }
+
+    @Test
+    @DisplayName("Bác khiếu nại đề nghị huỷ có tố bên kia: giữ luật cũ, công nhận hoàn tất")
+    void resolveDisputedRequest_whenDismissedAndCancelAccusedCounterpart_stillCompletes() {
+        // given
+        Request request =
+                disputedAfterRejectedCancel(com.shareloop.request.entity.CancelRequestCode.COUNTERPART_NO_SHOW);
+
+        // when
+        requestService.resolveDisputedRequest(REQUEST_ID, false, ADMIN_ID, null);
+
+        // then
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("isCancelDisputeWithoutAccusation: đúng với bận, hết nhu cầu, khác; sai với tố bên kia")
+    void isCancelDisputeWithoutAccusation_dependsOnTheReasonCode() {
+        // given
+        Request busy = disputedAfterRejectedCancel(com.shareloop.request.entity.CancelRequestCode.NO_LONGER_NEEDED);
+
+        // when and then
+        assertThat(requestService.isCancelDisputeWithoutAccusation(REQUEST_ID)).isTrue();
+        ReflectionTestUtils.setField(
+                busy, "cancelRequestCode", com.shareloop.request.entity.CancelRequestCode.CANNOT_CONTACT);
+        assertThat(requestService.isCancelDisputeWithoutAccusation(REQUEST_ID)).isFalse();
+    }
+
     @Test
     @DisplayName("Giao dịch đã COMPLETED (khiếu nại mở sau hoàn tất) thì không bị đổi gì và không cần lựa chọn món")
     void resolveDisputedRequest_whenNotDisputed_doesNothing() {

@@ -1454,7 +1454,8 @@ public class RequestService {
                 + ". Bên kia không đồng ý và giải trình: " + explanation;
         // Listener của module report chạy ngay trong transaction này để khiếu nại và DISPUTED cùng thành công hoặc
         // cùng rollback.
-        eventPublisher.publishEvent(new CancelRequestRejectedEvent(saved.getId(), requesterId, note));
+        eventPublisher.publishEvent(
+                new CancelRequestRejectedEvent(saved.getId(), requesterId, note, saved.isCancelRequestAccusation()));
         notificationService.notify(
                 requesterId,
                 "CANCEL_REQUEST_REJECTED",
@@ -2178,6 +2179,15 @@ public class RequestService {
         String message;
         if (upheld) {
             message = cancelUpheldDispute(request, adminId, itemOutcomes);
+        } else if (isCancelDisputeWithoutAccusation(request)) {
+            // Đề nghị huỷ không tố ai mà Admin bác: giao dịch tiếp tục, không coi là đã giao nhận xong (GN-06)
+            request.resumeAfterRejectedCancel();
+            requestRepository.save(request);
+            notifyBothParties(
+                    request,
+                    "TRANSACTION_RESUMED",
+                    "Admin đã xem xét đề nghị huỷ và không chấp thuận. Giao dịch tiếp tục theo lịch đã chốt.");
+            return true;
         } else {
             request.completeAfterDispute(Instant.now());
             requestRepository.save(request);
@@ -2197,6 +2207,22 @@ public class RequestService {
     }
 
     /**
+     * Giao dịch đang tranh chấp vì bên kia không đồng ý một đề nghị huỷ không tố ai (bận, hết nhu cầu, khác). Module
+     * report dùng để không tự trừ sao bên không đồng ý và để Admin có đường bác cho giao dịch tiếp tục.
+     */
+    @Transactional(readOnly = true)
+    public boolean isCancelDisputeWithoutAccusation(long requestId) {
+        Request request = requestRepository.findById(requestId).orElse(null);
+        return request != null && isCancelDisputeWithoutAccusation(request);
+    }
+
+    private boolean isCancelDisputeWithoutAccusation(Request request) {
+        return request.getStatus() == RequestStatus.DISPUTED
+                && request.getCancelRequestedBy() != null
+                && !request.isCancelRequestAccusation();
+    }
+
+    /**
      * Huỷ giao dịch khi Admin chấp nhận khiếu nại sự cố giao nhận và xử lý từng món theo lựa chọn của Admin (GN-14).
      * Mở lại: bài về APPROVED. Ẩn: bài về APPROVED rồi bị Admin ẩn. Đã đổi chủ: như Ẩn nhưng ghi lý do món đã được trao
      * trong một giao dịch bị huỷ. Không tự hoàn trả, không giữ đồ hay tiền.
@@ -2210,16 +2236,20 @@ public class RequestService {
 
         StringBuilder message = new StringBuilder("Admin đã xác minh sự cố giao nhận: giao dịch bị huỷ.");
         ItemSnapshot snapshot = loadItemSnapshot(request);
-        // Món chính nằm ở chỗ người nhận khi đã đổi chủ, món đổi nằm ở chỗ chủ bài
-        message.append(applyItemOutcome(
-                request, request.getItemId(), choices.get(request.getItemId()), adminId, request.getReceiverId()));
+        // Gặp trực tiếp: món chính ở chỗ người nhận, món đổi ở chỗ chủ bài. Giao hàng: theo từng chiều, chiều chưa nhận
+        // thì món vẫn ở chỗ người gửi.
+        boolean shipping = request.isShipping();
+        long mainHolder = shipping && !request.isLegReceived(1) ? snapshot.donorId() : request.getReceiverId();
+        message.append(
+                applyItemOutcome(request, request.getItemId(), choices.get(request.getItemId()), adminId, mainHolder));
         if (request.getOfferedItemId() != null) {
+            long offeredHolder = shipping && !request.isLegReceived(2) ? request.getReceiverId() : snapshot.donorId();
             message.append(applyItemOutcome(
                     request,
                     request.getOfferedItemId(),
                     choices.get(request.getOfferedItemId()),
                     adminId,
-                    snapshot.donorId()));
+                    offeredHolder));
         }
         return message.toString();
     }

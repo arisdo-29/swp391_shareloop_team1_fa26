@@ -47,7 +47,10 @@ class RequestStateMachineTest {
             "AWAITING_HANDOVER->DISPUTED",
             "AWAITING_HANDOVER->CANCELLED",
             "DISPUTED->COMPLETED",
-            "DISPUTED->CANCELLED");
+            "DISPUTED->CANCELLED",
+            // Hai cạnh 16 và 17: chỉ dành cho Admin bác khiếu nại đề nghị huỷ không tố ai (GN-06)
+            "DISPUTED->LOGISTICS_CONFIRMED",
+            "DISPUTED->AWAITING_HANDOVER");
 
     private static String key(RequestStatus from, RequestStatus to) {
         return from.name() + "->" + to.name();

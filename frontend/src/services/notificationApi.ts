@@ -62,6 +62,7 @@ export function notificationCategory(type: string): NotificationCategory {
       'CANCEL_REQUESTED',
       'CANCEL_REQUEST_WITHDRAWN',
       'CANCEL_REQUEST_REJECTED',
+      'TRANSACTION_RESUMED',
       'CANCEL_REQUEST_REMINDER',
       'RESCHEDULE_PROPOSED',
       'RESCHEDULE_ACCEPTED',

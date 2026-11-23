@@ -17,6 +17,7 @@ public class CancelRequestRejectedListener {
     // @EventListener thường: chạy cùng transaction với lúc giao dịch sang DISPUTED, lỗi thì cùng rollback.
     @EventListener
     public void onCancelRequestRejected(CancelRequestRejectedEvent event) {
-        reportService.openCancelRejectedDispute(event.reporterId(), event.requestId(), event.note());
+        reportService.openCancelRejectedDispute(
+                event.reporterId(), event.requestId(), event.note(), event.accusation());
     }
 }
