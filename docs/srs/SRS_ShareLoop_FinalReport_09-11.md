@@ -3048,7 +3048,7 @@ Sao đo mức đáng tin và chỉ giảm khi Admin kết luận vi phạm; đi�
 </tr>
 <tr class="odd">
 <td><span id="BR_UT_05" class="anchor"></span><strong>UT-05</strong></td>
-<td>Hồi 1 sao sau mỗi 10 giao dịch hoàn tất liên tiếp không bị trừ sao, tối đa 5 sao. Bị trừ sao thì chuỗi đếm về 0.</td>
+<td>Hồi 1 sao sau mỗi 10 giao dịch hoàn tất liên tiếp không bị trừ sao, tối đa 5 sao. Bị trừ sao thì chuỗi đếm về 0. Giao dịch cặp lặp (từ lần thứ 3 giữa cùng một cặp trong cửa sổ reputation_pair_window_days) không tính vào chuỗi sạch và không thêm đối tác. Hồi sao cần chuỗi đủ 10 giao dịch và ít nhất star_restore_min_distinct_partners đối tác khác nhau.</td>
 <td>reputation_clean_streak_for_star = 10</td>
 <td><a href="#xem-sao-uy-tín-điểm-và-hạng">Xem sao uy tín, điểm và hạng</a></td>
 </tr>

@@ -133,7 +133,7 @@ Cột "Nhanh nhất sau" tính theo trần 30 điểm / ngày (UT-07).
 | UT-02 | Chỉ trừ sao khi Admin chấp thuận một báo cáo / khiếu nại; mỗi lần 1 sao, không âm. Mới bị báo cáo thì chưa trừ. | 1 sao / lần |
 | UT-03 | Mỗi lần bị trừ sao, người dùng nhận thông báo "Bạn bị trừ 1 sao. Bạn còn N sao trước khi tài khoản bị cấm." | — |
 | UT-04 | Sao về 0 → tài khoản Bị cấm (KC-05). | 0 |
-| UT-05 | Hồi 1 sao sau mỗi 10 giao dịch hoàn tất liên tiếp không bị trừ sao, tối đa 5 sao. Bị trừ sao thì chuỗi đếm về 0. | reputation\_clean\_streak\_for\_star = 10 |
+| UT-05 | Hồi 1 sao sau mỗi 10 giao dịch hoàn tất liên tiếp không bị trừ sao, tối đa 5 sao. Bị trừ sao thì chuỗi đếm về 0. Giao dịch cặp lặp (từ lần thứ 3 giữa cùng một cặp trong cửa sổ reputation\_pair\_window\_days) không tính vào chuỗi sạch và không thêm đối tác. Hồi sao cần chuỗi đủ 10 giao dịch và ít nhất star\_restore\_min\_distinct\_partners đối tác khác nhau. | reputation\_clean\_streak\_for\_star = 10 |
 | UT-06 | Cộng điểm khi giao dịch Hoàn tất: bài Cho +10 người cho, +2 người nhận; bài Trao đổi +6 mỗi bên. Hạng tính lại ngay. | 10 / 2 / 6 |
 | UT-07 | Mỗi tài khoản được cộng tối đa 30 điểm / ngày theo giờ Việt Nam; chạm trần thì chỉ cộng phần còn lại. | daily\_points\_cap = 30 |
 | UT-08 | Chống cày điểm: từ giao dịch hoàn tất thứ 3 giữa cùng một cặp người trong 90 ngày thì không cộng điểm (vẫn ghi lịch sử); cặp có hơn 5 giao dịch hiện ở màn Giám sát bất thường. | 90 ngày / thứ 3 / hơn 5 |
