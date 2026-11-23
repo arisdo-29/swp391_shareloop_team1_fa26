@@ -3994,6 +3994,18 @@ Giá trị mặc định lấy từ enum ConfigKey (backend/src/main/java/com/sh
 | reputation_swap_each             | 6                           | Điểm mỗi bên khi trao đổi. Số điểm mỗi bên nhận được khi một giao dịch Trao đổi hoàn tất.                                                                                                                                                                                  |
 | reputation_clean_streak_for_star | 10                          | Số giao dịch sạch để hồi sao. Số giao dịch hoàn tất liên tiếp không vi phạm để được hồi 1 sao, khi người dùng đang dưới 5 sao.                                                                                                                                             |
 | reputation_pair_no_points_from   | 3                           | Giao dịch lặp cặp hết điểm từ lần thứ. Từ giao dịch thứ mấy giữa cùng hai người, trong thời gian tính lặp cặp, thì cả hai không được cộng điểm.                                                                                                                            |
+| star_restore_min_distinct_partners | 5 | Số đối tác khác nhau để hồi sao. Giao dịch lặp cặp không tính vào chuỗi sạch. |
+| login_max_failed_attempts | 5 | Số lần sai mật khẩu liên tiếp tối đa trước khi khoá đăng nhập email đó. |
+| login_lock_minutes | 15 | Số phút khoá đăng nhập sau khi sai quá số lần cho phép. |
+| reserved_display_refund_max_days | 7 | Số ngày trả lại tối đa vào hạn hiển thị khi giao dịch huỷ và bài được mở lại. |
+| reserved_release_grace_hours | 24 | Số giờ giữ thêm khi bài được mở lại mà vẫn quá hạn hiển thị. |
+| max_active_transactions | 5 | Số giao dịch chưa xong tối đa của một người nhận. |
+| request_resend_cooldown_hours | 24 | Số giờ chờ gửi lại yêu cầu cho cùng một bài sau khi tự huỷ. |
+| request_quiet_cancel_minutes | 5 | Huỷ yêu cầu trong số phút này sau khi gửi thì không báo chủ bài. |
+| report_trusted_min_account_days | 7 | Tuổi tài khoản để báo cáo tính vào ngưỡng tự ẩn bài. |
+| report_trusted_min_completed | 1 | Số giao dịch hoàn tất để báo cáo tính vào ngưỡng tự ẩn bài. |
+| media_orphan_cleanup_hours | 24 | Số giờ giữ ảnh đã tải lên nhưng chưa gắn. |
+| media_upload_per_hour | 40 | Số ảnh tải lên tối đa mỗi người mỗi giờ. |
 | reputation_pair_window_days      | 90                          | Số ngày tính lặp cặp. Số ngày gần nhất dùng để đếm các giao dịch giữa cùng hai người.                                                                                                                                                                                      |
 | reputation_pair_alert_threshold  | 5                           | Ngưỡng cảnh báo lặp cặp. Số giao dịch giữa cùng hai người vượt mức này thì cảnh báo Admin.                                                                                                                                                                                 |
 | ip_alert_window_days             | 30                          | Số ngày tính cảnh báo cùng IP. Số ngày gần nhất dùng để đếm tài khoản đăng ký từ cùng một địa chỉ IP.                                                                                                                                                                      |
@@ -4398,3 +4410,14 @@ Những chỗ code nhánh develop khác với BR v12 (02/11/2026) và kết qu�
 | 8      | Hồ sơ công khai (TK-01)                  | Khách xem trang chủ, tìm, chi tiết bài, danh mục, khu vực. | Hồ sơ công khai cần đăng nhập; file mô tả UC-07 ghi Khách xem được.                                                    | Chốt 09/11 (D-23): giữ cần đăng nhập; đã sửa UC-07 và TK-01.                   |
 | 9      | Độ dài giải trình                        | Không nêu.                                                 | /reports/{id}/response ≤ 2000 ký tự; /disputes/{id}/response ≤ 1000 ký tự.                                             | Chốt 09/11 (D-24): 2000 ký tự cho cả hai; đã ghi vào BC-03, BC-08.             |
 | 10     | Cảnh báo nhiều tài khoản cùng IP (AD-04) | Không nêu.                                                 | Chưa có; màn Giám sát bất thường chỉ có cặp giao dịch lặp.                                                             | Chốt 09/11 (D-26): làm thêm; đã ghi vào AD-04, mục 3.8.9 và bảng cấu hình.     |
+
+
+## Cột dữ liệu thêm ở đợt rà soát 22/11/2026 (không thêm bảng, vẫn 17 bảng)
+
+| Bảng | Cột | Ý nghĩa |
+| --- | --- | --- |
+| users | login_failed_count, login_locked_until | Khoá đăng nhập tạm sau nhiều lần sai mật khẩu (A2) |
+| users | email_canonical | Email chuẩn hoá để kiểm trùng, trigger tự điền, có unique index nếu dữ liệu không trùng (A3) |
+| users | clean_streak_partners | Mảng id đối tác khác nhau của chuỗi giao dịch sạch (F4) |
+| items | edit_submitted_at | Mốc gửi bản sửa của bài đã duyệt, dùng để cộng bù thời gian chờ duyệt (B1) |
+| requests | ux_requests_active_offered_item (index) | Một món chỉ được đem đổi ở một giao dịch đang chạy (C3) |
