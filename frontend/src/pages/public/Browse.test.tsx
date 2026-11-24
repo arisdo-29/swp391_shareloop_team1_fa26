@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { StrictMode, type ReactNode } from 'react';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -1022,4 +1022,25 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
       expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ categoryId: 7 })),
     );
   });
+});
+
+it('hiện giá tham khảo của bài Cho tặng, Trao đổi và bài cũ ngay trên thẻ Tìm đồ', async () => {
+  vi.mocked(itemApi.list).mockResolvedValue({
+    items: [
+      { ...book, referencePrice: 120000 },
+      { ...book, id: 503, title: 'Bàn phím', offerType: 'SWAP', referencePrice: 280000 },
+      { ...book, id: 504, title: 'Sách cũ', referencePrice: null },
+    ],
+    page: 0,
+    size: 20,
+    totalElements: 3,
+  });
+  renderBrowse();
+
+  const give = await screen.findByRole('link', { name: /Bộ giáo trình đại học/ });
+  const swap = screen.getByRole('link', { name: /Bàn phím/ });
+  const legacy = screen.getByRole('link', { name: /Sách cũ/ });
+  expect(within(give).getByText(/Giá tham khảo 120\.000\s*₫/)).toBeTruthy();
+  expect(within(swap).getByText(/Giá tham khảo 280\.000\s*₫/)).toBeTruthy();
+  expect(within(legacy).getByText('Chưa có giá tham khảo')).toBeTruthy();
 });

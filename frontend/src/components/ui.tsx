@@ -55,6 +55,7 @@ import type {
   User,
 } from '../types/domain';
 import { conditionLabel, txLabel } from '../utils/formatting';
+import { formatReferencePrice } from '../utils/referencePrice';
 import { resolveMediaUrl } from '../services/mediaUrl';
 
 // Chỉ giữ icon có chức năng (đóng, mở menu, hiện mật khẩu, mở danh sách, thông báo, đính kèm ảnh,
@@ -754,12 +755,14 @@ export function ProductCard({
   from,
   imageLabel,
   footer,
+  showReferencePrice,
 }: {
   item: Item;
   tradeFor?: string;
   from?: 'ai';
   imageLabel?: string;
   footer?: ReactNode;
+  showReferencePrice?: boolean;
 }) {
   const description = productCardDescription(item.description);
 
@@ -797,6 +800,11 @@ export function ProductCard({
         <p className="mt-2 h-5 !min-h-5 line-clamp-1 text-xs leading-5 text-[#6B7280] sm:text-[13px]">
           {description}
         </p>
+        {showReferencePrice ? (
+          <div className="mt-2 text-sm font-semibold text-primary">
+            {formatReferencePrice(item.referencePrice)}
+          </div>
+        ) : null}
         {tradeFor ? (
           <p className="mt-1 truncate text-xs text-[#6B7280]">
             <span className="font-medium text-[#374151]">Đang tìm:</span> {tradeFor}
