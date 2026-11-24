@@ -210,6 +210,15 @@ public enum ConfigKey {
             "Ngưỡng người đăng mới",
             "Người đăng có số bài đã từng được duyệt không vượt quá số này được xem là người mới và xếp trước trong"
                     + " hàng chờ duyệt (trong cùng số sao uy tín)."),
+    REVIEW_LOW_TRUST_MAX_STARS(
+            "review_low_trust_max_stars",
+            "2",
+            ConfigGroup.MODERATION,
+            "Ngưỡng ít sao uy tín khi duyệt bài",
+            "Người đăng có số sao uy tín không vượt quá ngưỡng này xuất hiện trong bộ lọc ít sao uy tín.",
+            ValueType.INTEGER,
+            BigDecimal.ZERO,
+            BigDecimal.valueOf(5)),
     ITEM_PHOTOS_MIN(
             "item_photos_min",
             "3",

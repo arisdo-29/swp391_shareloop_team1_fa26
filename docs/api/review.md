@@ -8,10 +8,15 @@ Tất cả các endpoint trong module này yêu cầu quyền **ADMIN** (Bearer 
 
 Lấy trang bài đăng đang chờ duyệt (`PENDING_REVIEW`) kèm danh sách điều kiện đạt `checklist` hiện hành, chỉ gồm mục active theo `sort_order`, rồi `id`.
 
-### Thứ tự ưu tiên sắp xếp (KD-06, không còn xét cờ AI):
-1. Người đăng có uy tín (`trust_stars`) thấp hơn đứng trước (ưu tiên soát tài khoản rủi ro cao).
-2. Cùng số sao: người đăng mới đứng trước. Người mới là người có số bài đã từng được duyệt (`items.approved_at` khác rỗng, tính cả bài đã hết hạn hoặc đã trao) không quá `review_newcomer_max_approved` (mặc định 3, Admin chỉnh được ở mục cấu hình).
-3. Bài đăng chờ lâu hơn đứng trước; trường `id` dùng để phá hòa ổn định.
+### Thứ tự hàng chờ
+
+Các bài được xếp theo thời điểm vào hàng chờ (`queuedAt`) từ cũ đến mới, cùng thời điểm thì theo ID tăng dần. Bài mới dùng thời điểm tạo. Bản sửa dùng lần gửi duyệt gần nhất. Với dữ liệu cũ, ưu tiên mốc `edit_submitted_at` nếu có, sau đó dùng `created_at`. Endpoint tương thích cũ `GET /api/v1/admin/items/pending` vẫn dùng thứ tự ưu tiên KD-06 trước đây.
+
+### Dấu hiệu rủi ro của người đăng
+
+- `LOW_TRUST` áp dụng khi số sao uy tín không vượt quá `review_low_trust_max_stars`, mặc định 2.
+- `REPEATED_PAIR` áp dụng cho cả hai người thuộc một cặp đang có cảnh báo giao dịch lặp theo AD-04. Dùng ngưỡng và cửa sổ của trang cảnh báo Admin.
+- `NEWCOMER` áp dụng khi số bài đã từng được duyệt không vượt quá `review_newcomer_max_approved`, mặc định 3. Tính cả bài hết hạn hoặc đã trao.
 
 Các trường `aiRisk`, `moderationFlag`, `flagReason` vẫn có trong response để tương thích, nhưng không ảnh hưởng thứ tự. Khi AI sàng lọc tắt (`item_ai_screening_enabled = false`), `aiRisk` luôn là `UNCHECKED`; `moderationFlag`/`matchedTerms` chỉ còn đến từ từ khoá mức REVIEW của tầng 1.
 
@@ -20,6 +25,12 @@ Các trường `aiRisk`, `moderationFlag`, `flagReason` vẫn có trong response
 |---------|------|----------|----------|-------|
 | `page` | `int` | `0` | $\ge 0$ | Số trang (bắt đầu từ 0) |
 | `size` | `int` | `20` | `1–100` | Số lượng bản ghi mỗi trang |
+| `q` | `string` | | | Tìm một phần tiêu đề bài, không phân biệt dấu và chữ hoa/thường |
+| `categoryId` | `long` | | ≥ 1 | Lọc theo danh mục |
+| `risk` | `string` | | `LOW_TRUST`, `REPEATED_PAIR`, `NEWCOMER` | Lọc theo một dấu hiệu rủi ro |
+| `edited` | `boolean` | | | `true` lọc bài từng được duyệt, `false` lọc bài chưa từng được duyệt |
+
+Các bộ lọc được áp dụng cùng nhau trước khi phân trang.
 
 ### Response 200 OK
 ```json
@@ -37,6 +48,7 @@ Các trường `aiRisk`, `moderationFlag`, `flagReason` vẫn có trong response
       "matchedTerms": ["zalo"],
       "donorTrustStars": 3,
       "createdAt": "2026-10-14T10:00:00Z",
+      "queuedAt": "2026-10-15T11:00:00Z",
       "editCount": 2,
       "isEdited": true
     }
@@ -46,11 +58,12 @@ Các trường `aiRisk`, `moderationFlag`, `flagReason` vẫn có trong response
     {"id": 12, "key": "category_match", "statement": "Danh mục và thẻ phân loại phản ánh đúng món đồ.", "description": null}
   ],
   "page": 0,
-  "size": 20
+  "size": 20,
+  "totalElements": 1
 }
 ```
 
-`donorName` là họ tên người đăng, lấy qua `UserService.findBriefs`; là `null` khi tài khoản người đăng đã bị xoá. Giao diện dùng trường này để hiện tên và tìm kiếm theo tên người đăng, không hiện `donorId`. Endpoint cũ `GET /api/v1/admin/items/pending` cũng trả thêm `donorName` ở mỗi phần tử.
+`donorName` là họ tên hiển thị của người đăng, lấy qua `UserService.findBriefs`. Giá trị có thể rỗng nếu không tra được tài khoản. `totalElements` là tổng số bài khớp bộ lọc, gồm cả các trang khác. Endpoint cũ `GET /api/v1/admin/items/pending` cũng trả `donorName` ở mỗi phần tử.
 
 | Mã HTTP | Ý nghĩa |
 |---------|---------|
