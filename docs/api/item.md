@@ -40,6 +40,7 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
   "categoryId": 1,
   "areaId": 1,
   "offerType": "GIVE",
+  "referencePrice": 120000,
   "title": "Giáo trình Toán rời rạc",
   "description": "Sách còn mới 95%, tặng cho bạn nào cần ôn thi",
   "desiredItem": null,
@@ -51,6 +52,7 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
 ```
 
 *Lưu ý nghiệp vụ:*
+- `referencePrice` là giá tham khảo bằng đồng, bắt buộc cho cả bài Cho tặng và bài Trao đổi mới. Giá phải là số nguyên dương và nằm trong phạm vi số nguyên an toàn của JavaScript.
 - Nếu `offerType` là `SWAP`, bắt buộc trường `desiredItem` không được rỗng.
 - Nếu `condition` là `DEFECTIVE`, bắt buộc trường `defectNote` không được rỗng.
 - Nếu `condition` là `DEFECTIVE`, `defectImages` phải có ít nhất một URL ảnh lỗi đã upload của chủ bài; ảnh này lưu với role `DEFECT`, tách khỏi `images` (3–8 ảnh chính).
@@ -140,6 +142,7 @@ Xem chi tiết một bài đăng theo ID.
 ## PUT /api/v1/items/{id}
 
 - **Xác thực:** Bearer Token, chỉ chủ bài. Body gồm các trường nội dung như `CreateItemRequest`; `images` và `defectImages` có thể bỏ qua để giữ ảnh hiện tại, hoặc gửi danh sách URL media của chính chủ bài để thay và sắp lại thứ tự. Khi đổi sang `DEFECTIVE` phải có ít nhất một ảnh lỗi; khi chọn danh mục điện tử phải gửi `operatingStatus`.
+- Có thể bỏ qua `referencePrice` hoặc gửi `null` để giữ giá hiện tại. Bài cũ chưa có giá có thể tiếp tục để trống.
 - **Luồng:** Từ chối bài đã `RESERVED`/`TRADED`/`EXPIRED` hoặc có Request từ `RESERVED` trở lên. **Không cho phép đổi hình thức** (`GIVE` ↔ `SWAP`): hình thức là thuộc tính cố định từ lúc tạo bài (BD-10); nếu gửi `offerType` khác hình thức hiện tại của bài, hệ thống trả `409 ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED` với thông điệp: "Không đổi hình thức Cho tặng / Trao đổi khi sửa bài." (D-02). Muốn đổi hình thức, người dùng phải đóng/xoá bài cũ và đăng bài mới. Kiểm duyệt tầng 1 tiêu đề, mô tả và món mong muốn; nội dung bị chặn trả `422`, không giữ phí hay đổi bài. Sau đó gọi `quoteEdit` và `holdEditFee` theo [luật phí sửa](listingfee.md). Bài thành `PENDING_REVIEW`, tạm ẩn để Admin duyệt lại. **Bài bị ẩn vì báo cáo vi phạm được chấp nhận** (báo cáo bài, kể cả báo cáo từ chối nhận): chủ bài sửa rồi Admin duyệt lại (`markApproved`) thì bài được bật lại cờ hiện (`is_active = true`) cùng lúc chuyển `APPROVED` (22/11/2026). Module item phát `ItemApprovedEvent`, module report nghe và chỉ hiện lại khi bài đang ẩn, có báo cáo được chấp nhận **sau lần duyệt trước** (`items.approved_at`), chủ bài không bị khoá và còn sao. Chủ bài chưa sửa thì bài chưa qua duyệt lại nên vẫn ẩn. Bài ẩn vì lý do khác (Admin gỡ thủ công, khoá tài khoản, đủ ngưỡng báo cáo chờ, `hideAllOfUser` do lý do nghiêm trọng) và bài hết hạn không bị đụng tới.
 - **Thành công:** `200 OK`, `ItemResponse` mới.
 - **Lỗi chính:** `401 UNAUTHORIZED`, `403 ITEM_NOT_OWNER`, `403 ITEM_ADMIN_BLOCKED` (quản trị viên), `403 ITEM_REPUTATION_BLOCKED` (chủ bài có 0 sao uy tín), `404 ITEM_NOT_FOUND`, `409 ITEM_EDIT_NOT_ALLOWED`, `409 ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED`, `409 ITEM_GIVE_LIMIT_REACHED`, `422 ITEM_MODERATION_BLOCKED` (`field: content`), `422 ITEM_INVALID_IMAGE_COUNT`, lỗi media và `402 WALLET_INSUFFICIENT_BALANCE`.
@@ -338,6 +341,7 @@ Quy tắc:
 | `offerType` | string | Có | `GIVE` hoặc `SWAP` |
 | `title` | string | Có | Tối đa 150 ký tự |
 | `description` | string | Có | Không được để trống |
+| `referencePrice` | number | Có | Giá tham khảo bằng đồng, số nguyên dương |
 | `desiredItem` | string? | Điều kiện | Bắt buộc nếu `offerType` là `SWAP` |
 | `condition` | string | Có | `NEW`, `LIKE_NEW`, `GOOD`, `DEFECTIVE` |
 | `defectNote` | string? | Điều kiện | Bắt buộc nếu `condition` là `DEFECTIVE` |
@@ -357,6 +361,7 @@ Quy tắc:
 | `offerType` | string | `GIVE` hoặc `SWAP` |
 | `title` | string | Tiêu đề bài đăng |
 | `description` | string | Nội dung mô tả |
+| `referencePrice` | number? | Giá tham khảo bằng đồng. Giá trị rỗng nếu bài chưa có giá |
 | `desiredItem` | string? | Món đồ mong muốn đổi (nếu SWAP) |
 | `condition` | string | Tình trạng đồ |
 | `defectNote` | string? | Mô tả lỗi (nếu DEFECTIVE) |

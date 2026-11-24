@@ -73,6 +73,7 @@ export interface CreateItemRequest {
   offerType: OfferType;
   title: string;
   description: string;
+  referencePrice: number;
   desiredItem: string | null;
   condition: ApiCondition;
   defectNote: string | null;
@@ -82,12 +83,14 @@ export interface CreateItemRequest {
   operatingStatus: OperatingStatus | null;
 }
 
-export type UpdateItemRequest = Omit<CreateItemRequest, 'images' | 'defectImages'> & {
+export type UpdateItemRequest = Omit<CreateItemRequest, 'images' | 'defectImages' | 'referencePrice'> & {
+  referencePrice?: number;
   images?: string[];
   defectImages?: string[] | null;
 };
 
-export interface ItemResponse extends CreateItemRequest {
+export interface ItemResponse extends Omit<CreateItemRequest, 'referencePrice'> {
+  referencePrice?: number | null;
   id: number;
   donorId: number;
   images: string[];

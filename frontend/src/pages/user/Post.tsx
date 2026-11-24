@@ -25,7 +25,9 @@ import {
   reputationBlockedMessage,
 } from '../../utils/apiErrorMessages';
 
-type FormErrors = Partial<Record<'type' | 'title' | 'category' | 'condition' | 'district' | 'description' | 'tradeFor' | 'brand' | 'defectNote' | 'images' | 'defectImages' | 'operatingStatus', string>>;
+import { parseReferencePrice } from '../../utils/referencePrice';
+
+type FormErrors = Partial<Record<'type' | 'referencePrice' | 'title' | 'category' | 'condition' | 'district' | 'description' | 'tradeFor' | 'brand' | 'defectNote' | 'images' | 'defectImages' | 'operatingStatus', string>>;
 type MediaUploadState = 'idle' | 'uploading' | 'error';
 
 const POST_REQUEST_SUCCESS = 'Đã gửi yêu cầu đăng bài thành công.';
@@ -73,6 +75,7 @@ export function Post() {
   const [district, setDistrict] = useState('');
   const [description, setDescription] = useState('');
   const [tradeFor, setTradeFor] = useState('');
+  const [referencePrice, setReferencePrice] = useState('');
   const [brand, setBrand] = useState('');
   const [defectNote, setDefectNote] = useState('');
   const [operatingStatus, setOperatingStatus] = useState<OperatingStatus | ''>('');
@@ -190,6 +193,9 @@ export function Post() {
       nextErrors.images = `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.`;
     } else if (imageFiles.length > ITEM_IMAGES_MAX) {
       nextErrors.images = `Chỉ được chọn tối đa ${ITEM_IMAGES_MAX} ảnh.`;
+    }
+    if (parseReferencePrice(referencePrice) === undefined) {
+      nextErrors.referencePrice = 'Vui lòng nhập giá tham khảo là số nguyên dương.';
     }
     if (title.trim().length > 150) nextErrors.title = 'Tiêu đề tối đa 150 ký tự.';
     if (type === 'trade' && !tradeFor.trim()) nextErrors.tradeFor = 'Vui lòng nhập món đồ mong muốn.';
@@ -329,6 +335,7 @@ export function Post() {
           areaId,
           offerType: type === 'gift' ? 'GIVE' : 'SWAP',
           title: title.trim(),
+          referencePrice: Number(referencePrice),
           description: description.trim(),
           desiredItem: type === 'trade' ? tradeFor.trim() || null : null,
           condition: CONDITION_TO_API[condition],
@@ -346,7 +353,7 @@ export function Post() {
     } catch (caught) {
       const apiError = caught as ApiError;
       const fieldNames: Record<string, keyof FormErrors> = {
-        title: 'title', description: 'description', desiredItem: 'tradeFor',
+        title: 'title', referencePrice: 'referencePrice', description: 'description', desiredItem: 'tradeFor',
         categoryId: 'category', areaId: 'district', condition: 'condition',
         defectNote: 'defectNote', images: 'images', defectImages: 'defectImages',
         brand: 'brand', operatingStatus: 'operatingStatus', offerType: 'type',
@@ -547,6 +554,13 @@ export function Post() {
           </PostStep>
 
           <PostStep number={3} title="Thông tin món đồ">
+            <Field
+              label="Giá tham khảo (đồng)"
+              inputMode="numeric"
+              value={referencePrice}
+              onChange={(event) => setReferencePrice(event.target.value)}
+              error={errors.referencePrice}
+            />
             <Field
               label="Tên món đồ"
               value={title}

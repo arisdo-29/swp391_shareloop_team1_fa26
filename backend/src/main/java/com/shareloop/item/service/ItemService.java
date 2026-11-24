@@ -211,6 +211,9 @@ public class ItemService {
                 request.condition(),
                 request.defectNote(),
                 request.brand());
+        if (request.referencePrice() != null) {
+            item.setReferencePrice(request.referencePrice().longValueExact());
+        }
 
         int minImages = configService.getInt(ConfigKey.ITEM_PHOTOS_MIN);
         int maxImages = configService.getInt(ConfigKey.ITEM_PHOTOS_MAX);
@@ -329,6 +332,9 @@ public class ItemService {
                 request.condition(),
                 request.defectNote(),
                 request.brand());
+        if (request.referencePrice() != null) {
+            item.setReferencePrice(request.referencePrice().longValueExact());
+        }
         if (newMediaIds != null || request.defectImages() != null || request.condition() != ItemCondition.DEFECTIVE) {
             replaceMediaMappings(
                     itemId,

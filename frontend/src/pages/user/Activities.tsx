@@ -1,3 +1,4 @@
+import { parseReferencePrice } from '../../utils/referencePrice';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
@@ -116,6 +117,7 @@ type EditFormErrors = Partial<
     | 'area'
     | 'description'
     | 'desiredItem'
+    | 'referencePrice'
     | 'brand'
     | 'images'
     | 'defectNote'
@@ -1301,6 +1303,7 @@ function EditItemForm({
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description);
   const [desiredItem, setDesiredItem] = useState(item.desiredItem ?? '');
+  const [referencePrice, setReferencePrice] = useState(item.referencePrice?.toString() ?? '');
   const [categoryId, setCategoryId] = useState(item.categoryId);
   const [selectedCondition, setCondition] = useState<ApiCondition>(item.condition);
   const [defectNote, setDefectNote] = useState(item.defectNote ?? '');
@@ -1369,6 +1372,9 @@ function EditItemForm({
     }
     if (!title.trim()) nextErrors.title = 'Vui lòng nhập tiêu đề.';
     else if (title.trim().length > 150) nextErrors.title = 'Tiêu đề tối đa 150 ký tự.';
+    if (referencePrice && parseReferencePrice(referencePrice) === undefined) {
+      nextErrors.referencePrice = 'Vui lòng nhập giá tham khảo là số nguyên dương.';
+    }
     if (!description.trim()) nextErrors.description = 'Vui lòng nhập mô tả.';
     if (item.offerType === 'SWAP' && !desiredItem.trim()) {
       nextErrors.desiredItem = 'Vui lòng nhập món đồ mong muốn.';
@@ -1458,6 +1464,7 @@ function EditItemForm({
         title: title.trim(),
         description: description.trim(),
         desiredItem: item.offerType === 'SWAP' ? desiredItem.trim() : null,
+        referencePrice: parseReferencePrice(referencePrice),
         condition,
         defectNote: condition === 'DEFECTIVE' ? defectNote.trim() : null,
         brand: brand.trim() || null,
@@ -1505,6 +1512,14 @@ function EditItemForm({
           onChange={(event) => setDesiredItem(event.target.value)}
         />
       ) : null}
+      <Field
+        label="Giá tham khảo (đồng)"
+        inputMode="numeric"
+        value={referencePrice}
+        disabled={formDisabled}
+        error={errors.referencePrice}
+        onChange={(event) => setReferencePrice(event.target.value)}
+      />
       <Field
         label="Tên món đồ"
         value={title}
