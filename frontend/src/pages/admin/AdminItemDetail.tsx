@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { Alert, Button, PageHeader, SkeletonRows } from '../../components/ui';
 import { adminItemApi, type AdminItemFullDetail } from '../../services/adminItemApi';
 import { requestStatusLabel } from '../../utils/request';
@@ -16,6 +16,7 @@ import {
 import { AdminItemVisibilityDialog } from './AdminItemVisibilityDialog';
 import { ModerationImageGallery } from './ModerationParts';
 import { conditionLabels, offerTypeLabels } from './moderationDisplay';
+import type { AdminLedgerRouteState } from './adminLedgerNavigation';
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -37,11 +38,16 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 
 export function AdminItemDetail() {
   const { itemId } = useParams();
+  const location = useLocation();
+  const ledgerReturn = (location.state as AdminLedgerRouteState | null)?.ledgerReturn;
   const id = Number(itemId);
   const [detail, setDetail] = useState<AdminItemFullDetail | null>(null);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [dialogMode, setDialogMode] = useState<'hide' | 'unhide' | null>(null);
+  const backTarget = ledgerReturn ? '/admin/finance/ledger' : '/admin/items';
+  const backLabel = ledgerReturn ? 'Về lịch sử giao dịch Credit' : 'Về danh sách bài đăng';
+  const backState = ledgerReturn ? { restoreLedger: ledgerReturn } : undefined;
 
   useEffect(() => {
     if (!Number.isInteger(id) || id <= 0) {
@@ -72,10 +78,11 @@ export function AdminItemDetail() {
             Thử lại
           </Button>
           <Link
-            to="/admin/items"
+            to={backTarget}
+            state={backState}
             className="inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-semibold"
           >
-            Về danh sách bài đăng
+            {backLabel}
           </Link>
         </div>
       </section>
@@ -95,10 +102,11 @@ export function AdminItemDetail() {
         action={
           <div className="flex flex-wrap gap-2">
             <Link
-              to="/admin/items"
+              to={backTarget}
+              state={backState}
               className="inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-semibold"
             >
-              Về danh sách
+              {ledgerReturn ? 'Về lịch sử giao dịch Credit' : 'Về danh sách'}
             </Link>
             {summary.active ? (
               <Button variant="danger" disabled={hideBlocked} onClick={() => setDialogMode('hide')}>

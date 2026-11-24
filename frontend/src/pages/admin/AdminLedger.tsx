@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { Dialog } from '../../components/Dialog';
 import { Pagination } from '../../components/Pagination';
 import { Alert, Button, Field, Icon, PageHeader, SearchField, Select, SkeletonRows } from '../../components/ui';
 import {
@@ -14,6 +15,7 @@ import { useDebouncedValue } from '../../utils/useDebouncedValue';
 import { adminErrorMessage } from './adminErrors';
 import { ledgerTypeLabels } from './adminItemDisplay';
 import { AdminUserPicker } from './AdminUserPicker';
+import type { AdminLedgerRouteState, AdminLedgerViewState } from './adminLedgerNavigation';
 import './admin-ledger.css';
 
 const PAGE_SIZE = 20;
@@ -85,7 +87,7 @@ function transactionContent(row: AdminLedgerRow): TransactionContent {
   }
 }
 
-function TransactionContentCell({ row }: { row: AdminLedgerRow }) {
+function TransactionContentCell({ row, returnState }: { row: AdminLedgerRow; returnState: AdminLedgerViewState }) {
   const content = transactionContent(row);
   const fullText = `${content.prefix}${content.detail ? `${content.separator}${content.detail}` : ''}`;
   const detail = content.detail ? (
@@ -93,6 +95,7 @@ function TransactionContentCell({ row }: { row: AdminLedgerRow }) {
       <Link
         className={`${content.code ? 'font-mono' : ''} font-semibold text-primary hover:underline`}
         to={content.to}
+        state={{ ledgerReturn: returnState, ...(row.orderCode ? { openTopUpOrder: row.orderCode } : {}) }}
       >
         {content.detail}
       </Link>
@@ -116,6 +119,122 @@ function TransactionContentCell({ row }: { row: AdminLedgerRow }) {
   );
 }
 
+function DetailItem({ label, children, wide = false }: { label: string; children: ReactNode; wide?: boolean }) {
+  return (
+    <div className={wide ? 'admin-ledger-detail-item admin-ledger-detail-item--wide' : 'admin-ledger-detail-item'}>
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  );
+}
+
+function LedgerDetailDialog({
+  row,
+  returnState,
+  onClose,
+}: {
+  row: AdminLedgerRow;
+  returnState: AdminLedgerViewState;
+  onClose: () => void;
+}) {
+  const content = transactionContent(row);
+  const contentText = `${content.prefix}${content.detail ? `${content.separator}${content.detail}` : ''}`;
+  const hasUser = Boolean(row.userName || row.userEmail);
+  const hasItem = Boolean(row.itemTitle);
+  const hasRelated = Boolean(row.itemId || row.itemTitle || row.orderCode);
+
+  return (
+    <Dialog title="Chi tiết giao dịch Credit" wide onClose={onClose}>
+      <dl className="admin-ledger-detail-grid">
+        <DetailItem label="Mã giao dịch">
+          <span className="font-mono font-semibold text-text-primary">#{row.id}</span>
+        </DetailItem>
+        <DetailItem label="Thời gian giao dịch">{formatDateTime(row.createdAt)}</DetailItem>
+        {hasUser ? (
+          <DetailItem label="Thông tin người dùng">
+            {row.userName ? <p className="font-semibold text-text-primary">{row.userName}</p> : null}
+            {row.userEmail ? <p className="break-all text-xs text-text-muted">{row.userEmail}</p> : null}
+          </DetailItem>
+        ) : null}
+        <DetailItem label="Loại giao dịch">
+          <span className={`admin-ledger-type ${ledgerTypeClass(row.type)}`}>
+            {ledgerTypeLabels[row.type]}
+          </span>
+        </DetailItem>
+        <DetailItem label="Số Credit cộng hoặc trừ">
+          <span className={`font-bold tabular-nums ${row.amount >= 0 ? 'text-success' : 'text-error'}`}>
+            {signed(row.amount)} Credit
+          </span>
+        </DetailItem>
+        <DetailItem label="Số dư sau giao dịch">
+          <span className="font-semibold tabular-nums text-text-primary">
+            {row.balanceAfter.toLocaleString('vi-VN')} Credit
+          </span>
+        </DetailItem>
+        <DetailItem label="Nội dung giao dịch" wide>
+          {contentText}
+        </DetailItem>
+        {hasRelated ? (
+          <DetailItem label="Bài đăng hoặc đơn nạp liên quan" wide>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              {hasItem ? (
+                row.itemId ? (
+                  <Link
+                    className="font-semibold text-primary hover:underline"
+                    to={`/admin/items/${row.itemId}`}
+                    state={{ ledgerReturn: returnState }}
+                  >
+                    {row.itemTitle}
+                  </Link>
+                ) : (
+                  <span>{row.itemTitle}</span>
+                )
+              ) : null}
+              {row.orderCode ? (
+                <Link
+                  className="break-all font-mono font-semibold text-primary hover:underline"
+                  to={`/admin/finance/topup-orders?q=${encodeURIComponent(row.orderCode)}`}
+                  state={{ ledgerReturn: returnState, openTopUpOrder: row.orderCode }}
+                >
+                  Mã đơn: {row.orderCode}
+                </Link>
+              ) : null}
+              {row.itemId ? (
+                <Link
+                  className="admin-ledger-related-action"
+                  to={`/admin/items/${row.itemId}`}
+                  state={{ ledgerReturn: returnState }}
+                >
+                  Xem chi tiết bài đăng
+                </Link>
+              ) : null}
+              {row.orderCode ? (
+                <Link
+                  className="admin-ledger-related-action"
+                  to={`/admin/finance/topup-orders?q=${encodeURIComponent(row.orderCode)}`}
+                  state={{ ledgerReturn: returnState, openTopUpOrder: row.orderCode }}
+                >
+                  Xem chi tiết đơn nạp
+                </Link>
+              ) : null}
+            </div>
+          </DetailItem>
+        ) : null}
+        {row.note ? (
+          <DetailItem label="Ghi chú và lý do giao dịch" wide>
+            <span className="whitespace-pre-wrap">{row.note}</span>
+          </DetailItem>
+        ) : null}
+        {row.createdByName ? (
+          <DetailItem label="Người thực hiện" wide>
+            {row.createdByName}
+          </DetailItem>
+        ) : null}
+      </dl>
+    </Dialog>
+  );
+}
+
 function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -128,18 +247,31 @@ function downloadBlob(blob: Blob, fileName: string) {
 }
 
 export function AdminLedger() {
+  const location = useLocation();
+  const restoredState = (location.state as AdminLedgerRouteState | null)?.restoreLedger;
   const [result, setResult] = useState<AdminLedgerPage | null>(null);
-  const [type, setType] = useState<LedgerTxType | ''>('');
-  const [user, setUser] = useState<AdminUserSummary | null>(null);
-  const [keywordInput, setKeywordInput] = useState('');
+  const [type, setType] = useState<LedgerTxType | ''>(restoredState?.type ?? '');
+  const [user, setUser] = useState<AdminUserSummary | null>(restoredState?.user ?? null);
+  const [keywordInput, setKeywordInput] = useState(restoredState?.keywordInput ?? '');
   const keyword = useDebouncedValue(keywordInput.trim());
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [page, setPage] = useState(0);
+  const [fromDate, setFromDate] = useState(restoredState?.fromDate ?? '');
+  const [toDate, setToDate] = useState(restoredState?.toDate ?? '');
+  const [page, setPage] = useState(restoredState?.page ?? 0);
   const [reloadKey, setReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
+  const [selectedRow, setSelectedRow] = useState<AdminLedgerRow | null>(null);
+  const firstFilterEffect = useRef(true);
+
+  const ledgerViewState: AdminLedgerViewState = {
+    type,
+    user,
+    keywordInput,
+    fromDate,
+    toDate,
+    page,
+  };
 
   const dateRangeError =
     fromDate && toDate && fromDate > toDate ? '"Từ ngày" không được sau "Đến ngày".' : '';
@@ -156,6 +288,10 @@ export function AdminLedger() {
 
   // Đổi bộ lọc nào cũng quay về trang đầu.
   useEffect(() => {
+    if (firstFilterEffect.current) {
+      firstFilterEffect.current = false;
+      return;
+    }
     setPage(0);
   }, [type, user, keyword, fromDate, toDate]);
 
@@ -312,6 +448,7 @@ export function AdminLedger() {
                   <th className="text-right">Số dư sau giao dịch</th>
                   <th>Nội dung giao dịch</th>
                   <th>Ghi chú</th>
+                  <th className="text-center whitespace-nowrap">Xem chi tiết</th>
                 </tr>
               </thead>
               <tbody>
@@ -333,18 +470,29 @@ export function AdminLedger() {
                       {signed(row.amount)}
                     </td>
                     <td className="admin-ledger-balance">{row.balanceAfter.toLocaleString('vi-VN')}</td>
-                    <TransactionContentCell row={row} />
+                    <TransactionContentCell row={row} returnState={ledgerViewState} />
                     <td className="admin-ledger-note">
                       <div className="admin-ledger-note-content">
                         {row.note || '—'}
                         {row.createdByName ? <p>Thực hiện bởi {row.createdByName}</p> : null}
                       </div>
                     </td>
+                    <td className="text-center">
+                      <button
+                        type="button"
+                        className="admin-ledger-view-action"
+                        aria-label="Xem chi tiết"
+                        title="Xem chi tiết"
+                        onClick={() => setSelectedRow(row)}
+                      >
+                        Xem chi tiết
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {result.items.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center text-text-muted">
+                    <td colSpan={8} className="text-center text-text-muted">
                       Không có giao dịch phù hợp bộ lọc hiện tại.
                     </td>
                   </tr>
@@ -360,6 +508,14 @@ export function AdminLedger() {
             onPageChange={setPage}
           />
         </div>
+      ) : null}
+
+      {selectedRow ? (
+        <LedgerDetailDialog
+          row={selectedRow}
+          returnState={ledgerViewState}
+          onClose={() => setSelectedRow(null)}
+        />
       ) : null}
     </section>
   );

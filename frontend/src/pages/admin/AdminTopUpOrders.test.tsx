@@ -2,13 +2,22 @@
 
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   adminFinanceApi,
   type AdminTopUpOrder,
   type AdminTopUpOrderDetail,
 } from '../../services/adminFinanceApi';
-import { AdminTopUpOrders } from './AdminTopUpOrders';
+import { AdminTopUpOrders as AdminTopUpOrdersPage } from './AdminTopUpOrders';
+
+function AdminTopUpOrders() {
+  return (
+    <MemoryRouter>
+      <AdminTopUpOrdersPage />
+    </MemoryRouter>
+  );
+}
 
 vi.mock('../../services/adminFinanceApi', () => ({
   adminFinanceApi: {
@@ -100,6 +109,35 @@ afterEach(() => {
 });
 
 describe('AdminTopUpOrders', () => {
+  it('mở đúng chi tiết đơn nạp và có đường về lịch sử Credit khi được điều hướng từ sổ Credit', async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: '/admin/finance/topup-orders',
+            state: {
+              openTopUpOrder: FLAGGED_CODE,
+              ledgerReturn: {
+                type: 'TOP_UP',
+                user: null,
+                keywordInput: FLAGGED_CODE,
+                fromDate: '',
+                toDate: '',
+                page: 1,
+              },
+            },
+          },
+        ]}
+      >
+        <AdminTopUpOrdersPage />
+      </MemoryRouter>,
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Chi tiết đơn nạp' });
+    expect(adminFinanceApi.topUpOrderDetail).toHaveBeenCalledWith(FLAGGED_CODE);
+    expect(within(dialog).getByRole('link', { name: 'Về lịch sử giao dịch Credit' })).toBeTruthy();
+  });
+
   it('mở trang là tải tất cả đơn mà không ép trạng thái và hiện khối tổng hợp', async () => {
     render(<AdminTopUpOrders />);
 
