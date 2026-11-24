@@ -122,7 +122,6 @@ describe('AdminLedger', () => {
     );
   });
 
-<<<<<<< HEAD
   it('mở modal chi tiết chỉ đọc với dữ liệu và liên kết bài đăng API cung cấp', async () => {
     const user = userEvent.setup();
     renderPage();
@@ -225,8 +224,6 @@ describe('AdminLedger', () => {
     );
   });
 
-=======
->>>>>>> origin/develop
   it('hiển thị nội dung giao dịch theo đầy đủ loại giao dịch thực tế từ API', async () => {
     vi.mocked(adminFinanceApi.ledger).mockResolvedValue({
       ...page,
@@ -249,10 +246,7 @@ describe('AdminLedger', () => {
 
     const table = screen.getByRole('table');
     expect(within(table).getByRole('columnheader', { name: 'Nội dung giao dịch' })).toBeTruthy();
-<<<<<<< HEAD
     expect(within(table).getByRole('columnheader', { name: 'Xem chi tiết' })).toBeTruthy();
-=======
->>>>>>> origin/develop
     const tableText = table.textContent ?? '';
     for (const content of [
       'Nạp Credit thành công – Mã đơn: NAP-001',
