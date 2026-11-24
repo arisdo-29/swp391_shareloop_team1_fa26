@@ -40,6 +40,7 @@ const sections = [
   {
     label: 'Hệ thống',
     items: [
+      ['Báo cáo hệ thống', '/admin/system-reports', 'report'],
       ['Cấu hình phí', '/admin/settings/fees', 'fees'],
       ['Nhật ký hoạt động', '/admin/audit-logs', 'auditLog'],
       ['Cảnh báo bất thường', '/admin/alerts', 'alert'],

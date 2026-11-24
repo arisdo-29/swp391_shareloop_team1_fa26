@@ -209,6 +209,7 @@ public class ReportService {
                         resolvedRequestId,
                         new CreateDisputeRequest(request.reason(), request.description(), request.evidenceMediaIds())));
             }
+            case SYSTEM -> throw new BusinessException(ReportErrorCode.REPORT_TARGET_REQUIRED);
         }
 
         ReportStage stage = resolvedRequestId != null ? ReportStage.AFTER : ReportStage.BEFORE;
@@ -410,6 +411,7 @@ public class ReportService {
     public void respond(Long userId, long reportId, RespondReportRequest input) {
         Report report = reportRepository
                 .findByIdForUpdate(reportId)
+                .filter(found -> found.getTargetType() != TargetType.SYSTEM)
                 .orElseThrow(() -> new BusinessException(ReportErrorCode.REPORT_NOT_FOUND));
         Long targetId = resolveViolator(report);
         if (!userId.equals(targetId)) throw new BusinessException(ReportErrorCode.REPORT_NOT_PARTICIPANT);
@@ -850,6 +852,7 @@ public class ReportService {
 
         Report dispute = reportRepository
                 .findByIdForUpdate(disputeId)
+                .filter(found -> found.getTargetType() != TargetType.SYSTEM)
                 .orElseThrow(() -> new BusinessException(ReportErrorCode.DISPUTE_NOT_FOUND));
 
         // Chỉ bên bị khiếu nại mới được giải trình
@@ -901,6 +904,7 @@ public class ReportService {
     public void requestResponse(Long adminId, long reportId) {
         Report report = reportRepository
                 .findByIdForUpdate(reportId)
+                .filter(found -> found.getTargetType() != TargetType.SYSTEM)
                 .orElseThrow(() -> new BusinessException(ReportErrorCode.REPORT_NOT_FOUND));
         if (report.getStatus() == ReportStatus.RESOLVED || report.getStatus() == ReportStatus.DISMISSED) {
             throw new BusinessException(ReportErrorCode.REPORT_ALREADY_CONCLUDED);
@@ -990,6 +994,7 @@ public class ReportService {
 
         Report report = reportRepository
                 .findByIdForUpdate(reportId)
+                .filter(found -> found.getTargetType() != TargetType.SYSTEM)
                 .orElseThrow(() -> new BusinessException(ReportErrorCode.REPORT_NOT_FOUND));
 
         if (report.getStatus() == ReportStatus.RESOLVED || report.getStatus() == ReportStatus.DISMISSED) {

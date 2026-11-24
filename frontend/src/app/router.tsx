@@ -32,6 +32,7 @@ const Credit = lazy(() => import('../pages/user/Credit').then((module) => ({ def
 const DemoPaymentCheckout = lazy(() => import('../pages/user/DemoPaymentCheckout').then((module) => ({ default: module.DemoPaymentCheckout })));
 const Notifications = lazy(() => import('../pages/user/Notifications').then((module) => ({ default: module.Notifications })));
 const ReportResponse = lazy(() => import('../pages/user/ReportResponse').then((module) => ({ default: module.ReportResponse })));
+const SystemReports = lazy(() => import('../pages/SystemReports').then((module) => ({ default: module.SystemReports })));
 const AdminLayout = lazy(() => import('../pages/admin/AdminLayout').then((module) => ({ default: module.AdminLayout })));
 const AdminAnomalies = lazy(() => import('../pages/admin/AdminAnomalies').then((module) => ({ default: module.AdminAnomalies })));
 const AdminComplaints = lazy(() => import('../pages/admin/AdminComplaints').then((module) => ({ default: module.AdminComplaints })));
@@ -99,6 +100,7 @@ export const router = createBrowserRouter([
           { path: '/users/:userId', element: <UserProfile /> },
           { path: '/me/disputes/:reportId', element: <ReportResponse kind="dispute" /> },
           { path: '/me/reports/:reportId', element: <ReportResponse /> },
+          { path: '/me/system-reports/:reportId?', element: <SystemReports /> },
           { path: '/notifications', element: <Notifications /> },
           { path: '/credit', element: <Credit /> },
           { path: '/wallet', element: <Credit /> },
@@ -146,6 +148,7 @@ export const router = createBrowserRouter([
               { path: 'transactions', element: <AdminTransactions /> },
               { path: 'transactions/:transactionId', element: <AdminTransactionDetail /> },
               { path: 'complaints', element: <AdminComplaints /> },
+              { path: 'system-reports/:reportId?', element: <SystemReports inAdmin /> },
               { path: 'disputes', element: <AdminComplaints /> },
               { path: 'alerts', element: <AdminAnomalies /> },
               { path: 'finance', element: <AdminFinance /> },

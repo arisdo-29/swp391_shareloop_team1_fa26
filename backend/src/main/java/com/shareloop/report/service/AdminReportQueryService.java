@@ -92,8 +92,9 @@ public class AdminReportQueryService {
     }
 
     public AdminReportDetail detail(long reportId) {
-        Report report =
-                reports.findById(reportId).orElseThrow(() -> new BusinessException(ReportErrorCode.REPORT_NOT_FOUND));
+        Report report = reports.findById(reportId)
+                .filter(found -> found.getTargetType() != TargetType.SYSTEM)
+                .orElseThrow(() -> new BusinessException(ReportErrorCode.REPORT_NOT_FOUND));
         Long targetId = report.getTargetUserId();
         Long itemId = report.getItemId();
         try {

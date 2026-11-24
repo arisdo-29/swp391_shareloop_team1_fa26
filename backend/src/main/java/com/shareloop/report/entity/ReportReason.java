@@ -19,6 +19,7 @@ public enum ReportReason {
             case USER -> java.util.EnumSet.of(NO_SHOW, WRONG_CONTACT_INFO, HARASSMENT, OTHER);
             case REQUEST ->
                 java.util.EnumSet.of(NOT_AS_DESCRIBED, COUNTERFEIT, NO_SHOW, WRONG_CONTACT_INFO, HARASSMENT, OTHER);
+            case SYSTEM -> java.util.Set.of(OTHER);
         };
     }
 }

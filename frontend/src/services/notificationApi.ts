@@ -19,13 +19,14 @@ export interface NotificationListParams {
   size?: number;
 }
 
-export type NotificationCategory = 'moderation' | 'transaction' | 'complaint' | 'credit' | 'other';
+export type NotificationCategory = 'moderation' | 'transaction' | 'complaint' | 'credit' | 'systemReport' | 'other';
 
 export const notificationCategoryLabels: Record<Exclude<NotificationCategory, 'other'>, string> = {
   moderation: 'Duyệt bài',
   transaction: 'Giao dịch và Tin nhắn',
   complaint: 'Khiếu nại và Giải trình',
   credit: 'Credit và Uy tín',
+  systemReport: 'Báo cáo hệ thống',
 };
 
 // Backend trả tối đa 100 dòng mỗi trang (docs/api/notification.md).
@@ -39,6 +40,7 @@ const HIDDEN_KEY_PREFIX = 'shareloop:hiddenNotifications:';
  * Loại mới chưa biết rơi vào 'other' và chỉ hiện ở bộ lọc "Tất cả".
  */
 export function notificationCategory(type: string): NotificationCategory {
+  if (type.startsWith('SYSTEM_REPORT_')) return 'systemReport';
   if (type.startsWith('POST_') || type.startsWith('ITEM_')) return 'moderation';
   if (type.startsWith('DISPUTE_') || type.startsWith('REPORT_')) return 'complaint';
   if (type.startsWith('TRUST_') || type.startsWith('BOOST_') || type.startsWith('POINTS_') || type.startsWith('TOPUP_') || type.includes('CREDIT'))
