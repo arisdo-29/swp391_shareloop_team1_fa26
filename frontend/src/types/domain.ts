@@ -174,6 +174,7 @@ export interface ItemRequest {
   donorName?: string;
   offeredItemId?: string;
   offeredItemTitle?: string;
+  offeredItemReferencePrice?: number;
   requesterId: string;
   requesterName?: string;
   requesterTrustStars?: number;

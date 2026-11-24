@@ -9,6 +9,7 @@ import com.shareloop.item.dto.ItemSummary;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.event.ItemUnavailableEvent;
 import com.shareloop.item.service.ItemQueryService;
+import com.shareloop.item.service.ItemQueryService.OfferedItemDetails;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.media.MediaErrorCode;
 import com.shareloop.media.service.MediaService;
@@ -3238,9 +3239,14 @@ public class RequestService {
     // itemCards giữ thẻ bài đã tra trong cùng một lần gọi để danh sách nhiều yêu cầu không tra lại cùng một bài.
     private RequestItemInfo findItemInfo(Request request, Map<Long, ItemCardDto> itemCards) {
         ItemCardDto card = findItemCard(request.getItemId(), itemCards);
-        String offeredItemTitle = findItemTitle(request.getOfferedItemId());
+        Long offeredItemId = request.getOfferedItemId();
+        OfferedItemDetails offeredItem = offeredItemId == null || itemQueryService == null
+                ? null
+                : itemQueryService.findOfferedItemDetails(offeredItemId).orElse(null);
+        String offeredItemTitle = offeredItem == null ? null : offeredItem.title();
+        Long offeredItemReferencePrice = offeredItem == null ? null : offeredItem.referencePrice();
         if (card == null) {
-            return new RequestItemInfo(null, null, null, null, offeredItemTitle, null);
+            return new RequestItemInfo(null, null, null, null, offeredItemTitle, null, offeredItemReferencePrice);
         }
         String itemOfferType = card.offerType() != null ? card.offerType().name() : null;
         return new RequestItemInfo(
@@ -3249,7 +3255,8 @@ public class RequestService {
                 card.donorId(),
                 findUserName(card.donorId()),
                 offeredItemTitle,
-                itemOfferType);
+                itemOfferType,
+                offeredItemReferencePrice);
     }
 
     // Bài đã xoá hoặc service chưa sẵn sàng thì trả null để API vẫn trả được phần còn lại.

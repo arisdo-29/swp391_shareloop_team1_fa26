@@ -559,6 +559,7 @@ Backend tính sẵn theo người đang gọi API, frontend không tự so giờ
 | `itemId` | number | Id bài đăng được xin / đề nghị đổi |
 | `receiverId` | number | Id người gửi yêu cầu |
 | `offeredItemId` | number? | Id bài đăng đề nghị đem đổi (SWAP) |
+| `offeredItemReferencePrice` | number? | Giá tham khảo hiện tại, bằng đồng, của món đem đổi. Rỗng nếu không kèm món hoặc món chưa có giá |
 | `type` | string | Loại **giao dịch**, `GIVE` hoặc `SWAP`. Lúc tạo bằng loại bài; đổi khi chủ bài chọn người hoặc đồng ý đề nghị đổi món trong chat |
 | `itemOfferType` | string? | Hình thức **hiện tại** của bài chính, `GIVE` hoặc `SWAP`. Khác `type` khi người xin gửi chéo loại (CD-01) và chưa được chọn. `null` khi không tra được bài |
 | `conversionFee` | number? | Số Credit chủ bài sẽ trả nếu giao dịch chuyển sang Trao đổi: bằng `post_fee` khi `itemOfferType = GIVE`, bằng `0` khi `SWAP`. Đọc từ cấu hình, frontend không tự viết cứng. Không phải số dư ví. `null` khi `itemOfferType = null` |
