@@ -2,6 +2,7 @@ package com.shareloop.item.service;
 
 import com.shareloop.audit.ActivityType;
 import com.shareloop.audit.service.ActivityLogQueryService;
+import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.catalog.service.AreaService;
 import com.shareloop.catalog.service.CategoryAttributeService;
 import com.shareloop.catalog.service.CategoryService;
@@ -94,6 +95,7 @@ public class ItemService {
     private final PostLimitProperties postLimitProperties;
     private final CategoryService categoryService;
     private final AreaService areaService;
+    private final ActivityLogService activityLogService;
     private NotificationService notificationService;
 
     @Autowired
@@ -138,7 +140,8 @@ public class ItemService {
             ObjectMapper objectMapper,
             PostLimitProperties postLimitProperties,
             @Lazy CategoryService categoryService,
-            AreaService areaService) {
+            AreaService areaService,
+            ActivityLogService activityLogService) {
         this.itemRepository = itemRepository;
         this.jdbcClient = jdbcClient;
         this.mediaService = mediaService;
@@ -155,6 +158,7 @@ public class ItemService {
         this.postLimitProperties = postLimitProperties;
         this.categoryService = categoryService;
         this.areaService = areaService;
+        this.activityLogService = activityLogService;
     }
 
     /**
@@ -346,6 +350,7 @@ public class ItemService {
         if (moderation.status() == ModerationStatus.REVIEW) {
             saveReviewFlag(itemId, moderation);
         }
+        activityLogService.log(ActivityType.ITEM_EDIT_SUBMITTED.code(), userId, "ITEM", itemId, Map.of(), null);
         publishItemUpdate(itemId, userId);
         if (wasApproved) {
             publishUnavailable(itemId, ItemUnavailableEvent.Reason.EDITED);

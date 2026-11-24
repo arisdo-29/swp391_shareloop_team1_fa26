@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.catalog.AreaErrorCode;
 import com.shareloop.catalog.CatalogErrorCode;
 import com.shareloop.catalog.dto.AreaResponse;
@@ -113,6 +114,9 @@ class ItemServiceTest {
 
     @Mock
     AreaService areaService;
+
+    @Mock
+    ActivityLogService activityLogService;
 
     @InjectMocks
     ItemService itemService;

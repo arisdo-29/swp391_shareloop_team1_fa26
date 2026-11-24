@@ -91,6 +91,7 @@ public class AdminActivityLogController {
                                                 "ADMIN_TOPUP_RECONCILED",
                                                 "ADMIN_ITEM_HIDDEN",
                                                 "ADMIN_ITEM_UNHIDDEN",
+                                                "ITEM_EDIT_SUBMITTED",
                                                 "ADMIN_VIEWED_CHAT",
                                                 "ITEM_DISPLAY_COMPENSATED",
                                                 "POINTS_REVOKED"

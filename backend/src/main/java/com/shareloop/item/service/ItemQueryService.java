@@ -159,6 +159,7 @@ public class ItemQueryService {
                 item.isActive(),
                 item.isHiddenByAdmin(),
                 item.getCreatedAt(),
+                item.getReviewSubmittedAt(),
                 approvedAt,
                 imageUrl);
     }

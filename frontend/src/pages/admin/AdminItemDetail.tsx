@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { Alert, Button, PageHeader, SkeletonRows } from '../../components/ui';
-import { adminItemApi, type AdminItemFullDetail } from '../../services/adminItemApi';
+import { adminItemApi, type AdminItemFullDetail, type AdminItemHistoryEntry } from '../../services/adminItemApi';
 import { requestStatusLabel } from '../../utils/request';
 import type { ItemRequestStatus } from '../../types/domain';
 import { adminErrorMessage } from './adminErrors';
@@ -33,6 +33,47 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
       <dt className="text-text-muted">{label}</dt>
       <dd className="text-right font-medium text-text-primary">{children}</dd>
     </div>
+  );
+}
+
+const historyRoleLabels: Record<AdminItemHistoryEntry['actorRole'], string> = {
+  ADMIN: 'Quản trị viên',
+  OWNER: 'Chủ bài',
+  USER: 'Người dùng',
+  SYSTEM: 'Hệ thống',
+};
+
+function ItemPostHistory({ detail }: { detail: AdminItemFullDetail }) {
+  const entries = detail.postHistory ?? detail.visibilityHistory.map((log): AdminItemHistoryEntry => ({
+    key: `log-${log.id}`,
+    action: log.typeLabel || (log.type === 'ADMIN_ITEM_HIDDEN' ? 'Admin ẩn bài đăng' : 'Admin hiện lại bài đăng'),
+    actorRole: 'ADMIN',
+    actorName: log.actorName ?? null,
+    createdAt: log.createdAt,
+    reason: log.reason ?? null,
+  }));
+
+  return (
+    <Card title="Lịch sử bài đăng">
+      {entries.length ? (
+        <ol aria-label="Lịch sử bài đăng" className="divide-y divide-border/60 text-sm">
+          {entries.map((entry) => (
+            <li key={entry.key} className="space-y-1 py-3 first:pt-0 last:pb-0">
+              <p className="break-words font-semibold text-text-primary">
+                {entry.action}
+                {entry.actorName && entry.actorRole !== 'SYSTEM' ? ` bởi ${entry.actorName}` : ''}
+              </p>
+              <p className="text-xs text-text-muted">
+                {historyRoleLabels[entry.actorRole]} · {entry.createdAt ? formatDateTime(entry.createdAt) : 'Không rõ thời điểm'}
+              </p>
+              {entry.reason ? <p className="whitespace-pre-wrap break-words text-text-secondary">Lý do: {entry.reason}</p> : null}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="text-sm text-text-muted">Chưa có hoạt động nào được ghi nhận.</p>
+      )}
+    </Card>
   );
 }
 
@@ -236,23 +277,7 @@ export function AdminItemDetail() {
             ) : null}
           </Card>
 
-          <Card title="Lịch sử ẩn hiện">
-            {detail.visibilityHistory.length === 0 ? (
-              <p className="text-sm text-text-muted">Admin chưa ẩn hay hiện lại bài này.</p>
-            ) : (
-              <ul className="divide-y divide-border/60 text-sm">
-                {detail.visibilityHistory.map((log) => (
-                  <li key={log.id} className="py-2">
-                    <p className="font-semibold text-text-primary">
-                      {log.typeLabel ?? log.type} bởi {log.actorName || 'quản trị viên'}
-                    </p>
-                    <p className="text-xs text-text-muted">{formatDateTime(log.createdAt)}</p>
-                    {log.reason ? <p className="text-text-secondary">Lý do: {log.reason}</p> : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+          <ItemPostHistory detail={detail} />
         </div>
       </div>
 

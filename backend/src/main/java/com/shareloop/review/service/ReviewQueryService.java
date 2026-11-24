@@ -1,6 +1,7 @@
 package com.shareloop.review.service;
 
 import com.shareloop.review.repository.ReviewItemRepository;
+import java.time.Instant;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,4 +24,12 @@ public class ReviewQueryService {
     public Optional<String> findRejectReason(long itemId) {
         return reviewItemRepository.findById(itemId).map(reviewItem -> reviewItem.getRejectReason());
     }
+
+    public Optional<Rejection> findRejection(long itemId) {
+        return reviewItemRepository
+                .findById(itemId)
+                .map(item -> new Rejection(item.getRejectReason(), item.getRejectedBy(), item.getRejectedAt()));
+    }
+
+    public record Rejection(String reason, Long actorId, Instant createdAt) {}
 }

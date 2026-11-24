@@ -6,7 +6,7 @@ import com.shareloop.wallet.dto.WalletTransactionResponse;
 import java.util.List;
 
 /**
- * Trang chi tiết bài của Admin: nội dung bài, phí Credit, yêu cầu, báo cáo và lịch sử ẩn hiện.
+ * Trang chi tiết bài của Admin: nội dung bài, phí Credit, yêu cầu, báo cáo và lịch sử bài đăng.
  *
  * @param item nội dung bài ở mọi trạng thái (gồm ảnh và thuộc tính)
  * @param summary các thông tin tóm tắt như ở danh sách (chủ bài, trạng thái ẩn, phí đăng, hạn hiển thị)
@@ -25,4 +25,5 @@ public record AdminItemFullDetail(
         Long runningRequestId,
         List<AdminItemReportRow> reports,
         String hiddenReason,
-        List<ActivityLogDto> visibilityHistory) {}
+        List<ActivityLogDto> visibilityHistory,
+        List<AdminItemHistoryEntry> postHistory) {}

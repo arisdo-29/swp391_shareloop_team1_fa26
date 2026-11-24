@@ -28,6 +28,7 @@ import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.request.service.RequestService;
 import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.service.UserService;
+import com.shareloop.wallet.dto.WalletTransactionResponse;
 import com.shareloop.wallet.service.CreditService;
 import java.time.Clock;
 import java.time.Instant;
@@ -76,6 +77,7 @@ public class AdminItemService {
     private final CategoryService categoryService;
     private final ActivityLogService activityLogService;
     private final ActivityLogQueryService activityLogQueryService;
+    private final AdminItemHistoryService itemHistoryService;
     private final NotificationService notificationService;
     private final Clock clock;
 
@@ -91,6 +93,7 @@ public class AdminItemService {
             CategoryService categoryService,
             ActivityLogService activityLogService,
             ActivityLogQueryService activityLogQueryService,
+            AdminItemHistoryService itemHistoryService,
             NotificationService notificationService,
             Clock clock) {
         this.itemService = itemService;
@@ -104,6 +107,7 @@ public class AdminItemService {
         this.categoryService = categoryService;
         this.activityLogService = activityLogService;
         this.activityLogQueryService = activityLogQueryService;
+        this.itemHistoryService = itemHistoryService;
         this.notificationService = notificationService;
         this.clock = clock;
     }
@@ -146,7 +150,7 @@ public class AdminItemService {
     }
 
     /**
-     * Chi tiết một bài ở mọi trạng thái kèm phí, yêu cầu, báo cáo và lịch sử ẩn hiện.
+     * Chi tiết một bài ở mọi trạng thái kèm phí, yêu cầu, báo cáo và lịch sử bài đăng.
      *
      * @throws BusinessException ITEM_NOT_FOUND khi không có bài hoặc đã xoá
      */
@@ -166,17 +170,30 @@ public class AdminItemService {
         List<ActivityLogDto> history = activityLogQueryService.findHistory(
                 "ITEM",
                 itemId,
-                List.of(ActivityType.ADMIN_ITEM_HIDDEN.code(), ActivityType.ADMIN_ITEM_UNHIDDEN.code()));
+                List.of(
+                        ActivityType.ADMIN_ITEM_HIDDEN.code(),
+                        ActivityType.ADMIN_ITEM_UNHIDDEN.code(),
+                        ActivityType.REVIEW_APPROVE.code(),
+                        ActivityType.REVIEW_REJECT.code(),
+                        ActivityType.ITEM_EDIT_SUBMITTED.code(),
+                        ActivityType.ITEM_DISPLAY_COMPENSATED.code()));
+        List<ActivityLogDto> visibilityHistory = history.stream()
+                .filter(log -> ActivityType.ADMIN_ITEM_HIDDEN.code().equals(log.type())
+                        || ActivityType.ADMIN_ITEM_UNHIDDEN.code().equals(log.type()))
+                .toList();
+        List<WalletTransactionResponse> fees = creditService.getLedgerOfItem(itemId);
+        List<ItemReportBrief> reports = reportService.findReportsOfItem(itemId);
         return new AdminItemFullDetail(
                 itemService.getItemForAdmin(itemId),
                 summary,
-                creditService.getLedgerOfItem(itemId),
+                fees,
                 requests,
                 runningRequestId != null,
                 runningRequestId,
-                toReportRows(reportService.findReportsOfItem(itemId)),
-                base.hiddenByAdmin() ? findHiddenReason(history) : null,
-                history);
+                toReportRows(reports),
+                base.hiddenByAdmin() ? findHiddenReason(visibilityHistory) : null,
+                visibilityHistory,
+                itemHistoryService.build(base, summary.ownerName(), history, requests, reports, fees));
     }
 
     /**

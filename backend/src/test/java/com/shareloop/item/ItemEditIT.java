@@ -63,6 +63,11 @@ class ItemEditIT extends IntegrationTest {
                         .single())
                 .isEqualTo("PENDING_REVIEW");
 
+        assertThat(jdbc.sql("""
+                        SELECT actor_id FROM activity_logs
+                        WHERE target_type = 'ITEM' AND target_id = :id AND type = 'ITEM_EDIT_SUBMITTED'
+                        """).param("id", itemId).query(Long.class).single()).isEqualTo(ownerId);
+
         assertThat(jdbc.sql("SELECT media_id FROM item_media_mappings WHERE item_id = :itemId ORDER BY sort_order")
                         .param("itemId", itemId)
                         .query(Long.class)

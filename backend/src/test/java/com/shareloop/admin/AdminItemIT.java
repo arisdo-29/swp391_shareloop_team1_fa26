@@ -2,10 +2,15 @@ package com.shareloop.admin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.shareloop.admin.dto.AdminItemFullDetail;
+import com.shareloop.admin.dto.AdminItemHistoryEntry;
+import com.shareloop.admin.dto.AdminItemHistoryEntry.ActorRole;
 import com.shareloop.admin.dto.AdminItemRow;
 import com.shareloop.admin.service.AdminItemService;
+import com.shareloop.audit.ActivityType;
+import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
@@ -18,8 +23,10 @@ import com.shareloop.support.IntegrationTest;
 import com.shareloop.user.service.AdminUserService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,6 +51,9 @@ class AdminItemIT extends IntegrationTest {
 
     @Autowired
     ReportService reportService;
+
+    @Autowired
+    ActivityLogService activityLogService;
 
     @Autowired
     JdbcTemplate jdbc;
@@ -400,6 +410,7 @@ class AdminItemIT extends IntegrationTest {
                 "INSERT INTO credit_ledger (user_id, amount, type, balance_after, item_id) VALUES (?, -5, 'POST_FEE', 15, ?)",
                 owner,
                 itemId);
+        activityLogService.log(ActivityType.REVIEW_REJECT.code(), admin, "ITEM", itemId, Map.of(), "Ảnh chưa rõ.");
         entityManager.flush();
 
         // when
@@ -414,7 +425,48 @@ class AdminItemIT extends IntegrationTest {
         assertThat(detail.reports()).extracting(row -> row.id()).containsExactly(reportId);
         assertThat(detail.hasRunningTransaction()).isFalse();
         assertThat(detail.hiddenReason()).isNull();
-        assertThat(admin).isPositive();
+        assertThat(detail.postHistory())
+                .extracting(
+                        AdminItemHistoryEntry::action,
+                        AdminItemHistoryEntry::actorName,
+                        AdminItemHistoryEntry::actorRole,
+                        AdminItemHistoryEntry::reason)
+                .containsExactlyInAnyOrder(
+                        tuple("Từ chối bài", "Quản trị", ActorRole.ADMIN, "Ảnh chưa rõ."),
+                        tuple("Đăng bài và gửi duyệt", "Chủ bài", ActorRole.OWNER, null),
+                        tuple("Gửi yêu cầu xin nhận", "Người xin", ActorRole.USER, null),
+                        tuple("Gửi báo cáo liên quan đến bài", "Người báo", ActorRole.USER, null));
+        assertThat(detail.postHistory())
+                .extracting(AdminItemHistoryEntry::createdAt)
+                .isSortedAccordingTo(java.util.Comparator.reverseOrder());
+        assertThat(detail.visibilityHistory()).isEmpty();
+    }
+
+    @Test
+    void getDetail_usesStoredRejectionReasonWhenLegacyItemHasNoAuditLog() {
+        long admin = user("Quản trị viên cũ");
+        long itemId = item(user("Chủ bài cũ"), "Bài trước đây", "REJECTED");
+        jdbc.update("""
+                UPDATE items
+                SET created_at = '2026-11-10T05:00:00Z', review_submitted_at = '2026-11-11T05:00:00Z',
+                    rejected_at = '2026-11-12T05:00:00Z', rejected_by = ?, reject_reason = ?
+                WHERE id = ?
+                """, admin, "Chọn sai danh mục món đồ.", itemId);
+
+        assertThat(adminItemService.getDetail(itemId).postHistory())
+                .extracting(
+                        AdminItemHistoryEntry::action,
+                        AdminItemHistoryEntry::actorName,
+                        AdminItemHistoryEntry::reason,
+                        AdminItemHistoryEntry::createdAt)
+                .containsExactly(
+                        tuple(
+                                "Từ chối bài",
+                                "Quản trị viên cũ",
+                                "Chọn sai danh mục món đồ.",
+                                Instant.parse("2026-11-12T05:00:00Z")),
+                        tuple("Gửi bản sửa để duyệt", "Chủ bài cũ", null, Instant.parse("2026-11-11T05:00:00Z")),
+                        tuple("Đăng bài và gửi duyệt", "Chủ bài cũ", null, Instant.parse("2026-11-10T05:00:00Z")));
     }
 
     @Test

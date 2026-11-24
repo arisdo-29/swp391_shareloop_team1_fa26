@@ -52,6 +52,15 @@ export interface AdminItemAttribute {
   value: string;
 }
 
+export interface AdminItemHistoryEntry {
+  key: string;
+  action: string;
+  actorRole: 'ADMIN' | 'OWNER' | 'USER' | 'SYSTEM';
+  actorName: string | null;
+  createdAt: string | null;
+  reason: string | null;
+}
+
 export interface AdminItemFullDetail {
   item: { item: ItemResponse; active: boolean; attributes: AdminItemAttribute[] };
   summary: AdminItemRow;
@@ -62,6 +71,7 @@ export interface AdminItemFullDetail {
   reports: AdminItemReportRow[];
   hiddenReason: string | null;
   visibilityHistory: ActivityLogResponse[];
+  postHistory?: AdminItemHistoryEntry[];
 }
 
 export interface AdminItemFilters {
