@@ -230,6 +230,24 @@ class AdminItemIT extends IntegrationTest {
     }
 
     @Test
+    void hide_whenItemTraded_explainsCompletedTransaction() {
+        long admin = user("Quản trị");
+        long itemId = item(user("Chủ bài"), "Bài đã giao dịch", "TRADED");
+        long completed = request(itemId, user("Người nhận"), null, "GIVE", "COMPLETED");
+
+        AdminItemFullDetail detail = adminItemService.getDetail(itemId);
+        assertThat(detail.hasRunningTransaction()).isFalse();
+        assertThat(detail.runningRequestId()).isNull();
+        assertThatThrownBy(() -> adminItemService.hide(admin, itemId, "Vi phạm nội quy"))
+                .isInstanceOfSatisfying(BusinessException.class, exception -> {
+                    assertThat(exception.getErrorCode()).isEqualTo(ItemErrorCode.ITEM_HIDE_NOT_ALLOWED);
+                    assertThat(exception).hasMessage("Giao dịch đã hoàn tất. Bài này không thể ẩn.");
+                });
+        assertThat(statusOfRequest(completed)).isEqualTo("COMPLETED");
+        assertThat(flagOf(itemId)).isFalse();
+    }
+
+    @Test
     void hide_whenAlreadyHidden_throwsAlreadyHidden() {
         // given
         long admin = user("Quản trị");

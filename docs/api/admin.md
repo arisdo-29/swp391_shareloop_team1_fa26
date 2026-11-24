@@ -777,7 +777,7 @@ Trả `AdminItemFullDetail`: `item` (như `AdminItemDetail` của trang duyệt 
 
 Body `{ "reason": "5 đến 500 ký tự" }`. Admin ẩn bài vi phạm:
 
-- Không hoàn phí đăng. Bài RESERVED trở lên hoặc đang có giao dịch đã chọn người chưa kết thúc không ẩn được: `409 ITEM_HIDE_NOT_ALLOWED`, Admin huỷ giao dịch ở trang Giao dịch trước. Bài đã ẩn: `409 ITEM_ALREADY_HIDDEN`.
+- Không hoàn phí đăng. Bài `RESERVED` hoặc đang có giao dịch đã chọn người chưa kết thúc trả `409 ITEM_HIDE_NOT_ALLOWED` kèm hướng dẫn huỷ giao dịch trước khi ẩn. Bài `TRADED` trả cùng mã lỗi kèm thông báo giao dịch đã hoàn tất. Bài đã ẩn trả `409 ITEM_ALREADY_HIDDEN`.
 - `is_active = false` và `hidden_by_admin = true`, không đổi `status`.
 - Huỷ các yêu cầu PENDING tới bài (`RequestService.cancelPendingRequestsToItem`, người xin nhận `REQUEST_CANCELLED`) và các yêu cầu PENDING dùng bài làm món đổi (qua `ItemUnavailableEvent` lý do `HIDDEN`).
 - Lượt đẩy đang chạy dừng theo: bài ẩn không còn trong danh sách đẩy và `BoostNotificationService` cắt `boosted_until` về lúc dừng.

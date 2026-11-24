@@ -133,7 +133,9 @@ export function AdminItemDetail() {
 
   const { summary } = detail;
   const item = detail.item.item;
-  const hideBlocked = detail.hasRunningTransaction || summary.status === 'RESERVED' || summary.status === 'TRADED';
+  const completed = summary.status === 'TRADED';
+  const running = !completed && (detail.hasRunningTransaction || summary.status === 'RESERVED');
+  const hideBlocked = completed || running;
 
   return (
     <section className="space-y-5">
@@ -160,7 +162,10 @@ export function AdminItemDetail() {
         }
       />
 
-      {summary.active && hideBlocked ? (
+      {summary.active && completed ? (
+        <Alert tone="info">Giao dịch đã hoàn tất. Bài này không thể ẩn.</Alert>
+      ) : null}
+      {summary.active && running ? (
         <Alert tone="warning">
           Bài đang có giao dịch chạy nên chưa ẩn được. Hãy huỷ giao dịch ở trang Giao dịch trước khi ẩn bài.{' '}
           {detail.runningRequestId ? (

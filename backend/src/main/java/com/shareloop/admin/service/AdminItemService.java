@@ -197,12 +197,12 @@ public class AdminItemService {
     }
 
     /**
-     * Admin ẩn bài vi phạm. Không hoàn phí đăng. Bài đang có giao dịch đã chọn (RESERVED trở lên) không ẩn được, Admin
-     * phải huỷ giao dịch ở trang Giao dịch trước. Ẩn bài thì huỷ các yêu cầu đang chờ tới bài và các yêu cầu dùng bài
+     * Admin ẩn bài vi phạm. Không hoàn phí đăng. Bài đã giao dịch xong hoặc đang có giao dịch đã chọn không ẩn được.
+     * Với giao dịch còn mở, Admin phải huỷ giao dịch ở trang Giao dịch trước. Ẩn bài thì huỷ các yêu cầu đang chờ tới bài và các yêu cầu dùng bài
      * làm món đổi, báo chủ bài kèm lý do và ghi nhật ký. Lượt đẩy đang chạy tự dừng vì bài ẩn không còn nằm trong
      * danh sách đẩy.
      *
-     * @throws BusinessException ITEM_NOT_FOUND; ITEM_ALREADY_HIDDEN; ITEM_HIDE_NOT_ALLOWED khi có giao dịch đang chạy
+     * @throws BusinessException ITEM_NOT_FOUND; ITEM_ALREADY_HIDDEN; ITEM_HIDE_NOT_ALLOWED khi giao dịch đang chạy hoặc đã hoàn tất
      */
     @Transactional
     public AdminItemFullDetail hide(long adminId, long itemId, String reason) {
@@ -210,9 +210,12 @@ public class AdminItemService {
         if (!base.active()) {
             throw new BusinessException(ItemErrorCode.ITEM_ALREADY_HIDDEN);
         }
-        boolean hasRunningTransaction = base.status() == ItemStatus.RESERVED
-                || base.status() == ItemStatus.TRADED
-                || requestQueryService.hasReservedOrHigherRequest(itemId);
+        if (base.status() == ItemStatus.TRADED) {
+            throw new BusinessException(
+                    ItemErrorCode.ITEM_HIDE_NOT_ALLOWED, "Giao dịch đã hoàn tất. Bài này không thể ẩn.");
+        }
+        boolean hasRunningTransaction =
+                base.status() == ItemStatus.RESERVED || requestQueryService.hasReservedOrHigherRequest(itemId);
         if (hasRunningTransaction) {
             throw new BusinessException(ItemErrorCode.ITEM_HIDE_NOT_ALLOWED);
         }
