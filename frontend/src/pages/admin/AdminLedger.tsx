@@ -15,7 +15,10 @@ import { useDebouncedValue } from '../../utils/useDebouncedValue';
 import { adminErrorMessage } from './adminErrors';
 import { ledgerTypeLabels } from './adminItemDisplay';
 import { AdminUserPicker } from './AdminUserPicker';
+<<<<<<< HEAD
 import type { AdminLedgerRouteState, AdminLedgerViewState } from './adminLedgerNavigation';
+=======
+>>>>>>> origin/develop
 import './admin-ledger.css';
 
 const PAGE_SIZE = 20;
@@ -87,7 +90,11 @@ function transactionContent(row: AdminLedgerRow): TransactionContent {
   }
 }
 
+<<<<<<< HEAD
 function TransactionContentCell({ row, returnState }: { row: AdminLedgerRow; returnState: AdminLedgerViewState }) {
+=======
+function TransactionContentCell({ row }: { row: AdminLedgerRow }) {
+>>>>>>> origin/develop
   const content = transactionContent(row);
   const fullText = `${content.prefix}${content.detail ? `${content.separator}${content.detail}` : ''}`;
   const detail = content.detail ? (
@@ -95,7 +102,10 @@ function TransactionContentCell({ row, returnState }: { row: AdminLedgerRow; ret
       <Link
         className={`${content.code ? 'font-mono' : ''} font-semibold text-primary hover:underline`}
         to={content.to}
+<<<<<<< HEAD
         state={{ ledgerReturn: returnState, ...(row.orderCode ? { openTopUpOrder: row.orderCode } : {}) }}
+=======
+>>>>>>> origin/develop
       >
         {content.detail}
       </Link>
@@ -117,6 +127,7 @@ function TransactionContentCell({ row, returnState }: { row: AdminLedgerRow; ret
       </div>
     </td>
   );
+<<<<<<< HEAD
 }
 
 function DetailItem({ label, children, wide = false }: { label: string; children: ReactNode; wide?: boolean }) {
@@ -233,6 +244,8 @@ function LedgerDetailDialog({
       </dl>
     </Dialog>
   );
+=======
+>>>>>>> origin/develop
 }
 
 function downloadBlob(blob: Blob, fileName: string) {
@@ -470,12 +483,17 @@ export function AdminLedger() {
                       {signed(row.amount)}
                     </td>
                     <td className="admin-ledger-balance">{row.balanceAfter.toLocaleString('vi-VN')}</td>
+<<<<<<< HEAD
                     <TransactionContentCell row={row} returnState={ledgerViewState} />
+=======
+                    <TransactionContentCell row={row} />
+>>>>>>> origin/develop
                     <td className="admin-ledger-note">
                       <div className="admin-ledger-note-content">
                         {row.note || '—'}
                         {row.createdByName ? <p>Thực hiện bởi {row.createdByName}</p> : null}
                       </div>
+<<<<<<< HEAD
                     </td>
                     <td className="text-center">
                       <button
@@ -487,6 +505,8 @@ export function AdminLedger() {
                       >
                         Xem chi tiết
                       </button>
+=======
+>>>>>>> origin/develop
                     </td>
                   </tr>
                 ))}

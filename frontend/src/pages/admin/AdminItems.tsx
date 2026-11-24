@@ -184,6 +184,7 @@ export function AdminItems() {
             </option>
           ))}
         </Select>
+<<<<<<< HEAD
         <div className="admin-items-filter-from">
           <Field
             className="admin-items-date-input"
@@ -203,6 +204,23 @@ export function AdminItems() {
             onChange={(event) => setToDate(event.target.value)}
           />
         </div>
+=======
+        <Field
+          className="admin-items-filter-from"
+          label="Từ ngày"
+          type="date"
+          value={fromDate}
+          error={dateRangeError || undefined}
+          onChange={(event) => setFromDate(event.target.value)}
+        />
+        <Field
+          className="admin-items-filter-to"
+          label="Đến ngày"
+          type="date"
+          value={toDate}
+          onChange={(event) => setToDate(event.target.value)}
+        />
+>>>>>>> origin/develop
         <label className="admin-items-filter-boosted">
           <input
             type="checkbox"
@@ -308,7 +326,11 @@ function ItemRow({
           <div className="min-w-0">
             <Link
               to={`/admin/items/${row.id}`}
+<<<<<<< HEAD
               className="admin-items-title font-semibold text-primary hover:underline"
+=======
+              className="block truncate font-semibold text-primary hover:underline"
+>>>>>>> origin/develop
             >
               {row.title}
             </Link>
@@ -317,8 +339,13 @@ function ItemRow({
         </div>
       </td>
       <td className="min-w-0">
+<<<<<<< HEAD
         <p className="admin-items-owner-name font-semibold text-text-primary">{row.ownerName || 'Người dùng đã xóa'}</p>
         {row.ownerEmail ? <p className="admin-items-owner-email text-xs text-text-muted">{row.ownerEmail}</p> : null}
+=======
+        <p className="truncate font-semibold text-text-primary">{row.ownerName || 'Người dùng đã xóa'}</p>
+        {row.ownerEmail ? <p className="truncate text-xs text-text-muted">{row.ownerEmail}</p> : null}
+>>>>>>> origin/develop
       </td>
       <td className="whitespace-nowrap">{offerTypeLabels[row.offerType]}</td>
       <td>
