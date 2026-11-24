@@ -1,6 +1,27 @@
 # Report API Contract
 
-Module báo cáo vi phạm (`report`) quản lý việc tiếp nhận khiếu nại và báo cáo từ người dùng nhằm duy trì môi trường an toàn cho nền tảng ShareLoop.
+Module `report` tiếp nhận báo cáo lỗi hệ thống, báo cáo vi phạm và khiếu nại giao dịch trên ShareLoop.
+
+## Báo cáo lỗi hệ thống
+
+Người dùng đã đăng nhập gửi và xem báo cáo của mình. Chỉ Admin xem danh sách chung và ghi kết quả xử lý.
+
+| Phương thức và đường dẫn | Nội dung |
+| --- | --- |
+| `POST /api/v1/me/system-reports` | Gửi `title` (tối đa 150 ký tự) và `description` (tối đa 2.000 ký tự). Cả hai bắt buộc. Trả 201 và hồ sơ ở trạng thái `OPEN`. |
+| `GET /api/v1/me/system-reports` | Liệt kê báo cáo hệ thống của chính người gọi. |
+| `GET /api/v1/me/system-reports/{reportId}` | Xem nội dung, trạng thái và kết quả của báo cáo do chính mình gửi. |
+| `GET /api/v1/admin/system-reports` | Liệt kê báo cáo hệ thống. Có thể lọc `status=OPEN` hoặc `status=RESOLVED`. |
+| `GET /api/v1/admin/system-reports/{reportId}` | Xem chi tiết báo cáo và tên người gửi. |
+| `POST /api/v1/admin/system-reports/{reportId}/resolve` | Gửi `resolution` bắt buộc, tối đa 2.000 ký tự. Trả 200 và hồ sơ ở trạng thái `RESOLVED`. |
+
+Danh sách nhận `page` từ 0 và `size` từ 1 đến 100, mặc định `page=0&size=20`.
+Kết quả gồm `items`, `page`, `totalPages` và `totalElements`, sắp theo `createdAt DESC, id DESC`.
+Mỗi hồ sơ có `id`, `title`, `description`, `status`, `createdAt`, `resolution`, `resolvedAt` và `reporterName`.
+`resolution` và `resolvedAt` là `null` khi hồ sơ còn chờ xử lý. `reporterName` chỉ có giá trị trong API Admin khi còn tra được tên.
+
+Báo cáo mới tạo thông báo chuông cho Admin với link đến hồ sơ. Khi xử lý, người gửi nhận thông báo chuông dẫn đến kết quả.
+Nếu gửi kết quả lần nữa, API trả 409 `SYSTEM_REPORT_ALREADY_RESOLVED`. Hồ sơ không tồn tại, sai loại hoặc thuộc người gửi khác trả 404 `SYSTEM_REPORT_NOT_FOUND` ở các đường dẫn trên.
 
 ## Admin đọc khiếu nại (#118)
 

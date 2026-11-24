@@ -37,6 +37,9 @@ public class Report extends BaseEntity {
     @Column(name = "description", nullable = false, columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "system_title", length = 150)
+    private String systemTitle;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "stage", nullable = false, length = 8)
     private ReportStage stage = ReportStage.BEFORE;
@@ -93,6 +96,24 @@ public class Report extends BaseEntity {
         this.stage = stage != null ? stage : ReportStage.BEFORE;
         this.status = ReportStatus.OPEN;
         this.starsDeducted = 0;
+    }
+
+    public static Report createSystemReport(Long reporterId, String title, String description) {
+        Report report = new Report(
+                reporterId, TargetType.SYSTEM, null, null, null, ReportReason.OTHER, description, ReportStage.BEFORE);
+        report.systemTitle = title;
+        return report;
+    }
+
+    public String getSystemTitle() {
+        return systemTitle;
+    }
+
+    public void resolveSystemReport(Long adminId, String resolution, Instant now) {
+        this.status = ReportStatus.RESOLVED;
+        this.resolvedBy = adminId;
+        this.resolution = resolution;
+        this.resolvedAt = now;
     }
 
     /**

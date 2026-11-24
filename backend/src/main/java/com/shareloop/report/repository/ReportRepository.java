@@ -27,9 +27,20 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     java.util.List<Report> findByRequestIdOrderByCreatedAtDescIdDesc(Long requestId);
 
     @Query("SELECT r FROM Report r WHERE (:status IS NULL OR r.status = :status) "
-            + "AND (:targetType IS NULL OR r.targetType = :targetType)")
+            + "AND (:targetType IS NULL OR r.targetType = :targetType) "
+            + "AND r.targetType <> com.shareloop.report.entity.TargetType.SYSTEM")
     Page<Report> findForAdmin(
             @Param("status") ReportStatus status, @Param("targetType") TargetType targetType, Pageable pageable);
+
+    Page<Report> findByReporterIdAndTargetType(Long reporterId, TargetType targetType, Pageable pageable);
+
+    Optional<Report> findByIdAndReporterIdAndTargetType(Long id, Long reporterId, TargetType targetType);
+
+    Optional<Report> findByIdAndTargetType(Long id, TargetType targetType);
+
+    @Query("SELECT r FROM Report r WHERE r.targetType = com.shareloop.report.entity.TargetType.SYSTEM "
+            + "AND (:status IS NULL OR r.status = :status)")
+    Page<Report> findSystemReports(@Param("status") ReportStatus status, Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM Report r WHERE r.id = :id")
@@ -87,7 +98,9 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
             TargetType targetType, Long itemId, ReportReason reason, Collection<ReportStatus> statuses);
 
     /** Các report một người đã gửi, mới nhất lên trước; dùng cho tab Khiếu nại và Báo cáo của Member. */
-    List<Report> findByReporterIdOrderByCreatedAtDescIdDesc(Long reporterId);
+    @Query("SELECT r FROM Report r WHERE r.reporterId = :reporterId "
+            + "AND r.targetType <> com.shareloop.report.entity.TargetType.SYSTEM ORDER BY r.createdAt DESC, r.id DESC")
+    List<Report> findByReporterIdOrderByCreatedAtDescIdDesc(@Param("reporterId") Long reporterId);
 
     /**
      * Các report nhắm vào một người và đã có hạn giải trình, mới nhất lên trước. target_user_id luôn là bên bị

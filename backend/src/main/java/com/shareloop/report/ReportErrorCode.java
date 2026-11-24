@@ -18,6 +18,8 @@ public enum ReportErrorCode implements ErrorCode {
     REPORT_CONTACT_REASON_NOT_ALLOWED(
             HttpStatus.BAD_REQUEST, "Chỉ báo sai thông tin liên lạc khi hai bên đã từng chốt lịch giao dịch."),
     REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy báo cáo vi phạm."),
+    SYSTEM_REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy báo cáo hệ thống."),
+    SYSTEM_REPORT_ALREADY_RESOLVED(HttpStatus.CONFLICT, "Báo cáo hệ thống đã được xử lý."),
     DISPUTE_NOT_A_PARTY(HttpStatus.FORBIDDEN, "Bạn không phải là một bên trong giao dịch này."),
     DISPUTE_REQUEST_NOT_COMPLETED(HttpStatus.CONFLICT, "Chỉ có thể khiếu nại giao dịch đã hoàn thành."),
     DISPUTE_WINDOW_EXPIRED(HttpStatus.UNPROCESSABLE_ENTITY, "Đã quá thời hạn để khiếu nại giao dịch."),

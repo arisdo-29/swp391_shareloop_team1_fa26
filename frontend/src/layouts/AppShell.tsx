@@ -389,6 +389,15 @@ function AppShellContent() {
                           Ví Credit
                         </Link>
                       ) : null}
+                      {!isAdmin && (
+                        <Link
+                          to="/me/system-reports"
+                          onClick={closeMenus}
+                          className="flex items-center rounded-md min-h-11 px-3 py-2 text-sm text-text-secondary transition hover:bg-surface-low"
+                        >
+                          Báo cáo hệ thống
+                        </Link>
+                      )}
                       <Link
                         to="/change-password"
                         onClick={closeMenus}
@@ -517,6 +526,9 @@ function AppShellContent() {
                   </Link>
                   <Link to="/safety" className="site-footer-link block py-2 transition">
                     An toàn khi giao nhận
+                  </Link>
+                  <Link to="/me/system-reports" className="site-footer-link block py-2 transition">
+                    Báo cáo lỗi hệ thống
                   </Link>
                   <a
                     href="mailto:support@shareloop.vn"
