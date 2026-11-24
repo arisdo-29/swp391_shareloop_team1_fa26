@@ -93,7 +93,7 @@ describe('AdminLedger', () => {
     expect(within(table).getByText('+50').className).toContain('text-success');
     expect(within(table).getByText('-10').className).toContain('text-error');
     const text = document.body.textContent ?? '';
-    for (const hidden of ['TOP_UP', 'POST_FEE', 'ADMIN_ADJUST', 'ABCD1234EFGH5678IJKL9012MNOP3456']) {
+    for (const hidden of ['TOP_UP', 'POST_FEE', 'ADMIN_ADJUST']) {
       expect(text).not.toContain(hidden);
     }
   });
@@ -104,10 +104,70 @@ describe('AdminLedger', () => {
 
     const itemLink = screen.getByRole('link', { name: 'Xe đạp cũ' });
     expect(itemLink.getAttribute('href')).toBe('/admin/items/77');
-    const orderLink = screen.getByRole('link', { name: '#ABCD...3456' });
+    const orderLink = screen.getByRole('link', {
+      name: 'Mã đơn: ABCD1234EFGH5678IJKL9012MNOP3456',
+    });
     expect(orderLink.getAttribute('href')).toBe(
       '/admin/finance/topup-orders?q=ABCD1234EFGH5678IJKL9012MNOP3456',
     );
+  });
+
+  it('hiển thị nội dung giao dịch theo đầy đủ loại giao dịch thực tế từ API', async () => {
+    vi.mocked(adminFinanceApi.ledger).mockResolvedValue({
+      ...page,
+      items: [
+        row({ id: 1, type: 'TOP_UP', orderCode: 'NAP-001' }),
+        row({ id: 2, type: 'POST_FEE', amount: -10, itemId: 21, itemTitle: 'Bàn học gỗ' }),
+        row({ id: 3, type: 'EDIT_FEE', amount: -2, itemId: 22, itemTitle: 'Ghế học sinh' }),
+        row({ id: 4, type: 'RENEW_FEE', amount: -3, itemId: 23, itemTitle: 'Tủ sách nhỏ' }),
+        row({ id: 5, type: 'BOOST_FEE', amount: -4, itemId: 24, itemTitle: 'Xe đạp trẻ em' }),
+        row({ id: 6, type: 'AI_SEARCH_FEE', amount: -1 }),
+        row({ id: 7, type: 'AI_SEARCH_FEE', amount: 1, note: 'Hoàn phí AI #6' }),
+        row({ id: 8, type: 'ADMIN_ADJUST', amount: 5, note: 'Hỗ trợ sự kiện' }),
+        row({ id: 9, type: 'ADMIN_ADJUST', amount: -5, note: 'Điều chỉnh sai lệch' }),
+      ],
+      totalElements: 9,
+    });
+
+    renderPage();
+    await screen.findByText('Bàn học gỗ');
+
+    const table = screen.getByRole('table');
+    expect(within(table).getByRole('columnheader', { name: 'Nội dung giao dịch' })).toBeTruthy();
+    const tableText = table.textContent ?? '';
+    for (const content of [
+      'Nạp Credit thành công – Mã đơn: NAP-001',
+      'Trừ Credit đăng bài: Bàn học gỗ',
+      'Trừ Credit sửa bài: Ghế học sinh',
+      'Trừ Credit gia hạn bài: Tủ sách nhỏ',
+      'Trừ Credit đẩy bài: Xe đạp trẻ em',
+      'Trừ Credit sử dụng Trợ lý AI',
+      'Hoàn Credit – Hoàn phí AI #6',
+      'Admin cộng Credit – Hỗ trợ sự kiện',
+      'Admin trừ Credit – Điều chỉnh sai lệch',
+    ]) {
+      expect(tableText).toContain(content);
+    }
+  });
+
+  it('không tự tạo dữ liệu chi tiết khi API không cung cấp', async () => {
+    vi.mocked(adminFinanceApi.ledger).mockResolvedValue({
+      ...page,
+      items: [
+        row({ id: 1, type: 'TOP_UP' }),
+        row({ id: 2, type: 'POST_FEE', amount: -10, itemId: 77 }),
+        row({ id: 3, type: 'ADMIN_ADJUST', amount: 5 }),
+      ],
+    });
+
+    renderPage();
+    await screen.findByText('Nạp Credit thành công');
+
+    const tableText = screen.getByRole('table').textContent ?? '';
+    expect(tableText).toContain('Trừ Credit đăng bài');
+    expect(tableText).toContain('Admin cộng Credit');
+    expect(tableText).not.toContain('Bài đã xóa');
+    expect(tableText).not.toContain('Mã đơn:');
   });
 
   it('hiện người thực hiện ở dòng Admin điều chỉnh', async () => {
