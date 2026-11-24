@@ -175,6 +175,7 @@ export interface ItemRequest {
   offeredItemId?: string;
   offeredItemTitle?: string;
   offeredItemReferencePrice?: number;
+  offeredItemAreaId?: number;
   requesterId: string;
   requesterName?: string;
   requesterTrustStars?: number;

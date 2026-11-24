@@ -10,6 +10,7 @@ package com.shareloop.request.dto;
  * @param donorName họ tên chủ bài đăng
  * @param offeredItemTitle tiêu đề món người xin đề nghị đổi (chỉ yêu cầu Trao đổi)
  * @param offeredItemReferencePrice giá tham khảo bằng đồng của món đem đổi
+ * @param offeredItemAreaId khu vực công khai của món đem đổi
  * @param itemOfferType hình thức hiện tại của bài đăng ("GIVE" | "SWAP")
  */
 public record RequestItemInfo(
@@ -19,7 +20,8 @@ public record RequestItemInfo(
         String donorName,
         String offeredItemTitle,
         String itemOfferType,
-        Long offeredItemReferencePrice) {
+        Long offeredItemReferencePrice,
+        Long offeredItemAreaId) {
 
-    public static final RequestItemInfo EMPTY = new RequestItemInfo(null, null, null, null, null, null, null);
+    public static final RequestItemInfo EMPTY = new RequestItemInfo(null, null, null, null, null, null, null, null);
 }

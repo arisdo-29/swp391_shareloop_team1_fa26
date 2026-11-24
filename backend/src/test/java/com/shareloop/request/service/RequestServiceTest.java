@@ -1240,7 +1240,7 @@ class RequestServiceTest {
                 .thenReturn(new ItemCardDto(
                         1L, "Xe đạp mini", OfferType.SWAP, ItemStatus.RESERVED, "/api/v1/media/5", 20L));
         when(itemQueryService.findOfferedItemDetails(2L))
-                .thenReturn(Optional.of(new OfferedItemDetails("Giày thể thao", 280000L)));
+                .thenReturn(Optional.of(new OfferedItemDetails("Giày thể thao", 280000L, 9L)));
         when(userService.findContact(10L)).thenReturn(new ContactInfo(10L, "Người xin", "b@example.com", "0901"));
         when(userService.findContact(20L)).thenReturn(new ContactInfo(20L, "Chủ bài", "a@example.com", "0902"));
 
@@ -1254,6 +1254,7 @@ class RequestServiceTest {
         assertThat(response.donorName()).isEqualTo("Chủ bài");
         assertThat(response.offeredItemTitle()).isEqualTo("Giày thể thao");
         assertThat(response.offeredItemReferencePrice()).isEqualTo(280000L);
+        assertThat(response.offeredItemAreaId()).isEqualTo(9L);
         assertThat(response.receiverName()).isEqualTo("Người xin");
     }
 
