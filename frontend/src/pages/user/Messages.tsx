@@ -61,6 +61,7 @@ import { productDetailFromRequestPath } from '../../utils/productDetailNavigatio
 import {
   conversationTitle,
   donorIdOf,
+  messageSideForSender,
   requestParticipantName,
   type ApiConversation,
 } from '../../components/messages/conversation';
@@ -821,7 +822,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     <ChatMessage
                       key={entry.id}
                       entry={entry}
-                      mine={entry.senderId === currentUserId}
+                      side={messageSideForSender(selected, entry.senderId)}
                       progressPath={transactionProgressPath(selected.request.id)}
                       requestId={selected.request.id}
                       onOpenItem={(itemId) => navigate(`/items/${itemId}`)}

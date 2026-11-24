@@ -9,7 +9,7 @@ import type { ItemResponse } from '../../services/itemApi';
 import type { RequestResponse } from '../../services/requestApi';
 import { ChatHeader } from './ChatHeader';
 import { ChatMessage } from './ChatMessage';
-import type { ApiConversation } from './conversation';
+import { messageSideForSender, type ApiConversation } from './conversation';
 
 const DONOR_ID = 9;
 const RECEIVER_ID = 12;
@@ -353,7 +353,7 @@ describe('ChatMessage', () => {
       <MemoryRouter>
         <ChatMessage
           entry={systemMessage}
-          mine={false}
+          side="left"
           progressPath="/messages/101/progress"
           requestId={101}
           onOpenItem={vi.fn()}
@@ -366,5 +366,52 @@ describe('ChatMessage', () => {
     expect(screen.getByRole('link', { name: 'Xem chi tiết' }).getAttribute('href')).toBe(
       '/messages/101/progress',
     );
+  });
+
+  it('căn tin nhắn theo chủ sở hữu hai món và không phụ thuộc tài khoản đang xem', () => {
+    const current = {
+      ...conversation({ type: 'SWAP', offeredItemId: 46 }),
+      item: item({ id: 45, donorId: DONOR_ID }),
+      offeredItem: item({ id: 46, donorId: RECEIVER_ID, title: 'Mũ bảo hiểm' }),
+    };
+
+    expect(messageSideForSender(current, DONOR_ID)).toBe('left');
+    expect(messageSideForSender(current, RECEIVER_ID)).toBe('right');
+  });
+
+  it('đảo căn lề nhưng giữ nguyên màu: xanh đậm bên trái, xanh nhạt bên phải', () => {
+    const textMessage = { ...systemMessage, kind: 'TEXT', senderId: RECEIVER_ID, content: 'Tin trao đổi' };
+    const { rerender } = render(
+      <MemoryRouter>
+        <ChatMessage
+          entry={textMessage}
+          side="right"
+          progressPath="/messages/101/progress"
+          requestId={101}
+          onOpenItem={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    const darkWrapper = screen.getByText('Tin trao đổi').closest('[data-message-align]');
+    expect(darkWrapper?.getAttribute('data-message-align')).toBe('left');
+    expect(darkWrapper?.className).toContain('justify-start');
+    expect(screen.getByText('Tin trao đổi').parentElement?.className).toContain('bg-primary');
+
+    rerender(
+      <MemoryRouter>
+        <ChatMessage
+          entry={{ ...textMessage, senderId: DONOR_ID }}
+          side="left"
+          progressPath="/messages/101/progress"
+          requestId={101}
+          onOpenItem={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    const lightWrapper = screen.getByText('Tin trao đổi').closest('[data-message-align]');
+    expect(lightWrapper?.getAttribute('data-message-align')).toBe('right');
+    expect(lightWrapper?.className).toContain('justify-end');
+    expect(screen.getByText('Tin trao đổi').parentElement?.className).toContain('bg-surface-low');
   });
 });

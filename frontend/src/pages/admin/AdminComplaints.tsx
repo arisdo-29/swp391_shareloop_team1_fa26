@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
+  Avatar,
   Button,
   EmptyState,
   Icon,
@@ -213,12 +214,20 @@ interface ComplaintItemDisplay {
   imageUrl: string | null;
 }
 
-function ComplaintItem({ item, compact = false }: { item: ComplaintItemDisplay | null; compact?: boolean }) {
+function ComplaintItem({
+  item,
+  compact = false,
+  target,
+}: {
+  item: ComplaintItemDisplay | null;
+  compact?: boolean;
+  target?: string;
+}) {
   if (!item?.title) return <span className="text-text-muted">—</span>;
-  const target = `/admin/items/${item.id}`;
+  const detailTarget = target ?? `/admin/items/${item.id}`;
   return (
     <div className={`admin-complaint-item ${compact ? 'admin-complaint-item-compact' : ''}`}>
-      <Link to={target} aria-label={`Xem chi tiết ${item.title}`} className="admin-complaint-item-image">
+      <Link to={detailTarget} aria-label={`Xem chi tiết ${item.title}`} className="admin-complaint-item-image">
         <ItemImage
           src={item.imageUrl ?? undefined}
           alt={item.title}
@@ -226,11 +235,11 @@ function ComplaintItem({ item, compact = false }: { item: ComplaintItemDisplay |
         />
       </Link>
       <div className="min-w-0">
-        <Link to={target} title={item.title} className="admin-complaint-item-title font-semibold text-primary hover:underline">
+        <Link to={detailTarget} title={item.title} className="admin-complaint-item-title font-semibold text-primary hover:underline">
           {item.title}
         </Link>
         {!compact ? (
-          <Link to={target} className="admin-complaint-item-detail">
+          <Link to={detailTarget} className="admin-complaint-item-detail">
             Xem chi tiết bài đăng
           </Link>
         ) : null}
@@ -253,6 +262,54 @@ function listReportedUser(report: ReportResponse, enrichment?: ComplaintListEnri
     (report.targetType === 'USER' ? report.targetName : null) ??
     '—'
   );
+}
+
+function avatarInitials(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(-2)
+    .map((part) => part.charAt(0))
+    .join('')
+    .toLocaleUpperCase('vi-VN');
+}
+
+function ComplaintTarget({
+  report,
+  enrichment,
+  item,
+}: {
+  report: ReportResponse;
+  enrichment?: ComplaintListEnrichment;
+  item: ComplaintItemDisplay | null;
+}) {
+  if (report.targetType === 'USER') {
+    const userId = enrichment?.detail?.reportedUser?.id ?? report.targetUserId;
+    const name = listReportedUser(report, enrichment);
+    const content = (
+      <>
+        <Avatar user={{ name, avatarInitials: avatarInitials(name), avatarUrl: undefined }} size="md" />
+        <span className="admin-complaint-target-name" title={name}>
+          {name}
+        </span>
+      </>
+    );
+    return userId !== null ? (
+      <Link to={`/admin/users/${userId}`} className="admin-complaint-target admin-complaint-target-user">
+        {content}
+      </Link>
+    ) : (
+      <div className="admin-complaint-target admin-complaint-target-user">{content}</div>
+    );
+  }
+
+  const target =
+    report.targetType === 'REQUEST' && report.requestId !== null
+      ? `/admin/transactions/${report.requestId}`
+      : item
+        ? `/admin/items/${item.id}`
+        : undefined;
+  return <ComplaintItem item={item} compact target={target} />;
 }
 
 export function AdminComplaints() {
@@ -603,7 +660,7 @@ export function AdminComplaints() {
               <thead>
                 <tr>
                   <th>Mã hồ sơ</th>
-                  <th>Bài đăng liên quan</th>
+                  <th>Đối tượng báo cáo</th>
                   <th>Loại khiếu nại/báo cáo</th>
                   <th>Người gửi báo cáo</th>
                   <th>Người bị báo cáo</th>
@@ -625,7 +682,7 @@ export function AdminComplaints() {
                     <tr key={report.id}>
                       <td className="admin-complaints-code">{reportCode(report.id)}</td>
                       <td>
-                        <ComplaintItem item={relatedItem} compact />
+                        <ComplaintTarget report={report} enrichment={enrichment} item={relatedItem} />
                       </td>
                       <td>{targetLabels[report.targetType]}</td>
                       <td>

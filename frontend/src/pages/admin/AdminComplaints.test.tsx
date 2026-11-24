@@ -155,7 +155,7 @@ describe('AdminComplaints', () => {
 
     const table = await screen.findByRole('table', { name: 'Danh sách hồ sơ' });
     expect(within(table).getByRole('columnheader', { name: 'Mã hồ sơ' })).toBeTruthy();
-    expect(within(table).getByRole('columnheader', { name: 'Bài đăng liên quan' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Đối tượng báo cáo' })).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Loại khiếu nại/báo cáo' })).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Người gửi báo cáo' })).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Lý do báo cáo' })).toBeTruthy();
@@ -166,6 +166,41 @@ describe('AdminComplaints', () => {
     expect(within(table).getByText('HS-7')).toBeTruthy();
     expect(await within(table).findByRole('img', { name: 'Bàn học gỗ' })).toBeTruthy();
     expect(adminItemApi.detail).toHaveBeenCalledWith(5);
+  });
+
+  it('báo cáo người dùng hiện avatar mặc định, tên và liên kết hồ sơ thay vì dấu gạch ngang', async () => {
+    const userReport = report({
+      id: 23,
+      targetType: 'USER',
+      itemId: null,
+      targetUserId: 23,
+      targetName: 'Lê Minh Hương',
+    });
+    const value = detail(userReport, {
+      report: userReport,
+      relatedItemId: null,
+      relatedItemTitle: null,
+      reportedUser: { id: 23, fullName: 'Lê Minh Hương' },
+    });
+    vi.mocked(reportApi.list).mockResolvedValue({
+      items: [userReport],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    vi.mocked(reportApi.detail).mockResolvedValue(value);
+
+    renderPage();
+
+    const code = await screen.findByText('HS-23');
+    const row = code.closest('tr');
+    expect(row).not.toBeNull();
+    const targetCell = (row as HTMLTableRowElement).cells[1];
+    const name = within(targetCell).getByText('Lê Minh Hương');
+    expect(name.closest('a')?.getAttribute('href')).toBe('/admin/users/23');
+    expect(within(targetCell).getByLabelText('Lê Minh Hương')).toBeTruthy();
+    expect(within(row as HTMLTableRowElement).queryByText('—')).toBeNull();
   });
 
   it('lọc được riêng khiếu nại giao dịch đang chờ giải trình', async () => {
