@@ -220,6 +220,8 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2&condition=GOOD&o
 thuộc cùng một lượt: không trùng bài, không sót bài. Không gửi thì backend tính theo giờ hiện tại, nên trang 2 gọi sau
 khi đã đổi lượt có thể lệch với trang 1.
 
+Khi chọn món đem đổi, giao diện ưu tiên giá nằm trong ngưỡng `swap_similar_price_percent` từ cấu hình công khai, mặc định 20%. Món ngoài ngưỡng hoặc chưa có giá vẫn chọn được nếu đủ điều kiện.
+
 ### Cách xếp bài đẩy (vòng xoay)
 
 - **Vòng**: id các bài đang đẩy (`boosted_until > now`) khớp bộ lọc, sắp theo id **tăng dần**. Thứ tự cố định, không

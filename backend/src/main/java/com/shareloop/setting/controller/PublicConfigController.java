@@ -38,6 +38,7 @@ public class PublicConfigController {
             ConfigKey.CONFIRMED_STALE_CANCEL_DAYS,
             ConfigKey.SHIPPING_SEND_DEADLINE_DAYS,
             ConfigKey.DEADLINE_REMINDER_HOURS_BEFORE_RESPONSE,
+            ConfigKey.SWAP_SIMILAR_PRICE_PERCENT,
             ConfigKey.REPORT_HIDE_THRESHOLD,
             ConfigKey.REPUTATION_CLEAN_STREAK_FOR_STAR,
             ConfigKey.STAR_RESTORE_MIN_DISTINCT_PARTNERS,

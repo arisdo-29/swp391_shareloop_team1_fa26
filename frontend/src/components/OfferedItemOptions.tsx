@@ -1,15 +1,17 @@
 import type { Item } from '../types/domain';
+import { formatReferencePrice } from '../utils/referencePrice';
 import { ItemImage } from './ui';
 
 interface OfferedItemOptionsProps {
   // Chỉ cần vài trường để vẽ thẻ, nên trang chat có thể truyền món dựng từ ItemResponse.
-  items: Array<Pick<Item, 'id' | 'title' | 'images' | 'district'>>;
+  items: Array<Pick<Item, 'id' | 'title' | 'images' | 'district' | 'referencePrice'>>;
+  similarPriceIds?: ReadonlySet<string>;
   selectedItemId: string;
   onSelect: (itemId: string) => void;
 }
 
 // Danh sách thẻ để chọn món của mình mang đi đổi; dùng chung cho form gửi yêu cầu và đề nghị đổi món trong chat.
-export function OfferedItemOptions({ items, selectedItemId, onSelect }: OfferedItemOptionsProps) {
+export function OfferedItemOptions({ items, similarPriceIds, selectedItemId, onSelect }: OfferedItemOptionsProps) {
   return (
     <>
       {items.map((entry) => (
@@ -24,6 +26,12 @@ export function OfferedItemOptions({ items, selectedItemId, onSelect }: OfferedI
           <span className="min-w-0 max-w-full flex-1 overflow-hidden">
             <strong className="block whitespace-normal break-words text-sm leading-5">{entry.title}</strong>
             <span className="block break-words text-xs text-text-muted">{entry.district}</span>
+            {similarPriceIds ? (
+              <span className="block text-xs text-text-secondary">{formatReferencePrice(entry.referencePrice)}</span>
+            ) : null}
+            {similarPriceIds?.has(entry.id) ? (
+              <span className="block text-xs font-semibold text-primary">Giá tương đương</span>
+            ) : null}
           </span>
         </button>
       ))}
