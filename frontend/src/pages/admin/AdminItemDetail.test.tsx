@@ -181,6 +181,23 @@ describe('AdminItemDetail', () => {
     expect(links.some((link) => link.getAttribute('href') === '/admin/transactions/31')).toBe(true);
   });
 
+  it('bài đã giao dịch hiện thông báo hoàn tất và không yêu cầu huỷ giao dịch', async () => {
+    vi.mocked(adminItemApi.detail).mockResolvedValue(
+      detail({
+        requests: [
+          { id: 31, receiverName: 'Bình Trần', type: 'GIVE', status: 'COMPLETED', offeredItemTitle: null, running: false, createdAt: '2026-11-03T03:00:00Z' },
+        ],
+      }, { status: 'TRADED' }),
+    );
+    renderPage();
+
+    expect(await screen.findByText('Giao dịch đã hoàn tất. Bài này không thể ẩn.')).toBeTruthy();
+    expect(screen.getByText('Hoàn tất')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Ẩn bài' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText(/huỷ giao dịch ở trang Giao dịch/)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Mở giao dịch đang chạy' })).toBeNull();
+  });
+
   it('ẩn bài có lý do rồi cập nhật trang theo kết quả của máy chủ', async () => {
     const user = userEvent.setup();
     vi.mocked(adminItemApi.hide).mockResolvedValue(
