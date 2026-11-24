@@ -31,6 +31,8 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -95,6 +97,7 @@ class ItemControllerTest {
                           "categoryId": 1,
                           "areaId": 1,
                           "offerType": "GIVE",
+                          "referencePrice": 300000,
                           "title": "Sách giáo trình",
                           "description": "Mô tả sách",
                           "condition": "NEW"
@@ -104,6 +107,28 @@ class ItemControllerTest {
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.donorId").value(10))
                 .andExpect(jsonPath("$.status").value("PENDING_REVIEW"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"null", "0", "-1", "300000.5"})
+    void create_withInvalidReferencePrice_returns400(String referencePrice) throws Exception {
+        String token = jwtService.issue(10L, false);
+        mockMvc.perform(post("/api/v1/items")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                          "categoryId": 1,
+                          "areaId": 1,
+                          "offerType": "GIVE",
+                          "title": "Sách giáo trình",
+                          "description": "Mô tả sách",
+                          "condition": "NEW",
+                          "referencePrice": %s
+                        }
+                        """.formatted(referencePrice)))
+                .andExpect(status().isBadRequest());
+        verify(itemService, never()).createItem(eq(10L), any(CreateItemRequest.class));
     }
 
     @Test
@@ -121,6 +146,7 @@ class ItemControllerTest {
                           "categoryId": 1,
                           "areaId": 1,
                           "offerType": "GIVE",
+                          "referencePrice": 300000,
                           "title": "Sách giáo trình",
                           "description": "Mô tả sách",
                           "condition": "NEW"

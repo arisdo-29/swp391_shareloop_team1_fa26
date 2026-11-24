@@ -28,6 +28,7 @@ import { loginPath } from '../../utils/authRedirect';
 import { productDetailBackLink } from '../../utils/productDetailNavigation';
 import { findActiveSwapPair, isActiveRequestStatus } from '../../utils/swapRequest';
 import { requestOfferLabel } from '../../utils/requestOffer';
+import { formatReferencePrice } from '../../utils/referencePrice';
 import { OfferedItemOptions } from '../../components/OfferedItemOptions';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
@@ -366,6 +367,7 @@ export function ProductDetail() {
               ) : null}
             </div>
             <h1 className="text-2xl font-bold leading-tight sm:text-3xl">{item.title}</h1>
+            <p className="text-sm font-semibold">{formatReferencePrice(item.referencePrice)}</p>
             {own && item.hidden && item.hiddenReason ? (
               <Alert tone="warning">{item.hiddenReason}</Alert>
             ) : null}

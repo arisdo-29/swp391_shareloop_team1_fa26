@@ -49,6 +49,9 @@ public class Item extends BaseEntity {
     @Column(name = "brand", length = 80)
     private String brand;
 
+    @Column(name = "reference_price")
+    private Long referencePrice;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
     private ItemStatus status = ItemStatus.PENDING_REVIEW;
@@ -121,6 +124,14 @@ public class Item extends BaseEntity {
 
     public String getBrand() {
         return brand;
+    }
+
+    public Long getReferencePrice() {
+        return referencePrice;
+    }
+
+    public void setReferencePrice(long referencePrice) {
+        this.referencePrice = referencePrice;
     }
 
     public ItemStatus getStatus() {

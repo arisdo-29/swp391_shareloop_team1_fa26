@@ -111,9 +111,10 @@ class ItemImagesIT extends IntegrationTest {
         long second = createMedia(userId);
         long third = createMedia(userId);
         long defect = createMedia(userId);
-        String body = "{\"categoryId\":%d,\"areaId\":%d,\"offerType\":\"GIVE\",\"title\":\"Sách cũ\","
-                + "\"description\":\"Còn dùng được\",\"condition\":\"DEFECTIVE\",\"defectNote\":\"Rách bìa\","
-                + "\"images\":[\"/api/v1/media/%d\",\"/api/v1/media/%d\",\"/api/v1/media/%d\"]%s}";
+        String body =
+                "{\"categoryId\":%d,\"areaId\":%d,\"offerType\":\"GIVE\",\"title\":\"Sách cũ\",\"referencePrice\":300000,"
+                        + "\"description\":\"Còn dùng được\",\"condition\":\"DEFECTIVE\",\"defectNote\":\"Rách bìa\","
+                        + "\"images\":[\"/api/v1/media/%d\",\"/api/v1/media/%d\",\"/api/v1/media/%d\"]%s}";
 
         mvc.perform(post("/api/v1/items")
                         .header("Authorization", "Bearer " + jwtService.issue(userId, false))
@@ -265,7 +266,7 @@ class ItemImagesIT extends IntegrationTest {
                 .mapToObj(id -> "\"/api/v1/media/" + id + "\"")
                 .collect(java.util.stream.Collectors.joining(","));
         return """
-                {"categoryId":%d,"areaId":%d,"offerType":"GIVE","title":"Sách",\
+                {"categoryId":%d,"areaId":%d,"offerType":"GIVE","title":"Sách","referencePrice":300000,\
                 "description":"Sách còn tốt","condition":"GOOD","images":[%s]}
                 """.formatted(categoryId, areaId, images);
     }

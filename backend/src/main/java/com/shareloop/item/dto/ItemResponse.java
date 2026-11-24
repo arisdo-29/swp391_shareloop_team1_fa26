@@ -54,7 +54,8 @@ public record ItemResponse(
         Instant boostChainEndsAt,
         Instant boostCooldownUntil,
         // Lý do Admin từ chối lần gần nhất; chỉ chủ bài hoặc Admin xem và chỉ khi bài đang Bị từ chối (B4).
-        String rejectionReason) {
+        String rejectionReason,
+        Long referencePrice) {
 
     /** Constructor 30 tham số trước khi có rejectionReason; trường mới để null. */
     public ItemResponse(
@@ -119,6 +120,7 @@ public record ItemResponse(
                 boostStartedAt,
                 boostChainEndsAt,
                 boostCooldownUntil,
+                null,
                 null);
     }
 
@@ -273,7 +275,9 @@ public record ItemResponse(
                 isRequestable,
                 boostStartedAt,
                 boostChainEndsAt,
-                boostCooldownUntil);
+                boostCooldownUntil,
+                null,
+                referencePrice);
     }
 
     /** Gắn lý do bị từ chối cho chủ bài hoặc Admin (B4). Gọi sau cùng vì các hàm with khác tạo bản sao 30 trường. */
@@ -309,7 +313,8 @@ public record ItemResponse(
                 boostStartedAt,
                 boostChainEndsAt,
                 boostCooldownUntil,
-                reason);
+                reason,
+                referencePrice);
     }
 
     /** Gắn trạng thái tạm ẩn cho chủ bài hoặc Admin (U04). */
@@ -344,7 +349,9 @@ public record ItemResponse(
                 requestable,
                 boostStartedAt,
                 boostChainEndsAt,
-                boostCooldownUntil);
+                boostCooldownUntil,
+                null,
+                referencePrice);
     }
 
     public ItemResponse withDonor(String name, Integer trustStars, String rank, Boolean donorLocked) {
@@ -378,7 +385,9 @@ public record ItemResponse(
                 requestable,
                 boostStartedAt,
                 boostChainEndsAt,
-                boostCooldownUntil);
+                boostCooldownUntil,
+                null,
+                referencePrice);
     }
 
     /**
@@ -416,7 +425,9 @@ public record ItemResponse(
                 requestable,
                 null,
                 null,
-                null);
+                null,
+                null,
+                referencePrice);
     }
 
     public ItemResponse withDonor(String name, Integer trustStars, String rank) {

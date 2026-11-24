@@ -99,6 +99,7 @@ export interface Item {
   district: string;
   images: string[];
   tradeFor?: string;
+  referencePrice?: number;
   brand?: string;
   defectNote?: string;
   defectImages?: string[];

@@ -76,7 +76,8 @@ class ItemCreateIT extends IntegrationTest {
 
         mvc.perform(create(owner, body("SWAP", "Sách học", "Sách còn tốt", images)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("PENDING_REVIEW"));
+                .andExpect(jsonPath("$.status").value("PENDING_REVIEW"))
+                .andExpect(jsonPath("$.referencePrice").value(300000));
 
         long itemId = itemId(owner);
         assertThat(jdbc.sql("SELECT fee_state FROM items WHERE id = :id")
@@ -393,7 +394,7 @@ class ItemCreateIT extends IntegrationTest {
         String desiredItemField = "SWAP".equals(offerType) ? "\"desiredItem\":\"Sách khác\"," : "";
         return """
                 {"categoryId":%d,"areaId":%d,"offerType":"%s",%s"title":"%s",\
-                "description":"%s","condition":"GOOD",\
+                "description":"%s","condition":"GOOD","referencePrice":300000,\
                 "images":["/api/v1/media/%d","/api/v1/media/%d","/api/v1/media/%d"]}
                 """.formatted(
                 category, area, offerType, desiredItemField, title, description, images[0], images[1], images[2]);

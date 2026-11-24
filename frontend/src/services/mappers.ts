@@ -127,6 +127,7 @@ export function toFeItem(
     district: areaNames.get(item.areaId) ?? '',
     images: Array.isArray(item.images) ? item.images.map(resolveMediaUrl).filter(Boolean) : [],
     tradeFor: item.desiredItem ?? undefined,
+    referencePrice: item.referencePrice ?? undefined,
     brand: item.brand ?? undefined,
     defectNote: item.defectNote ?? undefined,
     defectImages: item.defectImages.map(resolveMediaUrl).filter(Boolean),
