@@ -154,24 +154,29 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('giới thiệu Trợ lý AI trên trang Tìm đồ', () => {
-  it('chỉ lọc giá cho bài Trao đổi và bỏ khoảng giá khi đổi hình thức', async () => {
+describe('lọc khoảng giá trên trang Tìm đồ', () => {
+  it('lọc giá ngay ở Tất cả và giữ khoảng giá khi đổi hình thức', async () => {
     const user = userEvent.setup();
-    renderBrowse(['/browse?type=trade']);
+    renderBrowse();
     await user.type(screen.getByRole('textbox', { name: 'Giá từ (đồng)' }), '240000');
     await user.type(screen.getByRole('textbox', { name: 'Giá đến (đồng)' }), '360000');
     await user.click(screen.getByRole('button', { name: 'Áp dụng giá' }));
     await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
-      offerType: 'SWAP', minPrice: 240000, maxPrice: 360000,
+      offerType: undefined, minPrice: 240000, maxPrice: 360000,
     })));
     await user.click(screen.getByRole('button', { name: 'Cho tặng' }));
     await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
-      offerType: 'GIVE',
+      offerType: 'GIVE', minPrice: 240000, maxPrice: 360000,
     })));
-    expect(vi.mocked(itemApi.list).mock.lastCall?.[0]).not.toHaveProperty('minPrice');
-    expect(screen.queryByRole('textbox', { name: 'Giá từ (đồng)' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Trao đổi' }));
+    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
+      offerType: 'SWAP', minPrice: 240000, maxPrice: 360000,
+    })));
+    expect((screen.getByRole('textbox', { name: 'Giá từ (đồng)' }) as HTMLInputElement).value).toBe('240000');
   });
+});
 
+describe('giới thiệu Trợ lý AI trên trang Tìm đồ', () => {
   it('dẫn khách tới đăng nhập với đích quay về /ai và không gọi API hạn mức', async () => {
     renderBrowse();
 

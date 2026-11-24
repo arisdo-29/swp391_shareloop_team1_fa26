@@ -30,10 +30,6 @@ export function updateBrowseSearchParams(
 ): URLSearchParams {
   const next = new URLSearchParams(current);
   Object.entries(updates).forEach(([key, value]) => {
-    if (key === 'type' && value !== 'trade') {
-      next.delete('minPrice');
-      next.delete('maxPrice');
-    }
     if (key === 'areaId') next.delete('district');
     if (value) next.set(key, value);
     else next.delete(key);

@@ -650,17 +650,14 @@ public class ItemService {
             Long viewerKey,
             Long minPrice,
             Long maxPrice) {
-        boolean priceFilter = minPrice != null || maxPrice != null;
-        if ((priceFilter && offerType == OfferType.GIVE)
-                || (minPrice != null && maxPrice != null && minPrice > maxPrice)) {
+        if (minPrice != null && maxPrice != null && minPrice > maxPrice) {
             throw new BusinessException(ItemErrorCode.ITEM_INVALID_PRICE_RANGE);
         }
-        OfferType effectiveType = priceFilter ? OfferType.SWAP : offerType;
         BrowseFilter filter = new BrowseFilter(
                 categoryId,
                 areaId,
                 condition == null ? null : condition.name(),
-                effectiveType == null ? null : effectiveType.name(),
+                offerType == null ? null : offerType.name(),
                 q == null ? "" : q.trim(),
                 Instant.now(),
                 minPrice,

@@ -219,8 +219,8 @@ export function Browse() {
   const lastAppliedQueryRef = useRef(q);
   const typeParam = params.get('type');
   const type: ItemType | '' = typeParam === 'gift' || typeParam === 'trade' ? typeParam : '';
-  const rawMinPrice = type === 'trade' ? positiveIntegerParam(params.get('minPrice')) : undefined;
-  const rawMaxPrice = type === 'trade' ? positiveIntegerParam(params.get('maxPrice')) : undefined;
+  const rawMinPrice = positiveIntegerParam(params.get('minPrice'));
+  const rawMaxPrice = positiveIntegerParam(params.get('maxPrice'));
   const invalidPriceRange = rawMinPrice !== undefined && rawMaxPrice !== undefined && rawMinPrice > rawMaxPrice;
   const minPrice = invalidPriceRange ? undefined : rawMinPrice;
   const maxPrice = invalidPriceRange ? undefined : rawMaxPrice;
@@ -471,14 +471,12 @@ export function Browse() {
         value={type}
         onChange={(value) => setFilter('type', value)}
       />
-      {type === 'trade' ? (
-        <PriceFilter
-          key={String(rawMinPrice) + ':' + String(rawMaxPrice)}
-          minPrice={rawMinPrice}
-          maxPrice={rawMaxPrice}
-          onApply={setPriceFilter}
-        />
-      ) : null}
+      <PriceFilter
+        key={String(rawMinPrice) + ':' + String(rawMaxPrice)}
+        minPrice={rawMinPrice}
+        maxPrice={rawMaxPrice}
+        onApply={setPriceFilter}
+      />
       <Select
         label="Danh mục"
         value={category}
