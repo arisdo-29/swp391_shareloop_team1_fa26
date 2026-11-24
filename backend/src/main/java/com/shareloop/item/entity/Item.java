@@ -138,6 +138,10 @@ public class Item extends BaseEntity {
         this.referencePrice = referencePrice;
     }
 
+    public Instant getReviewSubmittedAt() {
+        return reviewSubmittedAt;
+    }
+
     public ItemStatus getStatus() {
         return status;
     }

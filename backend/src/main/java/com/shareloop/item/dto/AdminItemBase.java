@@ -22,5 +22,6 @@ public record AdminItemBase(
         boolean active,
         boolean hiddenByAdmin,
         Instant createdAt,
+        Instant reviewSubmittedAt,
         Instant approvedAt,
         String imageUrl) {}

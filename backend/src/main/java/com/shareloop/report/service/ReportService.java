@@ -705,8 +705,12 @@ public class ReportService {
     public List<ItemReportBrief> findReportsOfItem(long itemId) {
         List<ItemReportBrief> briefs = new ArrayList<>();
         for (Report report : reportRepository.findByItemIdOrderByCreatedAtDescIdDesc(itemId)) {
-            briefs.add(
-                    new ItemReportBrief(report.getId(), report.getReason(), report.getStatus(), report.getCreatedAt()));
+            briefs.add(new ItemReportBrief(
+                    report.getId(),
+                    report.getReporterId(),
+                    report.getReason(),
+                    report.getStatus(),
+                    report.getCreatedAt()));
         }
         return briefs;
     }

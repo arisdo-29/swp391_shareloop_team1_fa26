@@ -199,7 +199,7 @@ describe('AdminItemDetail', () => {
     expect(screen.getByRole('button', { name: 'Hiện lại bài' })).toBeTruthy();
   });
 
-  it('bài đang ẩn có nút Hiện lại và lịch sử ẩn hiện', async () => {
+  it('bài đang ẩn có nút Hiện lại và vẫn đọc được lịch sử ẩn hiện từ API cũ', async () => {
     vi.mocked(adminItemApi.detail).mockResolvedValue(
       detail(
         {
@@ -217,6 +217,24 @@ describe('AdminItemDetail', () => {
     expect(screen.getByRole('button', { name: 'Hiện lại bài' })).toBeTruthy();
     expect(screen.getByText('Admin ẩn bài đăng bởi Quản trị')).toBeTruthy();
     expect(screen.getByText('Lý do: Vi phạm nội quy')).toBeTruthy();
+  });
+
+  it('hiện lịch sử của cả quản trị viên và chủ bài, kèm lý do từ chối', async () => {
+    vi.mocked(adminItemApi.detail).mockResolvedValue(
+      detail({
+        postHistory: [
+          { key: 'log-12', action: 'Từ chối bài', actorRole: 'ADMIN', actorName: 'Quản trị', reason: 'Ảnh chưa rõ.', createdAt: '2026-11-05T04:00:00Z' },
+          { key: 'log-11', action: 'Gửi bản sửa để duyệt', actorRole: 'OWNER', actorName: 'Lan An', reason: null, createdAt: '2026-11-05T03:00:00Z' },
+        ],
+      }, { status: 'REJECTED' }),
+    );
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Lịch sử bài đăng' })).toBeTruthy();
+    const rows = within(screen.getByRole('list', { name: 'Lịch sử bài đăng' })).getAllByRole('listitem');
+    expect(within(rows[0]).getByText('Từ chối bài bởi Quản trị')).toBeTruthy();
+    expect(within(rows[0]).getByText('Lý do: Ảnh chưa rõ.')).toBeTruthy();
+    expect(within(rows[1]).getByText('Gửi bản sửa để duyệt bởi Lan An')).toBeTruthy();
   });
 
   it('báo lỗi khi không tải được và cho thử lại', async () => {

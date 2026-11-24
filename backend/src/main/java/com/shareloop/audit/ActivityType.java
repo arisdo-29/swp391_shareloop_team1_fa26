@@ -43,6 +43,7 @@ public enum ActivityType {
     ADMIN_TOPUP_RECONCILED("Đối soát đơn nạp tiền"),
     ADMIN_ITEM_HIDDEN("Admin ẩn bài đăng"),
     ADMIN_ITEM_UNHIDDEN("Admin hiện lại bài đăng"),
+    ITEM_EDIT_SUBMITTED("Gửi bản sửa để duyệt"),
     ADMIN_VIEWED_CHAT("Admin xem tin nhắn giao dịch"),
     ITEM_DISPLAY_COMPENSATED("Cộng bù thời gian hiển thị"),
     POINTS_REVOKED("Thu hồi điểm");

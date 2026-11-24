@@ -771,6 +771,8 @@ Trả `AdminItemFullDetail`: `item` (như `AdminItemDetail` của trang duyệt 
 `requests` (mọi yêu cầu tới bài: `id`, `receiverName`, `type`, `status`, `offeredItemTitle`, `running`, `createdAt`), `hasRunningTransaction`, `runningRequestId`,
 `reports` (`id`, `reason`, `status`, `createdAt`), `hiddenReason` (lý do Admin đã ẩn, null khi không do Admin ẩn), `visibilityHistory` (nhật ký ẩn và hiện lại, mới nhất trước). `404 ITEM_NOT_FOUND` khi không có bài hoặc đã xoá.
 
+`postHistory` là lịch sử bài đăng, mới nhất trước. Mỗi dòng gồm `key`, `action` (nhãn tiếng Việt), `actorRole` (`ADMIN`, `OWNER`, `USER`, `SYSTEM`), `actorName`, `createdAt` và `reason`. Danh sách gồm thời điểm đăng, các lần gửi bản sửa có dữ liệu, hành động duyệt, từ chối, ẩn, hiện lại, các yêu cầu và báo cáo liên quan, lần gia hạn hoặc đẩy bài ghi nhận trong sổ cái và các lần hệ thống cộng bù thời gian. Lý do từ chối lấy từ nhật ký kiểm duyệt hoặc dữ liệu kiểm duyệt của bài cũ. Tên, thời gian và lý do thiếu dữ liệu trả `null`, các dòng chưa rõ thời điểm hiển thị sau các dòng có thời gian.
+
 ### POST /api/v1/admin/items/{id}/hide
 
 Body `{ "reason": "5 đến 500 ký tự" }`. Admin ẩn bài vi phạm:
