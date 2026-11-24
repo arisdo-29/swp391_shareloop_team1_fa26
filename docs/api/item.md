@@ -208,7 +208,7 @@ Tham số tùy chọn: `q` (tìm theo cụm từ trong tiêu đề món đồ, k
 `viewerKey` (số nguyên ≥ 0; khoá xoay của khách chưa đăng nhập, FE tự sinh một lần và giữ lại; bỏ qua khi có token). Tất cả bộ lọc đều không bắt buộc và kết hợp được với nhau;
 lọc ở server nên `totalElements` và phân trang tính trên kết quả đã lọc (TT-01). Kết quả là `ItemListPageResponse`:
 
-Khoảng giá dùng `minPrice` và `maxPrice` (số nguyên dương bằng đồng, bao gồm hai đầu). Có thể gửi một đầu. Khi có khoảng giá, API lọc bài Trao đổi có giá và loại bài chưa có giá. Nếu gửi `GIVE` cùng khoảng giá hoặc giá từ lớn hơn giá đến, API trả `400 ITEM_INVALID_PRICE_RANGE`.
+Khoảng giá dùng `minPrice` và `maxPrice` (số nguyên dương bằng đồng, bao gồm hai đầu). Có thể gửi một đầu. Khoảng giá áp dụng cho cả bài Cho tặng và bài Trao đổi. Có thể dùng cùng `offerType` để giới hạn theo hình thức. Khi có khoảng giá, API bỏ qua bài chưa có giá. Nếu giá từ lớn hơn giá đến, API trả `400 ITEM_INVALID_PRICE_RANGE`.
 
 Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2&condition=GOOD&offerType=GIVE`. `q` rỗng hoặc chỉ có khoảng trắng tương đương không tìm kiếm; `%` và `_` được xem là ký tự thường.
 

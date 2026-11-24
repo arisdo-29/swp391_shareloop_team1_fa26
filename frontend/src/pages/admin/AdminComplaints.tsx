@@ -214,6 +214,7 @@ interface ComplaintItemDisplay {
   imageUrl: string | null;
 }
 
+ fix/frontend-message-layout
 function ComplaintItem({
   item,
   compact = false,
@@ -228,6 +229,14 @@ function ComplaintItem({
   return (
     <div className={`admin-complaint-item ${compact ? 'admin-complaint-item-compact' : ''}`}>
       <Link to={detailTarget} aria-label={`Xem chi tiết ${item.title}`} className="admin-complaint-item-image">
+
+function ComplaintItem({ item, compact = false }: { item: ComplaintItemDisplay | null; compact?: boolean }) {
+  if (!item?.title) return <span className="text-text-muted">—</span>;
+  const target = `/admin/items/${item.id}`;
+  return (
+    <div className={`admin-complaint-item ${compact ? 'admin-complaint-item-compact' : ''}`}>
+      <Link to={target} aria-label={`Xem chi tiết ${item.title}`} className="admin-complaint-item-image">
+ develop
         <ItemImage
           src={item.imageUrl ?? undefined}
           alt={item.title}
@@ -235,11 +244,19 @@ function ComplaintItem({
         />
       </Link>
       <div className="min-w-0">
+ fix/frontend-message-layout
         <Link to={detailTarget} title={item.title} className="admin-complaint-item-title font-semibold text-primary hover:underline">
           {item.title}
         </Link>
         {!compact ? (
           <Link to={detailTarget} className="admin-complaint-item-detail">
+
+       <Link to={target} title={item.title} className="admin-complaint-item-title font-semibold text-primary hover:underline">
+          {item.title}
+        </Link>
+        {!compact ? (
+          <Link to={target} className="admin-complaint-item-detail">
+ develop
             Xem chi tiết bài đăng
           </Link>
         ) : null}
@@ -264,6 +281,7 @@ function listReportedUser(report: ReportResponse, enrichment?: ComplaintListEnri
   );
 }
 
+fix/frontend-message-layout
 function avatarInitials(name: string) {
   return name
     .trim()
@@ -312,6 +330,8 @@ function ComplaintTarget({
   return <ComplaintItem item={item} compact target={target} />;
 }
 
+
+ develop
 export function AdminComplaints() {
   const [status, setStatus] = useState<ReportStatus | ''>('');
   const [targetType, setTargetType] = useState<ReportTargetType | ''>('');
@@ -660,7 +680,11 @@ export function AdminComplaints() {
               <thead>
                 <tr>
                   <th>Mã hồ sơ</th>
+fix/frontend-message-layout
                   <th>Đối tượng báo cáo</th>
+
+                  <th>Bài đăng liên quan</th>
+ develop
                   <th>Loại khiếu nại/báo cáo</th>
                   <th>Người gửi báo cáo</th>
                   <th>Người bị báo cáo</th>
@@ -682,7 +706,11 @@ export function AdminComplaints() {
                     <tr key={report.id}>
                       <td className="admin-complaints-code">{reportCode(report.id)}</td>
                       <td>
+ fix/frontend-message-layout
                         <ComplaintTarget report={report} enrichment={enrichment} item={relatedItem} />
+
+                        <ComplaintItem item={relatedItem} compact />
+ develop
                       </td>
                       <td>{targetLabels[report.targetType]}</td>
                       <td>

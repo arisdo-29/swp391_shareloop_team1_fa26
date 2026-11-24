@@ -78,7 +78,7 @@ class ItemPublicApiIT extends IntegrationTest {
     }
 
     @Test
-    void browsePriceRangeFiltersBothRegularAndBoostedSwapListings() throws Exception {
+    void browsePriceRangeFiltersGiveAndSwapListingsIncludingBoostedItems() throws Exception {
         long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active ORDER BY id LIMIT 1")
                 .query(Long.class)
                 .single();
@@ -120,9 +120,29 @@ class ItemPublicApiIT extends IntegrationTest {
                         .param("maxPrice", "360000")
                         .param("rotationSeed", "0"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalElements").value(3))
                 .andExpect(jsonPath("$.items[0].referencePrice").value(240000))
-                .andExpect(jsonPath("$.items[1].referencePrice").value(360000));
+                .andExpect(jsonPath("$.items[0].offerType").value("SWAP"))
+                .andExpect(jsonPath("$.items[1].referencePrice").value(360000))
+                .andExpect(jsonPath("$.items[2].referencePrice").value(360000));
+        mvc.perform(get("/api/v1/items")
+                        .param("q", "Sách giá mẫu")
+                        .param("offerType", "GIVE")
+                        .param("minPrice", "240000")
+                        .param("maxPrice", "360000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.items[0].offerType").value("GIVE"))
+                .andExpect(jsonPath("$.items[0].referencePrice").value(360000));
+        mvc.perform(get("/api/v1/items")
+                        .param("q", "Sách giá mẫu")
+                        .param("offerType", "SWAP")
+                        .param("minPrice", "240000")
+                        .param("maxPrice", "360000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.items[0].offerType").value("SWAP"))
+                .andExpect(jsonPath("$.items[1].offerType").value("SWAP"));
         mvc.perform(get("/api/v1/items").param("minPrice", "360000").param("maxPrice", "240000"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("ITEM_INVALID_PRICE_RANGE"));
