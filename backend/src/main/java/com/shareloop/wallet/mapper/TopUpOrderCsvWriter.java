@@ -56,7 +56,7 @@ public class TopUpOrderCsvWriter {
         return csv.toString().getBytes(StandardCharsets.UTF_8);
     }
 
-    private static String statusLabel(PaymentOrderStatus status) {
+    static String statusLabel(PaymentOrderStatus status) {
         return switch (status) {
             case PENDING -> "Đang chờ";
             case SUCCESS -> "Thành công";

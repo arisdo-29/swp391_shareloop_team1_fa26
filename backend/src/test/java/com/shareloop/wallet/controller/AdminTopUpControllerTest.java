@@ -11,6 +11,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -27,6 +29,7 @@ import com.shareloop.wallet.entity.PaymentOrderStatus;
 import com.shareloop.wallet.entity.PaymentProvider;
 import com.shareloop.wallet.service.AdminTopUpService;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -71,6 +74,7 @@ class AdminTopUpControllerTest {
         String token = "Bearer " + jwt.issue(42L, false);
         mvc.perform(get(ADMIN + "/summary").header("Authorization", token)).andExpect(status().isForbidden());
         mvc.perform(get(ADMIN + "/export.csv").header("Authorization", token)).andExpect(status().isForbidden());
+        mvc.perform(get(ADMIN + "/export.xlsx").header("Authorization", token)).andExpect(status().isForbidden());
         mvc.perform(get(ADMIN + "/ORD123").header("Authorization", token)).andExpect(status().isForbidden());
         mvc.perform(post(ADMIN + "/ORD123/reconcile")
                         .header("Authorization", token)
@@ -95,6 +99,27 @@ class AdminTopUpControllerTest {
 
         verify(adminTopUpService)
                 .list(isNull(), isNull(), isNull(), isNull(), isNull(), eq(false), eq(false), eq(0), eq(20));
+    }
+
+    @Test
+    void adminCanExportExcelWithPaymentDateFilters() throws Exception {
+        String token = "Bearer " + jwt.issue(1L, true);
+        var day = LocalDate.parse("2026-11-24");
+        byte[] workbook = {1, 2, 3};
+        when(adminTopUpService.exportExcel(null, PaymentOrderStatus.SUCCESS, null, day, day, true, false))
+                .thenReturn(workbook);
+
+        mvc.perform(get(ADMIN + "/export.xlsx")
+                        .header("Authorization", token)
+                        .param("from", day.toString())
+                        .param("to", day.toString())
+                        .param("paidDate", "true")
+                        .param("status", "SUCCESS"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .andExpect(header().string(
+                                "Content-Disposition", org.hamcrest.Matchers.containsString("giao-dich-nap-tien.xlsx")))
+                .andExpect(content().bytes(workbook));
     }
 
     @Test

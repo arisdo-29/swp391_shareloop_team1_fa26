@@ -34,6 +34,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 public class AdminTopUpController {
     private static final MediaType TEXT_CSV_UTF8 = new MediaType("text", "csv", StandardCharsets.UTF_8);
+    private static final MediaType XLSX =
+            MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
     private final AdminTopUpService service;
 
@@ -83,6 +85,27 @@ public class AdminTopUpController {
                                 .build()
                                 .toString())
                 .contentType(TEXT_CSV_UTF8)
+                .body(body);
+    }
+
+    @GetMapping("/export.xlsx")
+    public ResponseEntity<byte[]> exportExcel(
+            @RequestParam(required = false) PaymentProvider provider,
+            @RequestParam(required = false) PaymentOrderStatus status,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "false") boolean paidDate,
+            @RequestParam(defaultValue = "false") boolean needsReconcile) {
+        byte[] body = service.exportExcel(provider, status, q, from, to, paidDate, needsReconcile);
+        return ResponseEntity.ok()
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename("giao-dich-nap-tien.xlsx", StandardCharsets.UTF_8)
+                                .build()
+                                .toString())
+                .contentType(XLSX)
                 .body(body);
     }
 

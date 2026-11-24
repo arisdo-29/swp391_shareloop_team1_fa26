@@ -18,6 +18,7 @@ import com.shareloop.wallet.entity.PaymentOrder;
 import com.shareloop.wallet.entity.PaymentOrderStatus;
 import com.shareloop.wallet.entity.PaymentProvider;
 import com.shareloop.wallet.mapper.TopUpOrderCsvWriter;
+import com.shareloop.wallet.mapper.TopUpOrderExcelWriter;
 import com.shareloop.wallet.repository.CreditLedgerRepository;
 import com.shareloop.wallet.repository.PaymentOrderRepository;
 import com.shareloop.wallet.repository.PaymentOrderSnapshot;
@@ -49,7 +50,7 @@ public class AdminTopUpService {
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final Instant EARLIEST = Instant.EPOCH;
     private static final Instant LATEST = Instant.parse("9999-12-31T00:00:00Z");
-    private static final int CSV_MAX_ROWS = 10_000;
+    private static final int EXPORT_MAX_ROWS = 10_000;
 
     // Chỉ các khoá VNPay cần để đối soát. Không trả vnp_SecureHash và các khoá khác.
     private static final List<String> SAFE_CALLBACK_KEYS = List.of(
@@ -67,6 +68,7 @@ public class AdminTopUpService {
     private final NotificationService notificationService;
     private final ActivityLogService activityLogService;
     private final TopUpOrderCsvWriter csvWriter;
+    private final TopUpOrderExcelWriter excelWriter;
     private final Clock clock;
 
     public AdminTopUpService(
@@ -77,6 +79,7 @@ public class AdminTopUpService {
             NotificationService notificationService,
             ActivityLogService activityLogService,
             TopUpOrderCsvWriter csvWriter,
+            TopUpOrderExcelWriter excelWriter,
             Clock clock) {
         this.paymentOrderRepository = paymentOrderRepository;
         this.creditLedgerRepository = creditLedgerRepository;
@@ -85,6 +88,7 @@ public class AdminTopUpService {
         this.notificationService = notificationService;
         this.activityLogService = activityLogService;
         this.csvWriter = csvWriter;
+        this.excelWriter = excelWriter;
         this.clock = clock;
     }
 
@@ -121,6 +125,29 @@ public class AdminTopUpService {
             LocalDate to,
             boolean paidDate,
             boolean needsReconcile) {
+        return csvWriter.write(findExportRows(provider, status, keyword, from, to, paidDate, needsReconcile));
+    }
+
+    public byte[] exportExcel(
+            PaymentProvider provider,
+            PaymentOrderStatus status,
+            String keyword,
+            LocalDate from,
+            LocalDate to,
+            boolean paidDate,
+            boolean needsReconcile) {
+        return excelWriter.write(
+                findExportRows(provider, status, keyword, from, to, paidDate, needsReconcile), from, to, paidDate);
+    }
+
+    private List<AdminTopUpOrderResponse> findExportRows(
+            PaymentProvider provider,
+            PaymentOrderStatus status,
+            String keyword,
+            LocalDate from,
+            LocalDate to,
+            boolean paidDate,
+            boolean needsReconcile) {
         Page<PaymentOrder> orders = findOrders(
                 provider,
                 status,
@@ -129,13 +156,9 @@ public class AdminTopUpService {
                 to,
                 paidDate,
                 needsReconcile,
-                PageRequest.of(0, CSV_MAX_ROWS, newestFirst(paidDate)));
+                PageRequest.of(0, EXPORT_MAX_ROWS, newestFirst(paidDate)));
         Map<Long, UserBrief> briefs = findBriefs(orders.getContent());
-        List<AdminTopUpOrderResponse> rows = new ArrayList<>();
-        for (PaymentOrder order : orders.getContent()) {
-            rows.add(toResponse(order, briefs));
-        }
-        return csvWriter.write(rows);
+        return orders.stream().map(order -> toResponse(order, briefs)).toList();
     }
 
     /**

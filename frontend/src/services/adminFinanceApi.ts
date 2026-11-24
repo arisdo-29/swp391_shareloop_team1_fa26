@@ -205,14 +205,14 @@ export const adminFinanceApi = {
       ),
     };
   },
-  async topUpOrdersCsv(params: AdminTopUpFilters): Promise<FinanceCsvDownload> {
-    const response = await http.get<Blob>('/api/v1/admin/finance/topup-orders/export.csv', {
+  async topUpOrdersExcel(params: AdminTopUpFilters): Promise<FinanceCsvDownload> {
+    const response = await http.get<Blob>('/api/v1/admin/finance/topup-orders/export.xlsx', {
       params,
       responseType: 'blob',
     });
     return {
       blob: response.data,
-      fileName: financeFileName(response.headers['content-disposition'], 'giao-dich-nap-tien.csv'),
+      fileName: financeFileName(response.headers['content-disposition'], 'giao-dich-nap-tien.xlsx'),
     };
   },
   async report(params: AdminDateParams) {
