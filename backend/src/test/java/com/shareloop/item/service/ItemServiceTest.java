@@ -1312,9 +1312,11 @@ class ItemServiceTest {
             items.put(id, approvedItem(id));
         }
         when(configService.getInt(ConfigKey.BOOST_MAX_PER_PAGE)).thenReturn(3);
-        when(itemRepository.findPublicBoostedIds(eq(null), eq(null), eq(null), eq(null), eq(""), any(Instant.class)))
+        when(itemRepository.findPublicBoostedIds(
+                        eq(null), eq(null), eq(null), eq(null), eq(""), any(Instant.class), eq(null), eq(null)))
                 .thenReturn(List.of(1L, 2L, 3L, 4L));
-        when(itemRepository.countPublicBrowseItems(eq(null), eq(null), eq(null), eq(null), eq(""), any(Instant.class)))
+        when(itemRepository.countPublicBrowseItems(
+                        eq(null), eq(null), eq(null), eq(null), eq(""), any(Instant.class), eq(null), eq(null)))
                 .thenReturn(7L);
         // findAllById không giữ thứ tự: trả lộn xộn để kiểm service tự sắp lại theo vòng xoay
         when(itemRepository.findAllById(List.of(1L, 2L, 3L)))
@@ -1328,6 +1330,8 @@ class ItemServiceTest {
                         eq(null),
                         eq(""),
                         any(Instant.class),
+                        eq(null),
+                        eq(null),
                         eq(List.of(1L, 2L, 3L, 4L)),
                         eq("newest"),
                         eq(1),
@@ -1340,6 +1344,8 @@ class ItemServiceTest {
                         eq(null),
                         eq(""),
                         any(Instant.class),
+                        eq(null),
+                        eq(null),
                         eq(List.of(1L, 2L, 3L, 4L)),
                         eq("newest"),
                         eq(3),

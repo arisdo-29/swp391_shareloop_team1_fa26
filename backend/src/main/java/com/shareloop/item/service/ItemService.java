@@ -617,15 +617,63 @@ public class ItemService {
             Long rotationSeed,
             Long currentUserId,
             Long viewerKey) {
+        return listPublicItems(
+                categoryId,
+                areaId,
+                q,
+                condition,
+                offerType,
+                page,
+                size,
+                boostedOnly,
+                sort,
+                rotationSeed,
+                currentUserId,
+                viewerKey,
+                null,
+                null);
+    }
+
+    @Transactional(readOnly = true)
+    public ItemListPageResponse listPublicItems(
+            Long categoryId,
+            Long areaId,
+            String q,
+            ItemCondition condition,
+            OfferType offerType,
+            int page,
+            int size,
+            boolean boostedOnly,
+            String sort,
+            Long rotationSeed,
+            Long currentUserId,
+            Long viewerKey,
+            Long minPrice,
+            Long maxPrice) {
+        boolean priceFilter = minPrice != null || maxPrice != null;
+        if ((priceFilter && offerType == OfferType.GIVE)
+                || (minPrice != null && maxPrice != null && minPrice > maxPrice)) {
+            throw new BusinessException(ItemErrorCode.ITEM_INVALID_PRICE_RANGE);
+        }
+        OfferType effectiveType = priceFilter ? OfferType.SWAP : offerType;
         BrowseFilter filter = new BrowseFilter(
                 categoryId,
                 areaId,
                 condition == null ? null : condition.name(),
-                offerType == null ? null : offerType.name(),
+                effectiveType == null ? null : effectiveType.name(),
                 q == null ? "" : q.trim(),
-                Instant.now());
+                Instant.now(),
+                minPrice,
+                maxPrice);
         List<Long> ring = itemRepository.findPublicBoostedIds(
-                filter.categoryId(), filter.areaId(), filter.condition(), filter.offerType(), filter.q(), filter.now());
+                filter.categoryId(),
+                filter.areaId(),
+                filter.condition(),
+                filter.offerType(),
+                filter.q(),
+                filter.now(),
+                filter.minPrice(),
+                filter.maxPrice());
         long round = rotationSeed != null ? rotationSeed : currentRotationRound(filter.now());
         long viewer = resolveViewerKey(currentUserId, viewerKey);
         // Số bài đẩy trên một trang nằm trong [0, size]: không vượt cỡ trang, cấu hình âm coi như 0.
@@ -657,7 +705,7 @@ public class ItemService {
     @Transactional(readOnly = true)
     public FeaturedItemsResponse listFeaturedItems(int limit, Long currentUserId, Long viewerKey) {
         Instant now = Instant.now();
-        List<Long> ring = itemRepository.findPublicBoostedIds(null, null, null, null, "", now);
+        List<Long> ring = itemRepository.findPublicBoostedIds(null, null, null, null, "", now, null, null);
         int rotateSeconds = rotateSeconds();
         long round = now.getEpochSecond() / rotateSeconds;
         List<Long> featuredIds =
@@ -677,11 +725,25 @@ public class ItemService {
 
     /** Bộ lọc của trang Tìm đồ, gom lại để khỏi truyền sáu tham số qua từng hàm. */
     private record BrowseFilter(
-            Long categoryId, Long areaId, String condition, String offerType, String q, Instant now) {}
+            Long categoryId,
+            Long areaId,
+            String condition,
+            String offerType,
+            String q,
+            Instant now,
+            Long minPrice,
+            Long maxPrice) {}
 
     private long countPublicBrowse(BrowseFilter filter) {
         return itemRepository.countPublicBrowseItems(
-                filter.categoryId(), filter.areaId(), filter.condition(), filter.offerType(), filter.q(), filter.now());
+                filter.categoryId(),
+                filter.areaId(),
+                filter.condition(),
+                filter.offerType(),
+                filter.q(),
+                filter.now(),
+                filter.minPrice(),
+                filter.maxPrice());
     }
 
     /**
@@ -730,6 +792,8 @@ public class ItemService {
                 filter.offerType(),
                 filter.q(),
                 filter.now(),
+                filter.minPrice(),
+                filter.maxPrice(),
                 excluded,
                 sort,
                 limit,

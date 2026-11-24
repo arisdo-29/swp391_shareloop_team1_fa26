@@ -69,6 +69,8 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
             + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
             + "AND (CAST(:offerType AS varchar) IS NULL OR i.offer_type = :offerType) "
+            + "AND (CAST(:minPrice AS bigint) IS NULL OR i.reference_price >= :minPrice) "
+            + "AND (CAST(:maxPrice AS bigint) IS NULL OR i.reference_price <= :maxPrice) "
             + "AND (CASE WHEN f_unaccent(lower(:q)) ~ '^[a-z0-9 ]+$' THEN "
             + "(' ' || regexp_replace(f_unaccent(lower(i.title)), '[^a-z0-9]+', ' ', 'g') || ' ') LIKE "
             + "'% ' || trim(regexp_replace(f_unaccent(lower(:q)), '[^a-z0-9]+', ' ', 'g')) || ' %' "
@@ -84,7 +86,14 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
     /** Tổng số bài khớp bộ lọc của trang Tìm đồ, gồm cả bài đang đẩy và bài thường. */
     @Query(value = "SELECT count(*) FROM items i WHERE" + PUBLIC_BROWSE_FILTER, nativeQuery = true)
     long countPublicBrowseItems(
-            Long categoryId, Long areaId, String condition, String offerType, String q, Instant now);
+            Long categoryId,
+            Long areaId,
+            String condition,
+            String offerType,
+            String q,
+            Instant now,
+            Long minPrice,
+            Long maxPrice);
 
     @Query(
             value = "SELECT i.category_id, count(*) FROM items i "
@@ -102,7 +111,14 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
                     + "AND i.boosted_until > :now ORDER BY i.id ASC",
             nativeQuery = true)
     List<Long> findPublicBoostedIds(
-            Long categoryId, Long areaId, String condition, String offerType, String q, Instant now);
+            Long categoryId,
+            Long areaId,
+            String condition,
+            String offerType,
+            String q,
+            Instant now,
+            Long minPrice,
+            Long maxPrice);
 
     /**
      * Phần danh sách thường của trang Tìm đồ: mọi bài khớp bộ lọc (kể cả bài đang đẩy) trừ các id trong
@@ -125,6 +141,8 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             String offerType,
             String q,
             Instant now,
+            Long minPrice,
+            Long maxPrice,
             Collection<Long> excludedIds,
             String sort,
             int limit,

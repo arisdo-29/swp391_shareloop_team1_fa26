@@ -155,6 +155,23 @@ afterEach(() => {
 });
 
 describe('giới thiệu Trợ lý AI trên trang Tìm đồ', () => {
+  it('chỉ lọc giá cho bài Trao đổi và bỏ khoảng giá khi đổi hình thức', async () => {
+    const user = userEvent.setup();
+    renderBrowse(['/browse?type=trade']);
+    await user.type(screen.getByRole('textbox', { name: 'Giá từ (đồng)' }), '240000');
+    await user.type(screen.getByRole('textbox', { name: 'Giá đến (đồng)' }), '360000');
+    await user.click(screen.getByRole('button', { name: 'Áp dụng giá' }));
+    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
+      offerType: 'SWAP', minPrice: 240000, maxPrice: 360000,
+    })));
+    await user.click(screen.getByRole('button', { name: 'Cho tặng' }));
+    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
+      offerType: 'GIVE',
+    })));
+    expect(vi.mocked(itemApi.list).mock.lastCall?.[0]).not.toHaveProperty('minPrice');
+    expect(screen.queryByRole('textbox', { name: 'Giá từ (đồng)' })).toBeNull();
+  });
+
   it('dẫn khách tới đăng nhập với đích quay về /ai và không gọi API hạn mức', async () => {
     renderBrowse();
 
