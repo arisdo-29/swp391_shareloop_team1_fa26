@@ -14,6 +14,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -92,6 +93,20 @@ public class ItemQueryService {
         }
         return titles;
     }
+
+    /** Giá và tiêu đề để thành viên xem lại món được đề nghị trong yêu cầu, kể cả bài đã xoá mềm. */
+    public Optional<OfferedItemDetails> findOfferedItemDetails(long itemId) {
+        if (jdbcClient == null) {
+            return Optional.empty();
+        }
+        return jdbcClient
+                .sql("SELECT title, reference_price FROM items WHERE id = :itemId")
+                .param("itemId", itemId)
+                .query(OfferedItemDetails.class)
+                .optional();
+    }
+
+    public record OfferedItemDetails(String title, Long referencePrice) {}
 
     // JdbcClient tự map cột id, title vào record theo tên thành phần.
 

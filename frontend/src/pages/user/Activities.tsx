@@ -1,4 +1,4 @@
-import { parseReferencePrice } from '../../utils/referencePrice';
+import { formatReferencePrice, parseReferencePrice } from '../../utils/referencePrice';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
@@ -2084,6 +2084,7 @@ function RequestPanel({
                     >
                       {request.offeredItemTitle ?? 'Xem chi tiết'}
                     </Link>
+                    <span className="block">{formatReferencePrice(request.offeredItemReferencePrice)}</span>
                   </p>
                 ) : null}
                 {request.status === 'PENDING'

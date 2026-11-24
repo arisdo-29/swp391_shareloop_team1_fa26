@@ -1,6 +1,7 @@
 package com.shareloop.request;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -84,6 +85,8 @@ class OfferTypeConversionIT extends IntegrationTest {
         long giveItemId = insertItem(donorId, "GIVE", "APPROVED");
         long offeredItemId = insertItem(receiverId, "GIVE", "APPROVED");
 
+        jdbc.update("UPDATE items SET reference_price = 280000 WHERE id = ?", offeredItemId);
+
         // when
         JsonNode response = createRequestViaApi(giveItemId, receiverId, new CreateRequest(offeredItemId));
 
@@ -92,6 +95,10 @@ class OfferTypeConversionIT extends IntegrationTest {
         assertThat(response.get("offeredItemId").asLong()).isEqualTo(offeredItemId);
         assertThat(response.get("itemOfferType").asString()).isEqualTo("GIVE");
         assertThat(response.get("conversionFee").asInt()).isEqualTo(postFee());
+        mockMvc.perform(get("/api/v1/items/{id}/requests", giveItemId)
+                        .header("Authorization", "Bearer " + jwtService.issue(donorId, false)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].offeredItemReferencePrice").value(280000));
     }
 
     @Test

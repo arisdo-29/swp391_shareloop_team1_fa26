@@ -53,6 +53,7 @@ export interface RequestResponse {
   donorId?: number | null;
   donorName?: string | null;
   offeredItemTitle?: string | null;
+  offeredItemReferencePrice?: number | null;
   trustStars?: number | null;
   rank?: string | null;
   complaintDeadline?: string | null;
@@ -208,6 +209,7 @@ export function toFeItemRequest(
     donorName: request.donorName ?? undefined,
     offeredItemId: request.offeredItemId ? String(request.offeredItemId) : undefined,
     offeredItemTitle: request.offeredItemTitle ?? undefined,
+    offeredItemReferencePrice: request.offeredItemReferencePrice ?? undefined,
     requesterId,
     requesterName: request.receiverName ?? undefined,
     requesterTrustStars: typeof trustStars === 'number' ? trustStars : undefined,

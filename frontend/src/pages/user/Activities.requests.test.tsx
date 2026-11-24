@@ -113,6 +113,19 @@ describe('danh sách yêu cầu ở Bài của tôi', () => {
     expect(screen.getByRole('link', { name: 'Tester 2' }).getAttribute('href')).toBe('/users/42');
   });
 
+  it.each([
+    [280000, /Giá tham khảo 280\.000/],
+    [null, /Chưa có giá tham khảo/],
+  ])('hiện giá tham khảo của món đề nghị đổi (%s)', async (price, label) => {
+    vi.mocked(requestApi.forItem).mockResolvedValue([
+      { ...pendingRequest, offeredItemId: 81, offeredItemTitle: 'Bàn phím', offeredItemReferencePrice: price },
+    ]);
+    render(<MemoryRouter><Activities /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem 1 yêu cầu' }));
+    expect(screen.getByRole('link', { name: 'Bàn phím' })).toBeTruthy();
+    expect(screen.getByText(label)).toBeTruthy();
+  });
+
   it('yêu cầu có cờ cảnh báo hiện nhãn tiếng Việt để chủ bài biết trước khi chọn', async () => {
     // given
     vi.mocked(requestApi.forItem).mockResolvedValue([
