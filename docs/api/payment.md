@@ -28,7 +28,8 @@ Hai nhánh ghi `paid_at` và `provider_txn_id` khi callback tới: `VnPayCallbac
 | provider | (bỏ trống) | VNPAY/MOCK/MANUAL; bỏ trống là mọi cổng |
 | status | (bỏ trống) | PENDING/SUCCESS/FAILED/EXPIRED/CANCELLED; bỏ trống là mọi trạng thái |
 | q | (bỏ trống) | Khớp một phần mã đơn, họ tên hoặc email người nạp (không phân biệt hoa thường) |
-| from, to | (bỏ trống) | Khoảng ngày tạo đơn |
+| from, to | (bỏ trống) | Khoảng ngày theo giờ Việt Nam, gồm cả hai ngày |
+| paidDate | false | true lọc và sắp theo thời điểm thanh toán, các đơn chưa có thời điểm thanh toán bị loại. Mặc định dùng ngày tạo đơn. |
 | needsReconcile | false | true chỉ lấy đơn cần đối soát |
 | page, size | 0, 20 | size 1..100 |
 
@@ -42,13 +43,13 @@ Trả `AdminTopUpOrderDetail`: `order` (như trên), `callbackData` (chỉ các 
 `vnp_TransactionNo`, `vnp_BankCode`, `vnp_PayDate`, `vnp_Amount`; không bao giờ có `vnp_SecureHash`), `ledgerLines` (các dòng sổ cái TOP_UP đã cộng
 cho đơn: `id`, `amount`, `balanceAfter`, `createdAt`). Lỗi `404 WALLET_PAYMENT_ORDER_NOT_FOUND`.
 
-### GET /api/v1/admin/finance/topup-orders/summary?from&to
+### GET /api/v1/admin/finance/topup-orders/summary?from&to&paidDate
 
-Trả `{ byStatus: [{ status, orderCount, amountVnd }], needsReconcileCount }`, luôn đủ năm trạng thái (đơn không có thì 0).
+Trả `{ byStatus: [{ status, orderCount, amountVnd }], needsReconcileCount }`, luôn đủ năm trạng thái (đơn không có thì 0). Cùng cách lọc ngày với danh sách.
 
 ### GET /api/v1/admin/finance/topup-orders/export.csv
 
-Cùng bộ lọc với danh sách (`provider`, `status`, `q`, `from`, `to`, `needsReconcile`), tối đa 10000 dòng mới nhất. UTF-8 có BOM.
+Cùng bộ lọc với danh sách (`provider`, `status`, `q`, `from`, `to`, `paidDate`, `needsReconcile`), tối đa 10000 dòng mới nhất. UTF-8 có BOM.
 
 ### POST /api/v1/admin/finance/topup-orders/{orderCode}/reconcile
 

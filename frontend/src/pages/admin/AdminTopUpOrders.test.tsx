@@ -11,9 +11,9 @@ import {
 } from '../../services/adminFinanceApi';
 import { AdminTopUpOrders as AdminTopUpOrdersPage } from './AdminTopUpOrders';
 
-function AdminTopUpOrders() {
+function AdminTopUpOrders({ path = '/admin/finance/topup-orders' }: { path?: string }) {
   return (
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <AdminTopUpOrdersPage />
     </MemoryRouter>
   );
@@ -212,16 +212,25 @@ describe('AdminTopUpOrders', () => {
   });
 
   it('mở từ trang Lịch sử giao dịch Credit kèm ?q thì lọc sẵn theo mã đơn đó', async () => {
-    window.history.pushState({}, '', '/admin/finance/topup-orders?q=ABCD1234');
-    try {
-      render(<AdminTopUpOrders />);
-      await screen.findByText('Lan An');
+    render(<AdminTopUpOrders path="/admin/finance/topup-orders?q=ABCD1234" />);
+    await screen.findByText('Lan An');
 
-      expect(adminFinanceApi.topUpOrders).toHaveBeenCalledWith({ q: 'ABCD1234', page: 0, size: 10 });
-      expect((screen.getByLabelText('Tìm đơn nạp') as HTMLInputElement).value).toBe('ABCD1234');
-    } finally {
-      window.history.pushState({}, '', '/');
-    }
+    expect(adminFinanceApi.topUpOrders).toHaveBeenCalledWith({ q: 'ABCD1234', page: 0, size: 10 });
+    expect((screen.getByLabelText('Tìm đơn nạp') as HTMLInputElement).value).toBe('ABCD1234');
+  });
+
+  it('mở từ cột tiền thu thì lọc đơn thành công theo ngày thanh toán', async () => {
+    const day = '2026-10-06';
+    render(<AdminTopUpOrders path={`/admin/finance/topup-orders?from=${day}&to=${day}&paidDate=true&status=SUCCESS`} />);
+    await screen.findByText('Lan An');
+
+    expect(adminFinanceApi.topUpOrders).toHaveBeenCalledWith({
+      from: day, to: day, paidDate: true, status: 'SUCCESS', page: 0, size: 10,
+    });
+    expect(adminFinanceApi.topUpSummary).toHaveBeenCalledWith({ from: day, to: day, paidDate: true });
+    expect((screen.getByLabelText('Từ ngày thanh toán') as HTMLInputElement).value).toBe(day);
+    expect((screen.getByLabelText('Đến ngày thanh toán') as HTMLInputElement).value).toBe(day);
+    expect((screen.getByLabelText('Trạng thái') as HTMLSelectElement).value).toBe('SUCCESS');
   });
 
   it('khoảng ngày ngược thì báo lỗi và không gọi lại máy chủ', async () => {

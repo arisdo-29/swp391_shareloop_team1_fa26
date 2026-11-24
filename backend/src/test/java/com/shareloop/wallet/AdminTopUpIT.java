@@ -17,7 +17,9 @@ import com.shareloop.wallet.entity.PaymentProvider;
 import com.shareloop.wallet.repository.PaymentOrderRepository;
 import com.shareloop.wallet.service.AdminTopUpService;
 import com.shareloop.wallet.service.CreditService;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -73,7 +75,7 @@ class AdminTopUpIT extends IntegrationTest {
 
         // when
         PageResponse<AdminTopUpOrderResponse> page =
-                adminTopUpService.list(PaymentProvider.VNPAY, null, userEmail, null, null, true, 0, 20);
+                adminTopUpService.list(PaymentProvider.VNPAY, null, userEmail, null, null, false, true, 0, 20);
 
         // then: chỉ đơn đã đóng mà VNPay đã thu tiền
         assertThat(page.items()).extracting(AdminTopUpOrderResponse::orderCode).containsExactly(flagged);
@@ -91,9 +93,9 @@ class AdminTopUpIT extends IntegrationTest {
 
         // when
         PageResponse<AdminTopUpOrderResponse> byEmail =
-                adminTopUpService.list(null, null, userEmail.toUpperCase(), null, null, false, 0, 20);
+                adminTopUpService.list(null, null, userEmail.toUpperCase(), null, null, false, false, 0, 20);
         PageResponse<AdminTopUpOrderResponse> byCode =
-                adminTopUpService.list(null, null, firstCode.substring(0, 12), null, null, false, 0, 20);
+                adminTopUpService.list(null, null, firstCode.substring(0, 12), null, null, false, false, 0, 20);
 
         // then
         assertThat(byEmail.items())
@@ -117,11 +119,46 @@ class AdminTopUpIT extends IntegrationTest {
                 java.time.LocalDate.of(2001, 1, 1),
                 java.time.LocalDate.of(2001, 1, 31),
                 false,
+                false,
                 0,
                 20);
 
         // then
         assertThat(page.items()).isEmpty();
+    }
+
+    @Test
+    void paidDay_matchesCollectedCashAndKeepsTheSameFilterInSummaryAndExport() {
+        LocalDate day = LocalDate.of(2001, 1, 2);
+        String paid = order("SUCCESS", Instant.parse("2001-01-01T17:00:00Z"));
+        String nextDay = order("SUCCESS", Instant.parse("2001-01-02T17:00:00Z"));
+        String pending = order("PENDING", null);
+        jdbc.update(
+                "UPDATE payment_orders SET created_at = '2001-01-02T08:00:00Z' WHERE order_code IN (?, ?)",
+                nextDay,
+                pending);
+
+        var byPayment =
+                adminTopUpService.list(null, PaymentOrderStatus.SUCCESS, userEmail, day, day, true, false, 0, 10);
+        assertThat(byPayment.items())
+                .extracting(AdminTopUpOrderResponse::orderCode)
+                .containsExactly(paid);
+        var byCreation =
+                adminTopUpService.list(null, PaymentOrderStatus.SUCCESS, userEmail, day, day, false, false, 0, 10);
+        assertThat(byCreation.items())
+                .extracting(AdminTopUpOrderResponse::orderCode)
+                .containsExactly(nextDay);
+        assertThat(adminTopUpService.summarize(day, day, true).byStatus())
+                .filteredOn(row -> row.status() == PaymentOrderStatus.SUCCESS)
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.orderCount()).isEqualTo(1);
+                    assertThat(row.amountVnd()).isEqualTo(20000);
+                });
+        String csv = new String(
+                adminTopUpService.exportCsv(null, PaymentOrderStatus.SUCCESS, userEmail, day, day, true, false),
+                StandardCharsets.UTF_8);
+        assertThat(csv).contains(paid).doesNotContain(nextDay, pending);
     }
 
     @Test
@@ -245,7 +282,7 @@ class AdminTopUpIT extends IntegrationTest {
         order("FAILED", null);
 
         // when
-        AdminTopUpSummary summary = adminTopUpService.summarize(null, null);
+        AdminTopUpSummary summary = adminTopUpService.summarize(null, null, false);
 
         // then: toàn hệ thống nên chỉ kiểm tối thiểu, đủ năm trạng thái và ít nhất một đơn cần đối soát
         assertThat(summary.byStatus()).hasSize(PaymentOrderStatus.values().length);

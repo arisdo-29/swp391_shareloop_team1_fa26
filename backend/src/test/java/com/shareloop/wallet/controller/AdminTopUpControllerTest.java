@@ -83,7 +83,7 @@ class AdminTopUpControllerTest {
     @Test
     void adminCanListOrders() throws Exception {
         String token = "Bearer " + jwt.issue(1L, true);
-        when(adminTopUpService.list(any(), any(), any(), any(), any(), anyBoolean(), anyInt(), anyInt()))
+        when(adminTopUpService.list(any(), any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyInt(), anyInt()))
                 .thenReturn(new PageResponse<>(List.of(order()), 0, 20, 1L));
 
         mvc.perform(get(ADMIN).header("Authorization", token))
@@ -93,7 +93,8 @@ class AdminTopUpControllerTest {
                 .andExpect(jsonPath("$.items[0].needsReconcile").value(true))
                 .andExpect(jsonPath("$.items[0].paymentUrl").doesNotExist());
 
-        verify(adminTopUpService).list(isNull(), isNull(), isNull(), isNull(), isNull(), eq(false), eq(0), eq(20));
+        verify(adminTopUpService)
+                .list(isNull(), isNull(), isNull(), isNull(), isNull(), eq(false), eq(false), eq(0), eq(20));
     }
 
     @Test

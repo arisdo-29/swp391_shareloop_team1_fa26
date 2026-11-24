@@ -95,11 +95,19 @@ public class AdminTopUpService {
             String keyword,
             LocalDate from,
             LocalDate to,
+            boolean paidDate,
             boolean needsReconcile,
             int page,
             int size) {
         Page<PaymentOrder> orders = findOrders(
-                provider, status, keyword, from, to, needsReconcile, PageRequest.of(page, size, newestFirst()));
+                provider,
+                status,
+                keyword,
+                from,
+                to,
+                paidDate,
+                needsReconcile,
+                PageRequest.of(page, size, newestFirst(paidDate)));
         Map<Long, UserBrief> briefs = findBriefs(orders.getContent());
         return PageResponse.from(orders.map(order -> toResponse(order, briefs)));
     }
@@ -111,9 +119,17 @@ public class AdminTopUpService {
             String keyword,
             LocalDate from,
             LocalDate to,
+            boolean paidDate,
             boolean needsReconcile) {
         Page<PaymentOrder> orders = findOrders(
-                provider, status, keyword, from, to, needsReconcile, PageRequest.of(0, CSV_MAX_ROWS, newestFirst()));
+                provider,
+                status,
+                keyword,
+                from,
+                to,
+                paidDate,
+                needsReconcile,
+                PageRequest.of(0, CSV_MAX_ROWS, newestFirst(paidDate)));
         Map<Long, UserBrief> briefs = findBriefs(orders.getContent());
         List<AdminTopUpOrderResponse> rows = new ArrayList<>();
         for (PaymentOrder order : orders.getContent()) {
@@ -140,12 +156,12 @@ public class AdminTopUpService {
         return new AdminTopUpOrderDetail(toResponse(order, briefs), safeCallback(order), ledgerLines);
     }
 
-    /** Số đơn và tổng tiền theo từng trạng thái, và số đơn cần đối soát, theo ngày tạo trong khoảng lọc. */
-    public AdminTopUpSummary summarize(LocalDate from, LocalDate to) {
+    /** Số đơn và tổng tiền theo từng trạng thái cùng số đơn cần đối soát trong khoảng lọc. */
+    public AdminTopUpSummary summarize(LocalDate from, LocalDate to, boolean paidDate) {
         Instant fromInstant = startOf(from);
         Instant toInstant = endOf(to);
         Map<PaymentOrderStatus, StatusTotalView> found = new LinkedHashMap<>();
-        for (StatusTotalView view : paymentOrderRepository.summarizeByStatus(fromInstant, toInstant)) {
+        for (StatusTotalView view : paymentOrderRepository.summarizeByStatus(fromInstant, toInstant, paidDate)) {
             found.put(view.getStatus(), view);
         }
         List<AdminTopUpSummary.StatusTotal> totals = new ArrayList<>();
@@ -154,7 +170,8 @@ public class AdminTopUpService {
             totals.add(new AdminTopUpSummary.StatusTotal(
                     status, view == null ? 0 : view.getOrderCount(), view == null ? 0 : view.getAmountVnd()));
         }
-        return new AdminTopUpSummary(totals, paymentOrderRepository.countNeedingReconcile(fromInstant, toInstant));
+        return new AdminTopUpSummary(
+                totals, paymentOrderRepository.countNeedingReconcile(fromInstant, toInstant, paidDate));
     }
 
     /**
@@ -215,6 +232,7 @@ public class AdminTopUpService {
             String keyword,
             LocalDate from,
             LocalDate to,
+            boolean paidDate,
             boolean needsReconcile,
             PageRequest pageRequest) {
         boolean hasKeyword = keyword != null && !keyword.isBlank();
@@ -225,11 +243,11 @@ public class AdminTopUpService {
             userIds.add(-1L);
         }
         return paymentOrderRepository.findAdminOrders(
-                provider, status, pattern, userIds, startOf(from), endOf(to), needsReconcile, pageRequest);
+                provider, status, pattern, userIds, startOf(from), endOf(to), paidDate, needsReconcile, pageRequest);
     }
 
-    private static Sort newestFirst() {
-        return Sort.by(Sort.Direction.DESC, "createdAt", "id");
+    private static Sort newestFirst(boolean paidDate) {
+        return Sort.by(Sort.Direction.DESC, paidDate ? "paidAt" : "createdAt", "id");
     }
 
     private static Instant startOf(LocalDate from) {

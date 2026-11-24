@@ -272,21 +272,20 @@ export function AdminFinanceReport() {
       </section>
       <section className="rounded-lg bg-white p-5 ring-1 ring-border">
         <h2 className="mb-1 section-title">Tiền thu theo ngày</h2>
-        <p className="mb-4 text-sm text-text-muted">Tổng tiền các đơn nạp đã thanh toán trong khoảng ngày đã chọn.</p>
+        <p className="mb-4 text-sm text-text-muted">Chọn một cột để xem các đơn nạp thành công theo ngày thanh toán.</p>
         <Suspense fallback={null}>
           <CashByDayChart days={report.cashByDay} />
         </Suspense>
       </section>
       <div className="grid gap-5 lg:grid-cols-2">
         {([
-          { title: 'Credit cộng theo loại', rows: report.creditInByType, tone: 'credit' },
-          { title: 'Credit trừ theo loại', rows: report.creditOutByType, tone: 'debit' },
+          { title: 'Credit cộng theo loại', rows: report.creditInByType },
+          { title: 'Credit trừ theo loại', rows: report.creditOutByType },
         ] as const).map((group) => <section key={group.title} className="min-w-0 rounded-lg bg-white p-5 ring-1 ring-border">
           <h2 className="mb-4 section-title">{group.title}</h2>
           <Suspense fallback={null}>
             <CreditByTypeChart
               title={group.title}
-              tone={group.tone}
               rows={group.rows.map((row) => ({
                 label: transactionLabels[row.type] ?? 'Khác',
                 value: row.amount,
