@@ -19,16 +19,19 @@ import { formatDateTime, hiddenSourceLabels, itemStatusLabels } from './adminIte
 import { AdminItemVisibilityDialog } from './AdminItemVisibilityDialog';
 import { offerTypeLabels } from './moderationDisplay';
 import { useDebouncedValue } from '../../utils/useDebouncedValue';
+import './admin-items.css';
 
 const PAGE_SIZE = 20;
 
 type VisibilityFilter = '' | 'visible' | 'hidden';
 
 function statusClass(status: ItemStatus) {
-  if (status === 'APPROVED' || status === 'TRADED') return 'bg-success-soft text-success';
+  if (status === 'PENDING_REVIEW') return 'bg-warning-soft text-warning';
+  if (status === 'APPROVED') return 'bg-success-soft text-success';
   if (status === 'REJECTED') return 'bg-error-soft text-error';
-  if (status === 'PENDING_REVIEW' || status === 'RESERVED') return 'bg-warning-soft text-warning';
-  return 'bg-surface-low text-text-muted';
+  if (status === 'RESERVED') return 'bg-info-soft text-info';
+  if (status === 'TRADED') return 'bg-primary text-white';
+  return 'border border-border bg-surface-low text-text-muted';
 }
 
 export function AdminItems() {
@@ -109,19 +112,22 @@ export function AdminItems() {
   }, [buildFilters, dateRangeError, page, reloadKey]);
 
   return (
-    <section className="space-y-5">
-      <PageHeader
-        title="Quản lý bài đăng"
-        description="Xem mọi bài đăng ở mọi trạng thái, ẩn bài vi phạm hoặc hiện lại bài đã ẩn."
-        action={
-          <Button variant="outline" disabled={loading} onClick={() => setReloadKey((current) => current + 1)}>
-            Tải lại
-          </Button>
-        }
-      />
+    <section className="admin-items-page">
+      <div className="admin-items-header">
+        <PageHeader
+          title="Quản lý bài đăng"
+          description="Xem mọi bài đăng ở mọi trạng thái, ẩn bài vi phạm hoặc hiện lại bài đã ẩn."
+          action={
+            <Button variant="outline" disabled={loading} onClick={() => setReloadKey((current) => current + 1)}>
+              Tải lại
+            </Button>
+          }
+        />
+      </div>
 
-      <div className="grid gap-4 rounded-lg bg-white p-4 ring-1 ring-border md:grid-cols-2 lg:grid-cols-4">
-        <div className="md:col-span-2 lg:col-span-4">
+      <div className="admin-items-filters">
+        <div className="admin-items-filter-search">
+          <span className="label">Tìm kiếm</span>
           <SearchField
             aria-label="Tìm bài đăng"
             placeholder="Tìm theo tiêu đề, tên hoặc email chủ bài..."
@@ -130,6 +136,7 @@ export function AdminItems() {
           />
         </div>
         <Select
+          className="admin-items-filter-status"
           label="Trạng thái"
           value={status}
           onChange={(event) => setStatus(event.target.value as ItemStatus | '')}
@@ -142,6 +149,7 @@ export function AdminItems() {
           ))}
         </Select>
         <Select
+          className="admin-items-filter-visibility"
           label="Hiển thị"
           value={visibility}
           onChange={(event) => setVisibility(event.target.value as VisibilityFilter)}
@@ -151,6 +159,7 @@ export function AdminItems() {
           <option value="hidden">Đang ẩn</option>
         </Select>
         <Select
+          className="admin-items-filter-offer"
           label="Hình thức"
           value={offerType}
           onChange={(event) => setOfferType(event.target.value as OfferType | '')}
@@ -162,7 +171,12 @@ export function AdminItems() {
             </option>
           ))}
         </Select>
-        <Select label="Danh mục" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+        <Select
+          className="admin-items-filter-category"
+          label="Danh mục"
+          value={categoryId}
+          onChange={(event) => setCategoryId(event.target.value)}
+        >
           <option value="">Tất cả</option>
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
@@ -171,14 +185,21 @@ export function AdminItems() {
           ))}
         </Select>
         <Field
+          className="admin-items-filter-from"
           label="Từ ngày"
           type="date"
           value={fromDate}
           error={dateRangeError || undefined}
           onChange={(event) => setFromDate(event.target.value)}
         />
-        <Field label="Đến ngày" type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
-        <label className="flex items-center gap-2 self-end pb-2 text-sm font-medium text-text-primary">
+        <Field
+          className="admin-items-filter-to"
+          label="Đến ngày"
+          type="date"
+          value={toDate}
+          onChange={(event) => setToDate(event.target.value)}
+        />
+        <label className="admin-items-filter-boosted">
           <input
             type="checkbox"
             className="size-4"
@@ -200,9 +221,9 @@ export function AdminItems() {
       {loading && !result ? (
         <SkeletonRows label="Đang tải danh sách bài đăng" />
       ) : result ? (
-        <div>
-          <div className="table-wrap">
-            <table className="data-table">
+        <div className="admin-items-table-section">
+          <div className="table-wrap admin-items-table-wrap">
+            <table className="data-table admin-items-table">
               <thead>
                 <tr>
                   <th>Bài đăng</th>
@@ -272,18 +293,18 @@ function ItemRow({
   // Bài đã có người nhận thì không ẩn được, Admin phải huỷ giao dịch trước. Backend vẫn kiểm lại mọi trường hợp.
   const hideBlocked = row.status === 'RESERVED' || row.status === 'TRADED';
   return (
-    <tr>
+    <tr className="admin-items-row">
       <td>
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
           <ItemImage
             src={row.imageUrl ?? undefined}
             alt={row.title}
-            className="h-11 w-14 shrink-0 rounded-md object-cover"
+            className="size-12 shrink-0 rounded-sm object-cover"
           />
           <div className="min-w-0">
             <Link
               to={`/admin/items/${row.id}`}
-              className="block max-w-56 truncate font-semibold text-primary hover:underline"
+              className="block truncate font-semibold text-primary hover:underline"
             >
               {row.title}
             </Link>
@@ -291,13 +312,13 @@ function ItemRow({
           </div>
         </div>
       </td>
-      <td>
-        <p className="font-semibold text-text-primary">{row.ownerName || 'Người dùng đã xóa'}</p>
-        {row.ownerEmail ? <p className="text-xs text-text-muted">{row.ownerEmail}</p> : null}
+      <td className="min-w-0">
+        <p className="truncate font-semibold text-text-primary">{row.ownerName || 'Người dùng đã xóa'}</p>
+        {row.ownerEmail ? <p className="truncate text-xs text-text-muted">{row.ownerEmail}</p> : null}
       </td>
-      <td>{offerTypeLabels[row.offerType]}</td>
+      <td className="whitespace-nowrap">{offerTypeLabels[row.offerType]}</td>
       <td>
-        <div className="flex flex-col items-start gap-1">
+        <div className="admin-items-statuses">
           <span
             className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-2xs font-semibold ${statusClass(row.status)}`}
           >
@@ -314,24 +335,25 @@ function ItemRow({
           {row.boosting ? <span className="text-xs font-semibold text-secondary">Đang đẩy</span> : null}
         </div>
       </td>
-      <td className="tabular-nums">{row.postFeePaid > 0 ? `${row.postFeePaid} Credit` : '—'}</td>
-      <td className="tabular-nums">{row.pendingRequestCount}</td>
-      <td className="text-xs">
+      <td className="whitespace-nowrap tabular-nums">{row.postFeePaid > 0 ? `${row.postFeePaid} Credit` : '—'}</td>
+      <td className="text-center tabular-nums">{row.pendingRequestCount}</td>
+      <td className="admin-items-time">
         <p>Tạo lúc: {formatDateTime(row.createdAt)}</p>
         <p>Duyệt lúc: {formatDateTime(row.approvedAt)}</p>
         <p>Hết hạn: {formatDateTime(row.expireAt)}</p>
       </td>
       <td>
-        <div className="flex flex-wrap gap-2">
+        <div className="admin-items-actions">
           <Link
             to={`/admin/items/${row.id}`}
-            className="inline-flex min-h-9 items-center rounded-md border border-border px-3 text-sm font-semibold text-text-primary hover:bg-surface-low"
+            className="admin-items-action inline-flex items-center justify-center border border-border font-semibold text-text-primary hover:bg-surface-low"
           >
             Xem
           </Link>
           {row.active ? (
             <Button
               variant="danger"
+              className="admin-items-action"
               disabled={hideBlocked}
               title={hideBlocked ? 'Bài đã có giao dịch, hãy huỷ giao dịch trước khi ẩn.' : undefined}
               onClick={onHide}
@@ -339,7 +361,7 @@ function ItemRow({
               Ẩn
             </Button>
           ) : (
-            <Button variant="outline" onClick={onUnhide}>
+            <Button variant="outline" className="admin-items-action" onClick={onUnhide}>
               Hiện lại
             </Button>
           )}

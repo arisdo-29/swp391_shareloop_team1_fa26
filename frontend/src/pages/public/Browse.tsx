@@ -137,7 +137,7 @@ function BrowseAiPrompt({ signedIn }: { signedIn: boolean }) {
   }, [signedIn]);
 
   return (
-    <aside aria-label="Trợ lý AI" className="space-y-3 rounded-lg border border-border bg-surface-low p-4">
+    <aside aria-label="Trợ lý AI" className="browse-ai-prompt rounded-lg border border-border bg-surface-low">
       <div className="min-w-0 space-y-1">
         <p className="text-sm font-semibold text-text-primary">Không biết tìm bằng từ khóa nào?</p>
         <p className="text-sm text-text-secondary">Mô tả món đồ bạn cần, Trợ lý AI sẽ tìm giúp bạn.</p>
@@ -545,10 +545,10 @@ export function Browse() {
       </div>
 
       <div className="browse-layout">
-        {/* Khối bên trái gồm thẻ bộ lọc và khung Trợ lý AI, cùng ẩn hiện và cùng dính khi cuộn */}
+        {/* Sidebar đứng yên trên desktop, chỉ danh sách sản phẩm cuộn độc lập */}
         <div
           id="browse-filters"
-          className={`${mobileFilters ? 'block' : 'hidden'} space-y-4 lg:sticky lg:top-24 lg:block`}
+          className={`${mobileFilters ? 'block' : 'hidden'} browse-sidebar lg:block`}
         >
           <aside aria-label="Bộ lọc" className="browse-filter-card">
             <div className="browse-filter-heading">
