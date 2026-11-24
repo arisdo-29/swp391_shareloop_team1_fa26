@@ -25,7 +25,7 @@ vi.mock('../../services/adminFinanceApi', () => ({
     topUpSummary: vi.fn(),
     topUpOrderDetail: vi.fn(),
     reconcileTopUp: vi.fn(),
-    topUpOrdersCsv: vi.fn(),
+    topUpOrdersExcel: vi.fn(),
   },
 }));
 
@@ -378,27 +378,30 @@ describe('AdminTopUpOrders', () => {
     ).toBeTruthy();
   });
 
-  it('xuất CSV theo bộ lọc đang chọn', async () => {
+  it('xuất Excel theo ngày thanh toán và bộ lọc đang chọn', async () => {
     const user = userEvent.setup();
-    const createObjectURL = vi.fn(() => 'blob:csv');
+    const createObjectURL = vi.fn(() => 'blob:xlsx');
     const revokeObjectURL = vi.fn();
     Object.assign(URL, { createObjectURL, revokeObjectURL });
     // jsdom không điều hướng khi bấm thẻ a tải file nên chặn lại cho khỏi báo lỗi.
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    vi.mocked(adminFinanceApi.topUpOrdersCsv).mockResolvedValue({
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    vi.mocked(adminFinanceApi.topUpOrdersExcel).mockResolvedValue({
       blob: new Blob(['a']),
-      fileName: 'giao-dich-nap-tien.csv',
+      fileName: 'giao-dich-nap-tien.xlsx',
     });
-    render(<AdminTopUpOrders />);
+    render(<AdminTopUpOrders path="/admin/finance/topup-orders?from=2026-10-06&to=2026-10-06&paidDate=true" />);
     await screen.findByText('Lan An');
     await user.click(screen.getByLabelText('Chỉ đơn cần đối soát'));
 
-    await user.click(screen.getByRole('button', { name: 'Xuất CSV' }));
+    await user.click(screen.getByRole('button', { name: 'Xuất Excel' }));
 
     await waitFor(() =>
-      expect(adminFinanceApi.topUpOrdersCsv).toHaveBeenCalledWith({ needsReconcile: true }),
+      expect(adminFinanceApi.topUpOrdersExcel).toHaveBeenCalledWith({
+        from: '2026-10-06', to: '2026-10-06', paidDate: true, needsReconcile: true,
+      }),
     );
     expect(createObjectURL).toHaveBeenCalled();
+    expect((click.mock.contexts[0] as HTMLAnchorElement).download).toBe('giao-dich-nap-tien.xlsx');
   });
 
   it('báo lỗi khi tải danh sách thất bại và cho thử lại ngay trong khung lỗi', async () => {

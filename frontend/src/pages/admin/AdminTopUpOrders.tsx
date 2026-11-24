@@ -181,14 +181,14 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
 
   const reload = () => setReloadKey((current) => current + 1);
 
-  const exportCsv = async () => {
+  const exportExcel = async () => {
     setExporting(true);
     setError('');
     try {
-      const download = await adminFinanceApi.topUpOrdersCsv(buildFilters());
+      const download = await adminFinanceApi.topUpOrdersExcel(buildFilters());
       downloadBlob(download.blob, download.fileName);
     } catch (caught) {
-      setError(adminErrorMessage(caught, 'Không xuất được file. Vui lòng thử lại.'));
+      setError(adminErrorMessage(caught, 'Không xuất được tệp Excel. Vui lòng thử lại.'));
     } finally {
       setExporting(false);
     }
@@ -216,8 +216,8 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
                 Về lịch sử giao dịch Credit
               </Link>
             ) : null}
-            <Button variant="outline" disabled={exporting} onClick={() => void exportCsv()}>
-              {exporting ? 'Đang xuất...' : 'Xuất CSV'}
+            <Button variant="outline" disabled={exporting || Boolean(dateRangeError)} onClick={() => void exportExcel()}>
+              {exporting ? 'Đang xuất...' : 'Xuất Excel'}
             </Button>
             <Button variant="outline" disabled={loading} onClick={reload}>
               Tải lại

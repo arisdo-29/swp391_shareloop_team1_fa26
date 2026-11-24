@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -225,7 +226,7 @@ public class FinanceReportExcelWriter {
         return index + 2;
     }
 
-    private static CellStyle tableStyle(XSSFWorkbook workbook, boolean bold, IndexedColors fill) {
+    static CellStyle tableStyle(XSSFWorkbook workbook, boolean bold, IndexedColors fill) {
         CellStyle style = workbook.createCellStyle();
         style.setBorderBottom(BorderStyle.THIN);
         style.setBorderTop(BorderStyle.THIN);
@@ -243,13 +244,15 @@ public class FinanceReportExcelWriter {
         return style;
     }
 
-    private static void row(Sheet sheet, int index, CellStyle style, Object... values) {
+    static void row(Sheet sheet, int index, CellStyle style, Object... values) {
         var row = sheet.createRow(index);
         for (int column = 0; column < values.length; column++) {
             var cell = row.createCell(column);
             switch (values[column]) {
                 case Number value -> cell.setCellValue(value.doubleValue());
                 case LocalDate value -> cell.setCellValue(value);
+                case LocalDateTime value -> cell.setCellValue(value);
+                case null -> cell.setBlank();
                 default -> cell.setCellValue(values[column].toString());
             }
             if (style != null) cell.setCellStyle(style);
@@ -273,7 +276,7 @@ public class FinanceReportExcelWriter {
         sheet.createFreezePane(0, headerRows);
     }
 
-    private static String displayDate(LocalDate date) {
+    static String displayDate(LocalDate date) {
         return date == null ? "Không giới hạn" : date.format(DISPLAY_DATE);
     }
 }
