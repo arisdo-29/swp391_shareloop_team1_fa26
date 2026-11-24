@@ -405,6 +405,15 @@ public enum ConfigKey {
             ConfigGroup.TRANSACTION,
             "Nhắc trước hạn phản hồi",
             "Số giờ trước hạn phản hồi đề nghị huỷ hoặc đề nghị dời lịch thì hệ thống nhắc bên được hỏi một lần."),
+    SWAP_SIMILAR_PRICE_PERCENT(
+            "swap_similar_price_percent",
+            "20",
+            ConfigGroup.TRANSACTION,
+            "Khoảng giá gợi ý món đổi",
+            "Mức chênh lệch tối đa tính theo phần trăm giá tham khảo của món đang xem.",
+            ValueType.INTEGER,
+            BigDecimal.ZERO,
+            BigDecimal.valueOf(100)),
     STUCK_REQUEST_HOURS(
             "stuck_request_hours",
             "48",

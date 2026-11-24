@@ -28,7 +28,8 @@ import { loginPath } from '../../utils/authRedirect';
 import { productDetailBackLink } from '../../utils/productDetailNavigation';
 import { findActiveSwapPair, isActiveRequestStatus } from '../../utils/swapRequest';
 import { requestOfferLabel } from '../../utils/requestOffer';
-import { formatReferencePrice } from '../../utils/referencePrice';
+import { usePublicConfig } from '../../utils/usePublicConfig';
+import { formatReferencePrice, rankOfferedItems } from '../../utils/referencePrice';
 import { OfferedItemOptions } from '../../components/OfferedItemOptions';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
@@ -41,6 +42,7 @@ export function ProductDetail() {
   const user = useAppSelector(selectCurrentUser);
   const navigate = useNavigate();
   const location = useLocation();
+  const { swap_similar_price_percent: similarPricePercent } = usePublicConfig();
   const [requestError, setRequestError] = useState('');
   const [requestSuccess, setRequestSuccess] = useState('');
   const [offeredItemId, setOfferedItemId] = useState('');
@@ -195,9 +197,16 @@ export function ProductDetail() {
           entry.id !== item.id &&
           (entry.status === 'approved' || entry.status === 'APPROVED') &&
           (!entry.expiresAt || new Date(entry.expiresAt).getTime() >= Date.now()) &&
+          !entry.hidden &&
           !activeTransactionItemIds.has(entry.id),
       )
     : [];
+
+  const swapOffers = rankOfferedItems(
+    eligibleOfferedItems,
+    item.type === 'trade' ? item.referencePrice : undefined,
+    similarPricePercent,
+  );
 
   // Bài Cho: bấm lại món đang chọn để bỏ kèm món. Bài Trao đổi: chọn món thì bỏ lựa chọn "Chỉ xin nhận".
   const chooseOfferedItem = (itemId: string) => {
@@ -537,7 +546,8 @@ export function ProductDetail() {
                 <fieldset className="min-w-0 w-full max-w-full space-y-2">
                   <legend className="label">Chọn món bạn mang đổi</legend>
                   <OfferedItemOptions
-                    items={eligibleOfferedItems}
+                    items={swapOffers.items}
+                    similarPriceIds={swapOffers.similarIds}
                     selectedItemId={offeredItemId}
                     onSelect={chooseOfferedItem}
                   />

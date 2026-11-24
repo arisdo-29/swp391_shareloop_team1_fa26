@@ -21,6 +21,7 @@ export const DEFAULT_PUBLIC_CONFIG: PublicConfig = {
   confirmed_stale_cancel_days: 3,
   shipping_send_deadline_days: 3,
   deadline_reminder_hours_before_response: 6,
+  swap_similar_price_percent: 20,
   report_hide_threshold: 3,
   reputation_clean_streak_for_star: 10,
   star_restore_min_distinct_partners: 5,
