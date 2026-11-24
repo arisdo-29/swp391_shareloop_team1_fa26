@@ -4,11 +4,11 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { adminRequestApi, type AdminRequestRow } from '../../services/adminRequestApi';
+import { adminRequestApi, type AdminRequestDetail, type AdminRequestRow } from '../../services/adminRequestApi';
 import { AdminTransactions } from './AdminTransactions';
 
 vi.mock('../../services/adminRequestApi', () => ({
-  adminRequestApi: { list: vi.fn(), cancel: vi.fn() },
+  adminRequestApi: { list: vi.fn(), detail: vi.fn(), cancel: vi.fn() },
 }));
 
 function row(overrides: Partial<AdminRequestRow>): AdminRequestRow {
@@ -34,6 +34,34 @@ function page(items: AdminRequestRow[]) {
   return { items, page: 0, size: 20, totalElements: items.length, totalPages: 1 };
 }
 
+function detail(rowValue: AdminRequestRow, offeredItem: AdminRequestDetail['offeredItem'] = null): AdminRequestDetail {
+  return {
+    id: rowValue.id,
+    type: rowValue.type,
+    status: rowValue.status,
+    donor: null,
+    receiver: { userId: rowValue.receiverId, name: rowValue.receiverName, email: null, trustStars: null, rank: null, locked: false },
+    item: {
+      itemId: rowValue.itemId,
+      title: rowValue.itemTitle,
+      imageUrl: `/media/items/${rowValue.itemId}.jpg`,
+      status: 'APPROVED',
+      offerType: rowValue.type,
+    },
+    offeredItem,
+    deliveryMethod: rowValue.deliveryMethod,
+    meetingPlace: null,
+    meetingTime: rowValue.meetingTime,
+    timeline: [],
+    photos: [],
+    reports: [],
+    points: [],
+    messagesViewable: false,
+    cancellable: true,
+    createdAt: rowValue.createdAt,
+  };
+}
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -43,9 +71,9 @@ function renderPage() {
 }
 
 beforeEach(() => {
-  vi.mocked(adminRequestApi.list).mockResolvedValue(
-    page([row({}), row({ id: 6, itemTitle: 'Sách cũ', status: 'COMPLETED', flagReason: null })]),
-  );
+  const rows = [row({}), row({ id: 6, itemTitle: 'Sách cũ', status: 'COMPLETED', flagReason: null })];
+  vi.mocked(adminRequestApi.list).mockResolvedValue(page(rows));
+  vi.mocked(adminRequestApi.detail).mockImplementation(async (id) => detail(rows.find((entry) => entry.id === id) ?? rows[0]));
   vi.mocked(adminRequestApi.cancel).mockResolvedValue({} as never);
 });
 
@@ -85,14 +113,54 @@ describe('AdminTransactions', () => {
     );
   });
 
-  it('hiện hình thức giao nhận, không hiện mã kỹ thuật, và tên bài dẫn tới trang chi tiết', async () => {
+  it('hiện hình thức giao nhận, không hiện mã kỹ thuật, và món đồ dẫn tới trang chi tiết bài đăng Admin', async () => {
     renderPage();
 
     const link = await screen.findByRole('link', { name: 'Xe đạp cũ' });
-    expect(link.getAttribute('href')).toBe('/admin/transactions/5');
+    expect(link.getAttribute('href')).toBe('/admin/items/1');
+    expect(screen.getByRole('link', { name: 'Xem chi tiết Xe đạp cũ' }).getAttribute('href')).toBe('/admin/items/1');
+    expect(screen.getByRole('columnheader', { name: 'Món đồ chủ bài' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Món đem đổi' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Hình thức' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Người nhận / trao đổi' })).toBeTruthy();
+    expect(screen.getAllByText('Cho tặng').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Gặp trực tiếp').length).toBeGreaterThan(0);
     expect(document.body.textContent ?? '').not.toContain('mã 5');
     expect(document.body.textContent ?? '').not.toContain('IN_PERSON');
+  });
+
+  it('hiện đúng món đồ trao đổi của từng giao dịch SWAP và liên kết bằng ID API trả về', async () => {
+    const first = row({ id: 8, itemId: 18, itemTitle: 'Máy ảnh của chủ bài', type: 'SWAP', flagReason: null });
+    const second = row({ id: 9, itemId: 19, itemTitle: 'Đàn của chủ bài', type: 'SWAP', flagReason: null });
+    vi.mocked(adminRequestApi.list).mockResolvedValue(page([first, second]));
+    vi.mocked(adminRequestApi.detail).mockImplementation(async (id) => {
+      const current = id === first.id ? first : second;
+      return detail(current, {
+        itemId: id === first.id ? 108 : 109,
+        title: id === first.id ? 'Xe đạp đề xuất' : 'Loa đề xuất',
+        imageUrl: `/media/items/${id === first.id ? 108 : 109}.jpg`,
+        status: 'RESERVED',
+        offerType: 'SWAP',
+      });
+    });
+
+    renderPage();
+
+    expect((await screen.findByRole('link', { name: 'Xe đạp đề xuất' })).getAttribute('href')).toBe('/admin/items/108');
+    expect(screen.getByRole('link', { name: 'Loa đề xuất' }).getAttribute('href')).toBe('/admin/items/109');
+    expect(screen.getByRole('link', { name: 'Xem chi tiết Xe đạp đề xuất' }).getAttribute('href')).toBe('/admin/items/108');
+    expect(screen.getAllByText('Trao đổi', { selector: 'span' })).toHaveLength(2);
+  });
+
+  it('chỉ hiện món được cho tặng với giao dịch GIVE', async () => {
+    renderPage();
+
+    const title = await screen.findByText('Xe đạp cũ');
+    const currentRow = title.closest('tr');
+    expect(currentRow).not.toBeNull();
+    expect(within(currentRow as HTMLTableRowElement).getByText('Cho tặng')).toBeTruthy();
+    expect(within(currentRow as HTMLTableRowElement).getAllByRole('img')).toHaveLength(1);
+    expect(within(currentRow as HTMLTableRowElement).getAllByText('—').length).toBeGreaterThan(0);
   });
 
   it('lọc theo loại, hình thức giao nhận và khoảng ngày gửi đúng tham số', async () => {

@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { Pagination } from '../../components/Pagination';
 import { Link } from 'react-router-dom';
-import { Alert, Button, Field, PageHeader, Select, SkeletonRows, TextArea } from '../../components/ui';
+import { Alert, Button, Field, ItemImage, PageHeader, Select, SkeletonRows, TextArea } from '../../components/ui';
 import {
   adminRequestApi,
   type AdminRequestListParams,
+  type AdminRequestItemInfo,
   type AdminRequestPage,
   type AdminRequestRow,
   type DeliveryMethod,
@@ -14,6 +15,7 @@ import type { ApiError } from '../../services/http';
 import type { ItemRequestStatus } from '../../types/domain';
 import { requestStatusLabel } from '../../utils/request';
 import { deliveryMethodLabels } from './adminItemDisplay';
+import './admin-transactions.css';
 
 const PAGE_SIZE = 20;
 const REASON_MIN = 5;
@@ -51,6 +53,7 @@ function errorMessage(error: unknown) {
 
 export function AdminTransactions() {
   const [result, setResult] = useState<AdminRequestPage | null>(null);
+  const [rowItems, setRowItems] = useState<Record<number, RequestItems>>({});
   const [status, setStatus] = useState<ItemRequestStatus | ''>('');
   const [stuckOnly, setStuckOnly] = useState(false);
   const [type, setType] = useState<'GIVE' | 'SWAP' | ''>('');
@@ -77,6 +80,7 @@ export function AdminTransactions() {
     let active = true;
     setLoading(true);
     setError('');
+    setRowItems({});
     const params: AdminRequestListParams = {
       status: status || undefined,
       stuck: stuckOnly ? true : undefined,
@@ -99,6 +103,21 @@ export function AdminTransactions() {
           return;
         }
         setResult(response);
+        void Promise.all(
+          response.items.map(async (row) => {
+            try {
+              const detail = await adminRequestApi.detail(row.id);
+              return [row.id, { item: detail.item, offeredItem: detail.offeredItem }] as const;
+            } catch {
+              return [row.id, null] as const;
+            }
+          }),
+        ).then((entries) => {
+          if (!active) return;
+          setRowItems(
+            Object.fromEntries(entries.filter((entry): entry is readonly [number, RequestItems] => entry[1] !== null)),
+          );
+        });
       })
       .catch((caught: ApiError) => {
         if (!active) return;
@@ -135,26 +154,28 @@ export function AdminTransactions() {
   };
 
   return (
-    <section className="space-y-5">
-      <PageHeader
-        title="Giao dịch"
-        description="Theo dõi mọi giao dịch và huỷ giao dịch bị kẹt: quá giờ hẹn mà chưa ai xác nhận bàn giao, hoặc một bên đang bị khoá tài khoản."
-        action={
-          <Button variant="outline" disabled={loading} onClick={() => setReloadKey((current) => current + 1)}>
-            Tải lại
-          </Button>
-        }
-      />
+    <section className="admin-transactions-page">
+      <div className="admin-transactions-header">
+        <PageHeader
+          title="Giao dịch"
+          description="Theo dõi mọi giao dịch và huỷ giao dịch bị kẹt: quá giờ hẹn mà chưa ai xác nhận bàn giao, hoặc một bên đang bị khoá tài khoản."
+          action={
+            <Button variant="outline" disabled={loading} onClick={() => setReloadKey((current) => current + 1)}>
+              Tải lại
+            </Button>
+          }
+        />
+      </div>
 
       <form
-        className="flex flex-wrap items-end gap-4 rounded-lg bg-white p-4 ring-1 ring-border"
+        className="admin-transactions-filters"
         onSubmit={(event) => {
           event.preventDefault();
           setQuery(queryInput.trim());
           setPage(0);
         }}
       >
-        <div className="min-w-48">
+        <div className="admin-transactions-filter-status">
           <Select
             label="Trạng thái"
             value={status}
@@ -171,7 +192,7 @@ export function AdminTransactions() {
             ))}
           </Select>
         </div>
-        <div className="min-w-40">
+        <div className="admin-transactions-filter-type">
           <Select
             label="Loại giao dịch"
             value={type}
@@ -185,7 +206,7 @@ export function AdminTransactions() {
             <option value="SWAP">Trao đổi</option>
           </Select>
         </div>
-        <div className="min-w-40">
+        <div className="admin-transactions-filter-delivery">
           <Select
             label="Hình thức giao nhận"
             value={deliveryMethod}
@@ -199,29 +220,33 @@ export function AdminTransactions() {
             <option value="SHIPPING">Gửi hàng</option>
           </Select>
         </div>
-        <Field
-          label="Từ ngày"
-          type="date"
-          value={fromDate}
-          error={dateRangeError || undefined}
-          onChange={(event) => {
-            setFromDate(event.target.value);
-            setPage(0);
-          }}
-        />
-        <Field
-          label="Đến ngày"
-          type="date"
-          value={toDate}
-          onChange={(event) => {
-            setToDate(event.target.value);
-            setPage(0);
-          }}
-        />
-        <label className="grid gap-1.5 text-sm font-medium">
+        <div className="admin-transactions-filter-date">
+          <Field
+            label="Từ ngày"
+            type="date"
+            value={fromDate}
+            error={dateRangeError || undefined}
+            onChange={(event) => {
+              setFromDate(event.target.value);
+              setPage(0);
+            }}
+          />
+        </div>
+        <div className="admin-transactions-filter-date">
+          <Field
+            label="Đến ngày"
+            type="date"
+            value={toDate}
+            onChange={(event) => {
+              setToDate(event.target.value);
+              setPage(0);
+            }}
+          />
+        </div>
+        <label className="admin-transactions-filter-search grid gap-1.5 text-sm font-medium">
           Tìm theo tên bài hoặc tên người
           <input
-            className="rounded-md border border-border bg-white px-3 py-2"
+            className="admin-transactions-search-input rounded-md border border-border bg-white px-3 py-2"
             value={queryInput}
             maxLength={100}
             onChange={(event) => setQueryInput(event.target.value)}
@@ -281,13 +306,15 @@ export function AdminTransactions() {
         <SkeletonRows label="Đang tải giao dịch" />
       ) : result ? (
         <div>
-          <div className="table-wrap">
-            <table className="data-table">
+          <div className="table-wrap admin-transactions-table-wrap">
+            <table className="data-table admin-transactions-table">
               <thead>
                 <tr>
-                  <th>Bài đăng</th>
+                  <th>Món đồ chủ bài</th>
+                  <th>Món đem đổi</th>
+                  <th>Hình thức</th>
                   <th>Chủ bài</th>
-                  <th>Người nhận</th>
+                  <th>Người nhận / trao đổi</th>
                   <th>Trạng thái</th>
                   <th>Giao nhận</th>
                   <th>Giờ hẹn</th>
@@ -299,6 +326,7 @@ export function AdminTransactions() {
                   <TransactionRow
                     key={row.id}
                     row={row}
+                    items={rowItems[row.id]}
                     onCancel={() => {
                       setNotice('');
                       setCancelling(row);
@@ -307,7 +335,7 @@ export function AdminTransactions() {
                 ))}
                 {result.items.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center text-text-muted">
+                    <td colSpan={9} className="text-center text-text-muted">
                       Không có giao dịch phù hợp bộ lọc hiện tại.
                     </td>
                   </tr>
@@ -330,22 +358,55 @@ export function AdminTransactions() {
   );
 }
 
-function TransactionRow({ row, onCancel }: { row: AdminRequestRow; onCancel: () => void }) {
+interface RequestItems {
+  item: AdminRequestItemInfo;
+  offeredItem: AdminRequestItemInfo | null;
+}
+
+function TransactionItem({ item }: { item: AdminRequestItemInfo | null }) {
+  if (!item?.title) return <span className="text-text-muted">—</span>;
+
+  const target = `/admin/items/${item.itemId}`;
+  return (
+    <div className="admin-transaction-item">
+      <Link to={target} aria-label={`Xem chi tiết ${item.title}`} className="admin-transaction-item-image">
+        <ItemImage src={item.imageUrl ?? undefined} alt={item.title} className="size-14 rounded-md object-cover" />
+      </Link>
+      <div className="admin-transaction-item-content">
+        <Link to={target} className="admin-transaction-item-title font-semibold text-primary hover:underline" title={item.title}>
+          {item.title}
+        </Link>
+        <Link to={target} className="admin-transaction-item-detail" aria-label={`Xem đầy đủ ${item.title}`}>
+          Xem chi tiết
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function TransactionRow({ row, items, onCancel }: { row: AdminRequestRow; items?: RequestItems; onCancel: () => void }) {
+  const mainItem: AdminRequestItemInfo = items?.item ?? {
+    itemId: row.itemId,
+    title: row.itemTitle,
+    imageUrl: null,
+    status: null,
+    offerType: row.type,
+  };
+
   return (
     <tr>
       <td>
-        <Link
-          to={`/admin/transactions/${row.id}`}
-          className="cell-truncate block font-semibold text-primary hover:underline"
-          title={row.itemTitle || undefined}
-        >
-          {row.itemTitle || 'Bài đã xoá'}
-        </Link>
-        <p className="text-xs text-text-muted">{row.type === 'SWAP' ? 'Trao đổi' : 'Cho tặng'}</p>
+        <TransactionItem item={mainItem} />
       </td>
-      <td>{row.donorName || '—'}</td>
-      <td>{row.receiverName || '—'}</td>
-      <td>
+      <td>{row.type === 'SWAP' ? <TransactionItem item={items?.offeredItem ?? null} /> : <span className="text-text-muted">—</span>}</td>
+      <td className="admin-transaction-type-cell">
+        <span className={`admin-transaction-type ${row.type === 'SWAP' ? 'admin-transaction-type-swap' : 'admin-transaction-type-give'}`}>
+          {row.type === 'SWAP' ? 'Trao đổi' : 'Cho tặng'}
+        </span>
+      </td>
+      <td className="admin-transaction-person">{row.donorName || '—'}</td>
+      <td className="admin-transaction-person">{row.receiverName || '—'}</td>
+      <td className="admin-transaction-status">
         <span
           className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-2xs font-semibold ${statusClass(row.status)}`}
         >
@@ -358,9 +419,9 @@ function TransactionRow({ row, onCancel }: { row: AdminRequestRow; onCancel: () 
           </p>
         ))}
       </td>
-      <td className="text-xs">{row.deliveryMethod ? deliveryMethodLabels[row.deliveryMethod] : '—'}</td>
-      <td className="text-xs">{formatDateTime(row.meetingTime)}</td>
-      <td>
+      <td className="admin-transaction-delivery text-xs">{row.deliveryMethod ? deliveryMethodLabels[row.deliveryMethod] : '—'}</td>
+      <td className="admin-transaction-time text-xs">{formatDateTime(row.meetingTime)}</td>
+      <td className="admin-transaction-actions">
         {cancellableStatuses.includes(row.status) ? (
           <Button variant="danger" size="sm" onClick={onCancel}>
             Huỷ giao dịch
