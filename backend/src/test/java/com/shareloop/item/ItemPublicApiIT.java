@@ -78,6 +78,57 @@ class ItemPublicApiIT extends IntegrationTest {
     }
 
     @Test
+    void browsePriceRangeFiltersBothRegularAndBoostedSwapListings() throws Exception {
+        long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long areaId = jdbc.sql("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long userId = jdbc.sql(
+                        "INSERT INTO users (email, password_hash, full_name, phone, status) "
+                                + "VALUES ('price-test@shareloop.local', 'unused', 'Test', '0900000399', 'ACTIVE') RETURNING id")
+                .query(Long.class)
+                .single();
+        for (int i = 0; i < 5; i++) {
+            var type = i == 4 ? OfferType.GIVE : OfferType.SWAP;
+            var item = new Item(
+                    userId,
+                    categoryId,
+                    areaId,
+                    type,
+                    "Sách giá mẫu " + i,
+                    "Sách còn tốt",
+                    type == OfferType.SWAP ? "Sách khác" : null,
+                    ItemCondition.GOOD,
+                    null,
+                    null);
+            item.approve();
+            if (i != 3) {
+                item.setReferencePrice(i == 0 ? 240000L : i == 2 ? 400000L : 360000L);
+            }
+            items.saveAndFlush(item);
+            if (i == 0 || i == 2) {
+                jdbc.sql("UPDATE items SET boosted_until = CURRENT_TIMESTAMP + INTERVAL '1 day' WHERE id = :id")
+                        .param("id", item.getId())
+                        .update();
+            }
+        }
+        mvc.perform(get("/api/v1/items")
+                        .param("q", "Sách giá mẫu")
+                        .param("minPrice", "240000")
+                        .param("maxPrice", "360000")
+                        .param("rotationSeed", "0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.items[0].referencePrice").value(240000))
+                .andExpect(jsonPath("$.items[1].referencePrice").value(360000));
+        mvc.perform(get("/api/v1/items").param("minPrice", "360000").param("maxPrice", "240000"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ITEM_INVALID_PRICE_RANGE"));
+    }
+
+    @Test
     void browseHidesItemsOfDisabledCategoryOrAreaAndShowsThemAgainWhenEnabled() throws Exception {
         // given: một bài đã duyệt thuộc danh mục và khu vực đang bật
         long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")

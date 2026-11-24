@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   Button,
   EmptyState,
+  Field,
   Icon,
   LoadingState,
   PageHeader,
@@ -155,6 +156,44 @@ function BrowseAiPrompt({ signedIn }: { signedIn: boolean }) {
   );
 }
 
+function PriceFilter({
+  minPrice,
+  maxPrice,
+  onApply,
+}: {
+  minPrice?: number;
+  maxPrice?: number;
+  onApply: (min: string, max: string) => void;
+}) {
+  const [minInput, setMinInput] = useState(minPrice?.toString() ?? '');
+  const [maxInput, setMaxInput] = useState(maxPrice?.toString() ?? '');
+  const [error, setError] = useState('');
+
+  function apply() {
+    const min = positiveIntegerParam(minInput.trim());
+    const max = positiveIntegerParam(maxInput.trim());
+    if ((minInput.trim() && min === undefined) || (maxInput.trim() && max === undefined)) {
+      setError('Nhập giá bằng số nguyên dương.');
+      return;
+    }
+    if (min !== undefined && max !== undefined && min > max) {
+      setError('Giá từ phải nhỏ hơn hoặc bằng giá đến.');
+      return;
+    }
+    setError('');
+    onApply(min?.toString() ?? '', max?.toString() ?? '');
+  }
+
+  return (
+    <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); apply(); }}>
+      <Field label="Giá từ (đồng)" inputMode="numeric" value={minInput} onChange={(event) => setMinInput(event.target.value)} />
+      <Field label="Giá đến (đồng)" inputMode="numeric" value={maxInput} onChange={(event) => setMaxInput(event.target.value)} />
+      {error ? <p role="alert" className="text-xs text-error">{error}</p> : null}
+      <Button variant="outline" type="submit">Áp dụng giá</Button>
+    </form>
+  );
+}
+
 export function Browse() {
   const [params, setParams] = useSearchParams();
   const currentUser = useAppSelector(selectCurrentUser);
@@ -180,6 +219,11 @@ export function Browse() {
   const lastAppliedQueryRef = useRef(q);
   const typeParam = params.get('type');
   const type: ItemType | '' = typeParam === 'gift' || typeParam === 'trade' ? typeParam : '';
+  const rawMinPrice = type === 'trade' ? positiveIntegerParam(params.get('minPrice')) : undefined;
+  const rawMaxPrice = type === 'trade' ? positiveIntegerParam(params.get('maxPrice')) : undefined;
+  const invalidPriceRange = rawMinPrice !== undefined && rawMaxPrice !== undefined && rawMinPrice > rawMaxPrice;
+  const minPrice = invalidPriceRange ? undefined : rawMinPrice;
+  const maxPrice = invalidPriceRange ? undefined : rawMaxPrice;
   const categoryId = positiveIntegerParam(params.get('categoryId'));
   const category = categoryId ? String(categoryId) : '';
   const conditionParam = params.get('condition');
@@ -255,6 +299,8 @@ export function Browse() {
       q: q.trim() || undefined,
       condition: condition || undefined,
       offerType: type ? OFFER_TYPE_BY_TYPE[type] : undefined,
+      ...(minPrice !== undefined ? { minPrice } : {}),
+      ...(maxPrice !== undefined ? { maxPrice } : {}),
     };
     // Mọi thứ quyết định tập kết quả, trừ số trang. Đổi bất kỳ phần nào thì là bộ lọc mới.
     const filterKey = JSON.stringify({ ...requestParams, boostedOnly, viewerKey });
@@ -325,7 +371,7 @@ export function Browse() {
     return () => {
       active = false;
     };
-  }, [areaId, boostedOnly, categoryId, condition, itemsReloadKey, page, q, type, viewerKey]);
+  }, [areaId, boostedOnly, categoryId, condition, itemsReloadKey, maxPrice, minPrice, page, q, type, viewerKey]);
 
   useEffect(() => {
     if (!legacyDistrict || params.has('areaId')) return;
@@ -341,6 +387,11 @@ export function Browse() {
 
   const setFilter = (key: BrowseFilterKey, value: string) => {
     setParams(updateBrowseSearchParams(params, { [key]: value }));
+    setPage(0);
+  };
+
+  const setPriceFilter = (min: string, max: string) => {
+    setParams(updateBrowseSearchParams(params, { minPrice: min, maxPrice: max }));
     setPage(0);
   };
 
@@ -372,6 +423,9 @@ export function Browse() {
           label: type === 'gift' ? 'Cho tặng' : 'Trao đổi',
           clear: () => setFilter('type', ''),
         }
+      : null,
+    minPrice !== undefined || maxPrice !== undefined
+      ? { key: 'price', label: 'Khoảng giá', clear: () => setPriceFilter('', '') }
       : null,
     // Chưa tải xong danh mục hoặc không tìm thấy tên thì ẩn chip, không hiện id kỹ thuật
     selectedCategoryName
@@ -417,6 +471,14 @@ export function Browse() {
         value={type}
         onChange={(value) => setFilter('type', value)}
       />
+      {type === 'trade' ? (
+        <PriceFilter
+          key={String(rawMinPrice) + ':' + String(rawMaxPrice)}
+          minPrice={rawMinPrice}
+          maxPrice={rawMaxPrice}
+          onApply={setPriceFilter}
+        />
+      ) : null}
       <Select
         label="Danh mục"
         value={category}

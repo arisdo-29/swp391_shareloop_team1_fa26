@@ -22,6 +22,8 @@ export interface ItemListParams {
   areaId?: number;
   condition?: ApiCondition;
   offerType?: OfferType;
+  minPrice?: number;
+  maxPrice?: number;
   page?: number;
   size?: number;
   boosted?: boolean;
@@ -206,6 +208,8 @@ export function itemListUrl(params: ItemListParams = {}): string {
   if (params.areaId !== undefined) query.set('areaId', String(params.areaId));
   if (params.condition !== undefined) query.set('condition', params.condition);
   if (params.offerType !== undefined) query.set('offerType', params.offerType);
+  if (params.minPrice !== undefined) query.set('minPrice', String(params.minPrice));
+  if (params.maxPrice !== undefined) query.set('maxPrice', String(params.maxPrice));
   if (params.boosted !== undefined) query.set('boosted', String(params.boosted));
   if (params.sort !== undefined) query.set('sort', params.sort);
   if (params.page !== undefined) query.set('page', String(params.page));

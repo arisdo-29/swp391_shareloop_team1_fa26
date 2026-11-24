@@ -7,6 +7,9 @@ import org.springframework.http.HttpStatus;
  * Mã lỗi của module item; tiền tố ITEM_ và là một phần của contract (docs/api/item.md).
  */
 public enum ItemErrorCode implements ErrorCode {
+    ITEM_INVALID_PRICE_RANGE(
+            HttpStatus.BAD_REQUEST,
+            "Khoảng giá chỉ áp dụng cho bài Trao đổi và giá từ phải nhỏ hơn hoặc bằng giá đến."),
     ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy bài đăng."),
     ITEM_SWAP_DESIRED_ITEM_REQUIRED(HttpStatus.BAD_REQUEST, "Bài đăng trao đổi bắt buộc phải có món mong muốn."),
     ITEM_DEFECT_NOTE_REQUIRED(HttpStatus.BAD_REQUEST, "Bài đăng đồ lỗi bắt buộc phải có mô tả lỗi."),
