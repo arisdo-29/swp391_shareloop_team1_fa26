@@ -623,7 +623,7 @@ export function Browse() {
           ) : items.length ? (
             <div data-browse-results className="browse-product-grid">
               {items.map((item) => (
-                <ProductCard key={item.id} item={item} />
+                <ProductCard key={item.id} item={item} showReferencePrice />
               ))}
             </div>
           ) : (
