@@ -28,8 +28,12 @@ import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.reputation.dto.RepeatedPair;
+import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.review.ReviewErrorCode;
 import com.shareloop.review.dto.ChecklistAnswer;
+import com.shareloop.review.dto.ReviewQueueFilter;
+import com.shareloop.review.dto.ReviewQueueFilter.RiskSignal;
 import com.shareloop.review.entity.ReviewItem;
 import com.shareloop.review.repository.ReviewItemRepository;
 import com.shareloop.review.repository.ReviewQueueRepository;
@@ -42,9 +46,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
+import org.springframework.data.domain.Page;
 import tools.jackson.databind.json.JsonMapper;
 
 class ReviewServiceTest {
@@ -60,6 +66,7 @@ class ReviewServiceTest {
     private final CategoryService categoryService = mock(CategoryService.class);
     private final AreaService areaService = mock(AreaService.class);
     private final CategoryAttributeService categoryAttributeService = mock(CategoryAttributeService.class);
+    private final ReputationService reputationService = mock(ReputationService.class);
     private final ReviewItem reviewItem = mock(ReviewItem.class);
     private final ReviewService service = new ReviewService(
             queueRepository,
@@ -73,6 +80,7 @@ class ReviewServiceTest {
             categoryService,
             areaService,
             categoryAttributeService,
+            reputationService,
             JsonMapper.builder().build());
 
     @BeforeEach
@@ -87,15 +95,36 @@ class ReviewServiceTest {
 
     @Test
     void pendingResponseIncludesChecklist() {
-        when(queueRepository.findPendingReviewQueue(any(), anyInt())).thenReturn(List.of());
+        when(queueRepository.findFilteredQueue(
+                        any(), eq(""), eq(null), eq(null), eq(null), eq(false), eq(List.of(0L)), eq(null)))
+                .thenReturn(Page.empty());
 
-        var result = service.listPendingWithChecklist(0, 20);
+        var result = service.listPendingWithChecklist(0, 20, new ReviewQueueFilter(null, null, null, null));
 
         assertThat(result.items()).isEmpty();
         assertThat(result.checklist())
                 .containsExactly(
                         new ChecklistItem(11L, "photos", "Ảnh đúng món"),
                         new ChecklistItem(12L, "description", "Mô tả trung thực"));
+    }
+
+    @Test
+    void repeatedPairFilterUsesConfiguredAlertAndIncludesBothPeople() {
+        when(configService.getInt(ConfigKey.REPUTATION_PAIR_WINDOW_DAYS)).thenReturn(90);
+        when(configService.getInt(ConfigKey.REPUTATION_PAIR_ALERT_THRESHOLD)).thenReturn(5);
+        when(reputationService.findRepeatedPairs(any(Instant.class), eq(5)))
+                .thenReturn(List.of(new RepeatedPair(2L, 7L, 6L, Instant.now())));
+        when(queueRepository.findFilteredQueue(
+                        any(), eq("đèn"), eq(4L), eq(null), eq(null), eq(true), eq(Set.of(2L, 7L)), eq(null)))
+                .thenReturn(Page.empty());
+
+        var result = service.listPendingWithChecklist(
+                0, 20, new ReviewQueueFilter(" đèn ", 4L, RiskSignal.REPEATED_PAIR, null));
+
+        assertThat(result.items()).isEmpty();
+        verify(queueRepository)
+                .findFilteredQueue(
+                        any(), eq("đèn"), eq(4L), eq(null), eq(null), eq(true), eq(Set.of(2L, 7L)), eq(null));
     }
 
     @Test

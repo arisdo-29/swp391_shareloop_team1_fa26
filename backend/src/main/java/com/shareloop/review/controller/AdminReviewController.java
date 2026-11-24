@@ -4,6 +4,8 @@ import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.review.dto.ApproveReviewRequest;
 import com.shareloop.review.dto.RejectReviewRequest;
 import com.shareloop.review.dto.ReviewItemDetailResponse;
+import com.shareloop.review.dto.ReviewQueueFilter;
+import com.shareloop.review.dto.ReviewQueueFilter.RiskSignal;
 import com.shareloop.review.dto.ReviewQueueItem;
 import com.shareloop.review.dto.ReviewQueueResponse;
 import com.shareloop.review.service.ReviewService;
@@ -56,20 +58,23 @@ public class AdminReviewController {
 
     @Operation(
             summary = "Danh sách hàng chờ duyệt",
-            description =
-                    "Sắp xếp: người đăng có trust_stars thấp trước; cùng số sao thì người mới (số bài đã từng được duyệt không quá ngưỡng review_newcomer_max_approved, mặc định 3) trước; rồi bài chờ lâu hơn trước. Kèm checklist kiểm duyệt hiện hành.")
+            description = "Lọc theo tiêu đề, danh mục và dấu hiệu rủi ro. Bài chờ lâu nhất đứng đầu.")
     @ApiResponse(responseCode = "200", description = "Trả về hàng chờ đã sắp xếp kèm checklist")
     @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")
     @ApiResponse(responseCode = "403", description = "Không có quyền Admin")
     @GetMapping("/reviews/pending")
     public ReviewQueueResponse listPendingReviews(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) @Min(1) Long categoryId,
+            @RequestParam(required = false) RiskSignal risk,
+            @RequestParam(required = false) Boolean edited,
             @Parameter(description = "Số trang (bắt đầu từ 0)") @RequestParam(defaultValue = "0") @Min(0) int page,
             @Parameter(description = "Số lượng bản ghi mỗi trang (1-100)")
                     @RequestParam(defaultValue = "20")
                     @Min(1)
                     @Max(100)
                     int size) {
-        return reviewService.listPendingWithChecklist(page, size);
+        return reviewService.listPendingWithChecklist(page, size, new ReviewQueueFilter(q, categoryId, risk, edited));
     }
 
     @Operation(

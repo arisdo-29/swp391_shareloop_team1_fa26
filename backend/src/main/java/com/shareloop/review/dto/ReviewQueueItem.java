@@ -49,7 +49,10 @@ public record ReviewQueueItem(
         Integer editCount,
 
         @Schema(description = "Bài đăng có phải là bản chỉnh sửa từ bài đã duyệt trước đó hay không", example = "true")
-        Boolean isEdited) {
+        Boolean isEdited,
+
+        @Schema(description = "Thời điểm bài được gửi duyệt gần nhất")
+        Instant queuedAt) {
 
     public ReviewQueueItem(
             Long id,
@@ -76,7 +79,8 @@ public record ReviewQueueItem(
                 donorTrustStars,
                 createdAt,
                 0,
-                false);
+                false,
+                createdAt);
     }
 
     // KD-06: cờ AI không còn ưu tiên. Cùng thứ tự với ReviewQueueRepository, trừ bước "người đăng mới" (số bài đã

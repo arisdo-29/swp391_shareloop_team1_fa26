@@ -12,6 +12,8 @@ import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
 import com.shareloop.review.dto.ChecklistAnswer;
+import com.shareloop.review.dto.ReviewQueueFilter;
+import com.shareloop.review.dto.ReviewQueueFilter.RiskSignal;
 import com.shareloop.review.dto.ReviewQueueResponse;
 import com.shareloop.review.service.ReviewService;
 import com.shareloop.setting.dto.ChecklistItem;
@@ -43,15 +45,33 @@ class AdminReviewControllerTest {
 
     @Test
     void pendingQueueReturnsChecklistForAdmin() throws Exception {
-        when(reviewService.listPendingWithChecklist(0, 20))
+        when(reviewService.listPendingWithChecklist(0, 20, new ReviewQueueFilter(null, null, null, null)))
                 .thenReturn(new ReviewQueueResponse(
-                        List.of(), List.of(new ChecklistItem(11L, "photos", "Ảnh đúng món")), 0, 20));
+                        List.of(), List.of(new ChecklistItem(11L, "photos", "Ảnh đúng món")), 0, 20, 0));
         String adminToken = jwtService.issue(1L, true);
 
         mockMvc.perform(get("/api/v1/admin/reviews/pending").header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.totalElements").value(0))
                 .andExpect(jsonPath("$.checklist[0].statement").value("Ảnh đúng món"));
+    }
+
+    @Test
+    void pendingQueueCombinesTitleCategoryRiskAndEditFilters() throws Exception {
+        var filter = new ReviewQueueFilter("đèn", 8L, RiskSignal.REPEATED_PAIR, true);
+        when(reviewService.listPendingWithChecklist(1, 20, filter))
+                .thenReturn(new ReviewQueueResponse(List.of(), List.of(), 1, 20, 25));
+
+        mockMvc.perform(get("/api/v1/admin/reviews/pending")
+                        .header("Authorization", "Bearer " + jwtService.issue(1L, true))
+                        .param("q", "đèn")
+                        .param("categoryId", "8")
+                        .param("risk", "REPEATED_PAIR")
+                        .param("edited", "true")
+                        .param("page", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(25));
     }
 
     @Test

@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,6 +61,67 @@ class ReviewQueueNewcomerOrderIT extends IntegrationTest {
 
         // then
         assertThat(queue).containsExactly(veteranPendingId, newcomerPendingId);
+    }
+
+    @Test
+    void filteredQueueUsesLatestSubmissionAndFiltersBeforePagination() {
+        long lowTrust = createUser(2);
+        createApprovedItems(lowTrust, NEWCOMER_MAX_APPROVED + 1);
+        long edited = createPendingItem(lowTrust, now.minus(10, ChronoUnit.HOURS));
+        long oldest = createPendingItem(createUser(5), now.minus(4, ChronoUnit.HOURS));
+        long otherCategory = createPendingItem(createUser(1), now.minus(5, ChronoUnit.HOURS));
+        jdbc.sql("UPDATE items SET title = 'Đèn bàn cần duyệt' WHERE id IN (:ids)")
+                .param("ids", List.of(edited, oldest, otherCategory))
+                .update();
+        jdbc.sql("""
+                UPDATE items SET review_submitted_at = :queuedAt, approved_at = :approvedAt, edit_submitted_at = :legacyAt
+                WHERE id = :id
+                """)
+                .param("queuedAt", java.sql.Timestamp.from(now.minus(1, ChronoUnit.HOURS)))
+                .param("approvedAt", java.sql.Timestamp.from(now.minus(9, ChronoUnit.HOURS)))
+                .param("legacyAt", java.sql.Timestamp.from(now.minus(8, ChronoUnit.HOURS)))
+                .param("id", edited)
+                .update();
+        long category = jdbc.sql("SELECT category_id FROM items WHERE id = :id")
+                .param("id", oldest)
+                .query(Long.class)
+                .single();
+        jdbc.sql("""
+                UPDATE items SET category_id = (SELECT id FROM item_categories WHERE id <> :category ORDER BY id LIMIT 1)
+                WHERE id = :id
+                """).param("category", category).param("id", otherCategory).update();
+
+        var first = queueRepository.findFilteredQueue(
+                PageRequest.of(0, 1), "den ban can duyet", category, null, null, false, List.of(0L), null);
+        var second = queueRepository.findFilteredQueue(
+                PageRequest.of(1, 1), "den ban can duyet", category, null, null, false, List.of(0L), null);
+        assertThat(first.getTotalElements()).isEqualTo(2);
+        assertThat(queueIds(first)).containsExactly(oldest);
+        assertThat(queueIds(second)).containsExactly(edited);
+
+        var fewerStars = queueRepository.findFilteredQueue(
+                PageRequest.of(0, 10), "Đèn bàn cần duyệt", category, true, 2, false, List.of(0L), null);
+        assertThat(queueIds(fewerStars)).containsExactly(edited);
+        var newcomer = queueRepository.findFilteredQueue(
+                PageRequest.of(0, 10),
+                "Đèn bàn cần duyệt",
+                category,
+                null,
+                null,
+                false,
+                List.of(0L),
+                NEWCOMER_MAX_APPROVED);
+        assertThat(queueIds(newcomer)).containsExactly(oldest);
+        var repeated = queueRepository.findFilteredQueue(
+                PageRequest.of(0, 10), "Đèn bàn cần duyệt", category, null, null, true, List.of(lowTrust), null);
+        assertThat(queueIds(repeated)).containsExactly(edited);
+        var donorSearch = queueRepository.findFilteredQueue(
+                PageRequest.of(0, 10), "Queue Test", category, null, null, false, List.of(0L), null);
+        assertThat(donorSearch).isEmpty();
+    }
+
+    private List<Long> queueIds(Page<Object[]> page) {
+        return page.stream().map(row -> ((Number) row[0]).longValue()).toList();
     }
 
     // Lấy thứ tự hàng chờ rồi chỉ giữ hai bài của test, vì database test có thể còn bài chờ duyệt khác.

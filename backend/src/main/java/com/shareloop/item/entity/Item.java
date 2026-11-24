@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import org.hibernate.annotations.SQLRestriction;
 
 /**
@@ -51,6 +52,9 @@ public class Item extends BaseEntity {
 
     @Column(name = "reference_price")
     private Long referencePrice;
+
+    @Column(name = "review_submitted_at")
+    private Instant reviewSubmittedAt;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
@@ -171,6 +175,7 @@ public class Item extends BaseEntity {
         if (status != ItemStatus.PENDING_REVIEW) {
             transitionTo(ItemStatus.PENDING_REVIEW);
         }
+        this.reviewSubmittedAt = Instant.now();
         this.categoryId = categoryId;
         this.areaId = areaId;
         this.offerType = offerType;
