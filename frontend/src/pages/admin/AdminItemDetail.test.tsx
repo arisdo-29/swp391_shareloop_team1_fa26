@@ -2,7 +2,7 @@
 
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminItemApi, type AdminItemFullDetail } from '../../services/adminItemApi';
 import { AdminItemDetail } from './AdminItemDetail';
@@ -82,6 +82,11 @@ function renderPage() {
   );
 }
 
+function LedgerReturnProbe() {
+  const location = useLocation();
+  return <p data-testid="restored-ledger-state">{JSON.stringify(location.state)}</p>;
+}
+
 beforeEach(() => {
   vi.mocked(adminItemApi.detail).mockResolvedValue(detail());
 });
@@ -92,6 +97,55 @@ afterEach(() => {
 });
 
 describe('AdminItemDetail', () => {
+  it('có nút về lịch sử Credit và trả lại nguyên trạng thái bộ lọc khi được mở từ sổ Credit', async () => {
+    const user = userEvent.setup();
+    const ledgerReturn = {
+      type: 'POST_FEE' as const,
+      user: null,
+      keywordInput: 'xe đạp',
+      fromDate: '2026-11-01',
+      toDate: '2026-11-20',
+      page: 3,
+    };
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/admin/items/7', state: { ledgerReturn } }]}>
+        <Routes>
+          <Route path="/admin/items/:itemId" element={<AdminItemDetail />} />
+          <Route path="/admin/finance/ledger" element={<LedgerReturnProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Nội dung bài');
+    await user.click(screen.getByRole('link', { name: 'Về lịch sử giao dịch Credit' }));
+
+    expect(screen.getByTestId('restored-ledger-state').textContent).toContain('"restoreLedger"');
+    expect(screen.getByTestId('restored-ledger-state').textContent).toContain('"page":3');
+    expect(screen.getByTestId('restored-ledger-state').textContent).toContain('"keywordInput":"xe đạp"');
+  });
+
+  it('bài không còn tồn tại vẫn cho quay về lịch sử giao dịch Credit', async () => {
+    vi.mocked(adminItemApi.detail).mockRejectedValue({ status: 404, message: 'Không tìm thấy bài đăng này.' });
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: '/admin/items/7',
+            state: {
+              ledgerReturn: { type: '', user: null, keywordInput: '', fromDate: '', toDate: '', page: 1 },
+            },
+          },
+        ]}
+      >
+        <Routes>
+          <Route path="/admin/items/:itemId" element={<AdminItemDetail />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Không tìm thấy dữ liệu yêu cầu.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Về lịch sử giao dịch Credit' })).toBeTruthy();
+  });
   it('hiện nội dung bài, phí, yêu cầu và báo cáo bằng chữ tiếng Việt', async () => {
     renderPage();
 

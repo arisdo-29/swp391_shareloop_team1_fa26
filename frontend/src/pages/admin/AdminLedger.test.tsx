@@ -2,7 +2,7 @@
 
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminFinanceApi, type AdminLedgerPage, type AdminLedgerRow } from '../../services/adminFinanceApi';
 import { AdminLedger } from './AdminLedger';
@@ -63,6 +63,16 @@ function renderPage() {
   );
 }
 
+function NavigationProbe() {
+  const location = useLocation();
+  return (
+    <div>
+      <p data-testid="navigation-path">{location.pathname}</p>
+      <p data-testid="navigation-state">{JSON.stringify(location.state)}</p>
+    </div>
+  );
+}
+
 beforeEach(() => {
   vi.mocked(adminFinanceApi.ledger).mockResolvedValue(page);
 });
@@ -112,6 +122,108 @@ describe('AdminLedger', () => {
     );
   });
 
+  it('mở modal chi tiết chỉ đọc với dữ liệu và liên kết bài đăng API cung cấp', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Xe đạp cũ');
+
+    const itemRow = screen.getByText('Xe đạp cũ').closest('tr') as HTMLElement;
+    await user.click(within(itemRow).getByRole('button', { name: 'Xem chi tiết' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Chi tiết giao dịch Credit' });
+    expect(within(dialog).getByText('#2')).toBeTruthy();
+    expect(within(dialog).getByText('Phí đăng bài')).toBeTruthy();
+    expect(within(dialog).getByText('-10 Credit').className).toContain('text-error');
+    expect(within(dialog).getByText('40 Credit')).toBeTruthy();
+    expect(within(dialog).getByText('Trừ Credit đăng bài: Xe đạp cũ')).toBeTruthy();
+    const relatedItem = within(dialog).getByRole('link', { name: 'Xe đạp cũ' });
+    expect(relatedItem.getAttribute('href')).toBe('/admin/items/77');
+    expect(within(dialog).getByRole('link', { name: 'Xem chi tiết bài đăng' })).toBeTruthy();
+    expect(within(dialog).queryByText('Số dư trước giao dịch')).toBeNull();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Đóng' }));
+    expect(screen.queryByRole('dialog', { name: 'Chi tiết giao dịch Credit' })).toBeNull();
+  });
+
+  it('đi tới đúng trang chi tiết bài đăng và mang theo trạng thái quay lại', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/admin/finance/ledger']}>
+        <Routes>
+          <Route path="/admin/finance/ledger" element={<AdminLedger />} />
+          <Route path="/admin/items/:itemId" element={<NavigationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await screen.findByText('Xe đạp cũ');
+
+    const itemRow = screen.getByText('Xe đạp cũ').closest('tr') as HTMLElement;
+    await user.click(within(itemRow).getByRole('button', { name: 'Xem chi tiết' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('link', { name: 'Xem chi tiết bài đăng' }));
+
+    expect(screen.getByTestId('navigation-path').textContent).toBe('/admin/items/77');
+    expect(screen.getByTestId('navigation-state').textContent).toContain('"ledgerReturn"');
+    expect(screen.getByTestId('navigation-state').textContent).toContain('"page":0');
+  });
+
+  it('khôi phục bộ lọc và trang phân trang khi quay lại từ trang chi tiết', async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: '/admin/finance/ledger',
+            state: {
+              restoreLedger: {
+                type: 'BOOST_FEE',
+                user: null,
+                keywordInput: 'xe đạp',
+                fromDate: '2026-11-01',
+                toDate: '2026-11-20',
+                page: 2,
+              },
+            },
+          },
+        ]}
+      >
+        <AdminLedger />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() =>
+      expect(adminFinanceApi.ledger).toHaveBeenCalledWith({
+        type: 'BOOST_FEE',
+        q: 'xe đạp',
+        from: '2026-11-01',
+        to: '2026-11-20',
+        page: 2,
+        size: 20,
+      }),
+    );
+    expect((screen.getByLabelText('Loại giao dịch') as HTMLSelectElement).value).toBe('BOOST_FEE');
+    expect((screen.getByLabelText('Tìm giao dịch Credit') as HTMLInputElement).value).toBe('xe đạp');
+  });
+
+  it('modal hiển thị Credit cộng màu xanh và đơn nạp liên quan', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Xe đạp cũ');
+
+    const orderLink = screen.getByRole('link', {
+      name: 'Mã đơn: ABCD1234EFGH5678IJKL9012MNOP3456',
+    });
+    const topUpRow = orderLink.closest('tr') as HTMLElement;
+    await user.click(within(topUpRow).getByRole('button', { name: 'Xem chi tiết' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Chi tiết giao dịch Credit' });
+    expect(within(dialog).getByText('+50 Credit').className).toContain('text-success');
+    const relatedOrder = within(dialog).getByRole('link', {
+      name: 'Mã đơn: ABCD1234EFGH5678IJKL9012MNOP3456',
+    });
+    expect(relatedOrder.getAttribute('href')).toBe(
+      '/admin/finance/topup-orders?q=ABCD1234EFGH5678IJKL9012MNOP3456',
+    );
+  });
+
   it('hiển thị nội dung giao dịch theo đầy đủ loại giao dịch thực tế từ API', async () => {
     vi.mocked(adminFinanceApi.ledger).mockResolvedValue({
       ...page,
@@ -134,6 +246,7 @@ describe('AdminLedger', () => {
 
     const table = screen.getByRole('table');
     expect(within(table).getByRole('columnheader', { name: 'Nội dung giao dịch' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Xem chi tiết' })).toBeTruthy();
     const tableText = table.textContent ?? '';
     for (const content of [
       'Nạp Credit thành công – Mã đơn: NAP-001',

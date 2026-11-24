@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Dialog } from '../../components/Dialog';
 import { Pagination } from '../../components/Pagination';
 import {
@@ -23,6 +24,7 @@ import type { PageResponse } from '../../services/itemApi';
 import type { PaymentOrderStatus } from '../../services/paymentApi';
 import { formatVnd } from '../../utils/formatting';
 import { adminErrorMessage } from './adminErrors';
+import type { AdminLedgerRouteState, AdminLedgerViewState } from './adminLedgerNavigation';
 
 const PAGE_SIZE = 10;
 const REASON_MIN = 5;
@@ -83,6 +85,9 @@ function downloadBlob(blob: Blob, fileName: string) {
 const initialKeyword = () => new URLSearchParams(window.location.search).get('q') ?? '';
 
 export function AdminTopUpOrders() {
+  const location = useLocation();
+  const routeState = location.state as AdminLedgerRouteState | null;
+  const ledgerReturn = routeState?.ledgerReturn;
   const [result, setResult] = useState<PageResponse<AdminTopUpOrder> | null>(null);
   const [summary, setSummary] = useState<AdminTopUpSummary | null>(null);
   // '' là tất cả trạng thái: mở trang là thấy toàn bộ đơn, đơn mới nhất ở trên.
@@ -98,7 +103,7 @@ export function AdminTopUpOrders() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
-  const [openedCode, setOpenedCode] = useState<string | null>(null);
+  const [openedCode, setOpenedCode] = useState<string | null>(routeState?.openTopUpOrder ?? null);
 
   const dateRangeError =
     fromDate && toDate && fromDate > toDate ? '"Từ ngày" không được sau "Đến ngày".' : '';
@@ -197,6 +202,15 @@ export function AdminTopUpOrders() {
         description="Đối soát từng đơn nạp Credit qua cổng thanh toán. Đơn đã đóng mà VNPay vẫn thu tiền được đánh dấu cần đối soát."
         action={
           <div className="flex gap-2">
+            {ledgerReturn ? (
+              <Link
+                to="/admin/finance/ledger"
+                state={{ restoreLedger: ledgerReturn }}
+                className="inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-semibold text-primary hover:bg-surface-low"
+              >
+                Về lịch sử giao dịch Credit
+              </Link>
+            ) : null}
             <Button variant="outline" disabled={exporting} onClick={() => void exportCsv()}>
               {exporting ? 'Đang xuất...' : 'Xuất CSV'}
             </Button>
@@ -325,6 +339,7 @@ export function AdminTopUpOrders() {
       {openedCode ? (
         <OrderDialog
           orderCode={openedCode}
+          ledgerReturn={ledgerReturn}
           onClose={() => setOpenedCode(null)}
           onChanged={reload}
         />
@@ -487,10 +502,12 @@ const actionTexts: Record<AdminTopUpAction, { button: string; title: string; hin
 
 function OrderDialog({
   orderCode,
+  ledgerReturn,
   onClose,
   onChanged,
 }: {
   orderCode: string;
+  ledgerReturn?: AdminLedgerViewState;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -544,6 +561,17 @@ function OrderDialog({
   const order = detail?.order;
   return (
     <Dialog title="Chi tiết đơn nạp" wide busy={busy} onClose={onClose}>
+      {ledgerReturn ? (
+        <div className="mb-4">
+          <Link
+            to="/admin/finance/ledger"
+            state={{ restoreLedger: ledgerReturn }}
+            className="inline-flex min-h-10 items-center rounded-md border border-border px-3 text-sm font-semibold text-primary hover:bg-surface-low"
+          >
+            Về lịch sử giao dịch Credit
+          </Link>
+        </div>
+      ) : null}
       {!order ? (
         error ? (
           <Alert tone="error">{error}</Alert>
