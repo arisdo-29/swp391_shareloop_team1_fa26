@@ -2,9 +2,11 @@
 
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { reportApi, type AdminReportDetail, type ReportResponse } from '../../services/reportApi';
 import { adminRequestApi, type AdminRequestDetail } from '../../services/adminRequestApi';
+import { adminItemApi } from '../../services/adminItemApi';
 import { formatDeadline } from '../../utils/request';
 import { AdminComplaints } from './AdminComplaints';
 
@@ -28,6 +30,14 @@ vi.mock('../../services/adminRequestApi', async (importOriginal) => {
   const detail = vi.fn().mockResolvedValue({ status: 'COMPLETED' });
   return { ...actual, adminRequestApi: { ...actual.adminRequestApi, detail } };
 });
+
+vi.mock('../../services/adminItemApi', () => ({
+  adminItemApi: {
+    detail: vi.fn(async (itemId: number) => ({
+      summary: { id: itemId, title: 'Bàn học gỗ', imageUrl: `/media/items/${itemId}.jpg` },
+    })),
+  },
+}));
 
 afterEach(() => {
   cleanup();
@@ -77,6 +87,14 @@ function detail(
   } satisfies AdminReportDetail;
 }
 
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <AdminComplaints />
+    </MemoryRouter>,
+  );
+}
+
 async function openDetail(value: AdminReportDetail) {
   const user = userEvent.setup();
   vi.mocked(reportApi.list).mockResolvedValue({
@@ -87,7 +105,7 @@ async function openDetail(value: AdminReportDetail) {
     totalPages: 1,
   });
   vi.mocked(reportApi.detail).mockResolvedValue(value);
-  render(<AdminComplaints />);
+  renderPage();
   await user.click(await screen.findByRole('button', { name: 'Xem chi tiết' }));
   const dialog = screen.getByRole('dialog');
   const heading = await within(dialog).findByText('Kết quả xử lý');
@@ -105,7 +123,7 @@ async function openPendingDetail(value: AdminReportDetail) {
     totalPages: 1,
   });
   vi.mocked(reportApi.detail).mockResolvedValue(value);
-  render(<AdminComplaints />);
+  renderPage();
   await user.click(await screen.findByRole('button', { name: 'Xem chi tiết' }));
   const dialog = screen.getByRole('dialog');
   const concludeButton = (await within(dialog).findByRole('button', {
@@ -122,6 +140,34 @@ function rowValue(container: HTMLElement, label: string) {
 }
 
 describe('AdminComplaints', () => {
+  it('hiện danh sách dạng bảng với đúng bài liên quan và các cột quản trị', async () => {
+    const value = detail({ status: 'OPEN' }, { ...pending });
+    vi.mocked(reportApi.list).mockResolvedValue({
+      items: [value.report],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    vi.mocked(reportApi.detail).mockResolvedValue(value);
+
+    renderPage();
+
+    const table = await screen.findByRole('table', { name: 'Danh sách hồ sơ' });
+    expect(within(table).getByRole('columnheader', { name: 'Mã hồ sơ' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Bài đăng liên quan' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Loại khiếu nại/báo cáo' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Người gửi báo cáo' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Lý do báo cáo' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Ngày gửi' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Trạng thái xử lý' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Người bị báo cáo' })).toBeTruthy();
+    expect(within(table).getByText('Báo cáo bài đăng')).toBeTruthy();
+    expect(within(table).getByText('HS-7')).toBeTruthy();
+    expect(await within(table).findByRole('img', { name: 'Bàn học gỗ' })).toBeTruthy();
+    expect(adminItemApi.detail).toHaveBeenCalledWith(5);
+  });
+
   it('lọc được riêng khiếu nại giao dịch đang chờ giải trình', async () => {
     const user = userEvent.setup();
     vi.mocked(reportApi.list).mockResolvedValue({
@@ -131,7 +177,7 @@ describe('AdminComplaints', () => {
       totalElements: 0,
       totalPages: 0,
     });
-    render(<AdminComplaints />);
+    renderPage();
 
     await user.selectOptions(screen.getByLabelText('Loại hồ sơ'), 'REQUEST');
     await user.click(screen.getByRole('button', { name: 'Chờ giải trình' }));
@@ -214,7 +260,7 @@ describe('AdminComplaints', () => {
       totalElements: 1,
       totalPages: 1,
     });
-    render(<AdminComplaints />);
+    renderPage();
 
     expect(await screen.findByText('Tài khoản mới')).toBeTruthy();
   });
@@ -275,7 +321,7 @@ describe('AdminComplaints', () => {
     expect(
       await screen.findByText('Bên bị báo cáo vẫn đang trong hạn giải trình, chưa thể kết luận.'),
     ).toBeTruthy();
-    expect(reportApi.detail).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(reportApi.detail).mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it('D-07: báo cáo bài đang Chờ xử lý có nút Yêu cầu giải trình, bấm thì gọi API và tải lại', async () => {
@@ -290,7 +336,7 @@ describe('AdminComplaints', () => {
     expect(
       await screen.findByText('Đã gửi yêu cầu giải trình. Xem hạn phản hồi trong hồ sơ.'),
     ).toBeTruthy();
-    expect(reportApi.detail).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(reportApi.detail).mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it('D-07: khiếu nại giao dịch hoặc hồ sơ đã có giải trình thì không có nút Yêu cầu giải trình', async () => {
@@ -366,6 +412,21 @@ describe('AdminComplaints kết luận từng món của giao dịch', () => {
     },
     { ...pending, responseWindowOpen: false },
   );
+
+  it('modal hiện mã hồ sơ, hồ sơ hai bên, giao dịch và đúng hai món SWAP', async () => {
+    vi.mocked(adminRequestApi.detail).mockResolvedValue(disputedSwap);
+
+    const { dialog } = await openPendingDetail(requestReport);
+
+    expect(within(dialog).getByText(/Chi tiết hồ sơ HS-7/)).toBeTruthy();
+    expect(within(dialog).getByRole('link', { name: 'Nguyễn Văn An' }).getAttribute('href')).toBe('/admin/users/2');
+    expect(within(dialog).getByRole('link', { name: 'Trần Thị Bình' }).getAttribute('href')).toBe('/admin/users/3');
+    expect(within(dialog).getByRole('link', { name: 'Xem chi tiết giao dịch' }).getAttribute('href')).toBe(
+      '/admin/transactions/90',
+    );
+    expect((await within(dialog).findByRole('link', { name: 'Máy ảnh' })).getAttribute('href')).toBe('/admin/items/5');
+    expect(within(dialog).getByRole('link', { name: 'Mũ bảo hiểm' }).getAttribute('href')).toBe('/admin/items/6');
+  });
 
   it('mặc định món của bên vi phạm là Ẩn, món bên kia là Mở lại, và gửi đủ mọi món khi chấp thuận', async () => {
     vi.mocked(adminRequestApi.detail).mockResolvedValue(disputedSwap);

@@ -4,12 +4,14 @@ import {
   Button,
   EmptyState,
   Icon,
+  ItemImage,
   PageHeader,
   Select,
   SkeletonRows,
   TextArea,
 } from '../../components/ui';
 import { DialogFrame } from '../../components/Dialog';
+import { Link } from 'react-router-dom';
 import {
   reportApi,
   type AdminReportDetail,
@@ -23,6 +25,7 @@ import {
 import type { ApiError } from '../../services/http';
 import { formatDeadline } from '../../utils/request';
 import { adminRequestApi, type AdminRequestDetail } from '../../services/adminRequestApi';
+import { adminItemApi, type AdminItemRow } from '../../services/adminItemApi';
 import { DisputeItemOutcomes } from '../../components/admin/DisputeItemOutcomes';
 import {
   defaultItemChoices,
@@ -31,6 +34,7 @@ import {
 } from '../../utils/disputeItemOutcomes';
 import { disputeReasonLabels } from '../../utils/disputeErrors';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
+import './admin-complaints.css';
 
 const statusLabels: Record<ReportStatus, string> = {
   OPEN: 'Chờ xử lý',
@@ -39,9 +43,9 @@ const statusLabels: Record<ReportStatus, string> = {
   DISMISSED: 'Đã bác bỏ',
 };
 const targetLabels: Record<ReportTargetType, string> = {
-  ITEM: 'Bài đăng',
-  USER: 'Người dùng',
-  REQUEST: 'Giao dịch',
+  ITEM: 'Báo cáo bài đăng',
+  USER: 'Báo cáo người dùng',
+  REQUEST: 'Khiếu nại giao dịch',
 };
 const filters: { value: ReportStatus | ''; label: string }[] = [
   { value: '', label: 'Tất cả' },
@@ -61,6 +65,15 @@ function reportReasonLabel(report: ReportResponse) {
 
 const date = (value: string | null) =>
   value ? new Date(value).toLocaleString('vi-VN') : 'Chưa có';
+
+interface ComplaintListEnrichment {
+  detail: AdminReportDetail | null;
+  item: AdminItemRow | null;
+}
+
+function reportCode(id: number) {
+  return `HS-${id}`;
+}
 // Báo cáo Từ chối giao nhận (báo cáo bài kèm giao dịch): người báo đã bị trừ sao tự động nên không có ô phạt thêm (F7).
 const isRefusalReport = (report: ReportResponse) =>
   report.targetType === 'ITEM' && report.reason === 'NOT_AS_DESCRIBED' && report.requestId != null;
@@ -149,7 +162,7 @@ function EvidenceImage({ reportId, evidence }: { reportId: number; evidence: Rep
       {failed || !evidence.available || !evidence.url ? (
         <p className="p-3 text-xs text-text-muted">Ảnh bằng chứng không còn khả dụng.</p>
       ) : source ? (
-        <a href={source} target="_blank" rel="noreferrer">
+        <a href={source} target="_blank" rel="noreferrer" title="Mở ảnh kích thước đầy đủ" className="block cursor-zoom-in">
           <img
             src={source}
             alt="Ảnh bằng chứng"
@@ -194,6 +207,54 @@ function EvidenceGallery({
   );
 }
 
+interface ComplaintItemDisplay {
+  id: number;
+  title: string | null;
+  imageUrl: string | null;
+}
+
+function ComplaintItem({ item, compact = false }: { item: ComplaintItemDisplay | null; compact?: boolean }) {
+  if (!item?.title) return <span className="text-text-muted">—</span>;
+  const target = `/admin/items/${item.id}`;
+  return (
+    <div className={`admin-complaint-item ${compact ? 'admin-complaint-item-compact' : ''}`}>
+      <Link to={target} aria-label={`Xem chi tiết ${item.title}`} className="admin-complaint-item-image">
+        <ItemImage
+          src={item.imageUrl ?? undefined}
+          alt={item.title}
+          className={`${compact ? 'size-12' : 'size-14'} rounded-md object-cover`}
+        />
+      </Link>
+      <div className="min-w-0">
+        <Link to={target} title={item.title} className="admin-complaint-item-title font-semibold text-primary hover:underline">
+          {item.title}
+        </Link>
+        {!compact ? (
+          <Link to={target} className="admin-complaint-item-detail">
+            Xem chi tiết bài đăng
+          </Link>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function itemFromSummary(item: AdminItemRow | null, fallbackId?: number | null, fallbackTitle?: string | null) {
+  if (item) return { id: item.id, title: item.title, imageUrl: item.imageUrl };
+  if (fallbackId !== null && fallbackId !== undefined && fallbackTitle) {
+    return { id: fallbackId, title: fallbackTitle, imageUrl: null };
+  }
+  return null;
+}
+
+function listReportedUser(report: ReportResponse, enrichment?: ComplaintListEnrichment) {
+  return (
+    enrichment?.detail?.reportedUser?.fullName ??
+    (report.targetType === 'USER' ? report.targetName : null) ??
+    '—'
+  );
+}
+
 export function AdminComplaints() {
   const [status, setStatus] = useState<ReportStatus | ''>('');
   const [targetType, setTargetType] = useState<ReportTargetType | ''>('');
@@ -201,6 +262,7 @@ export function AdminComplaints() {
   const [reload, setReload] = useState(0);
   useRealtimeRefresh(['NOTIFICATION'], () => setReload((value) => value + 1));
   const [list, setList] = useState<AdminReportPage | null>(null);
+  const [listEnrichment, setListEnrichment] = useState<Record<number, ComplaintListEnrichment>>({});
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -214,6 +276,8 @@ export function AdminComplaints() {
   const [deliberateFalse, setDeliberateFalse] = useState(false);
   // Khiếu nại sự cố giao nhận đang DISPUTED: chọn cách xử lý từng món khi chấp thuận (GN-14)
   const [requestDetail, setRequestDetail] = useState<AdminRequestDetail | null>(null);
+  const [relatedRequestDetail, setRelatedRequestDetail] = useState<AdminRequestDetail | null>(null);
+  const [relatedItem, setRelatedItem] = useState<AdminItemRow | null>(null);
   const [itemChoices, setItemChoices] = useState<Record<number, ItemChoice>>({});
   // Khiếu nại do bên kia không đồng ý đề nghị huỷ không tố ai: bên bị trừ sao ('' là không trừ ai)
   const [penalizedUserId, setPenalizedUserId] = useState('');
@@ -227,6 +291,7 @@ export function AdminComplaints() {
     const controller = new AbortController();
     setListLoading(true);
     setListError('');
+    setListEnrichment({});
     reportApi
       .list(
         { page, size: 20, status: status || undefined, targetType: targetType || undefined },
@@ -239,6 +304,33 @@ export function AdminComplaints() {
           return;
         }
         setList(result);
+        void Promise.all(
+          result.items.map(async (report) => {
+            let reportDetail: AdminReportDetail | null = null;
+            try {
+              reportDetail = await reportApi.detail(report.id, controller.signal);
+            } catch {
+              if (controller.signal.aborted) return null;
+            }
+            const itemId = reportDetail?.relatedItemId ?? report.itemId;
+            let item: AdminItemRow | null = null;
+            if (itemId !== null) {
+              try {
+                item = (await adminItemApi.detail(itemId)).summary;
+              } catch {
+                item = null;
+              }
+            }
+            return [report.id, { detail: reportDetail, item }] as const;
+          }),
+        ).then((entries) => {
+          if (controller.signal.aborted) return;
+          setListEnrichment(
+            Object.fromEntries(
+              entries.filter((entry): entry is readonly [number, ComplaintListEnrichment] => entry !== null),
+            ),
+          );
+        });
       })
       .catch((error: ApiError) => {
         if (!controller.signal.aborted) setListError(errorMessage(error));
@@ -260,6 +352,8 @@ export function AdminComplaints() {
     setDeliberateFalse(false);
     setDecision('');
     setRequestDetail(null);
+    setRelatedRequestDetail(null);
+    setRelatedItem(null);
     setItemChoices({});
     setPenalizedUserId('');
     reportApi
@@ -279,12 +373,14 @@ export function AdminComplaints() {
   // Tải các món của giao dịch khi hồ sơ là khiếu nại giao dịch đang DISPUTED, để Admin chọn cách xử lý từng món
   useEffect(() => {
     const requestId = detail?.report.targetType === 'REQUEST' ? detail.report.requestId : null;
-    if (!detail || requestId === null || concluded(detail.report.status)) return;
+    if (!detail || requestId === null) return;
     let active = true;
     adminRequestApi
       .detail(requestId)
       .then((result) => {
-        if (!active || result.status !== 'DISPUTED') return;
+        if (!active) return;
+        setRelatedRequestDetail(result);
+        if (concluded(detail.report.status) || result.status !== 'DISPUTED') return;
         setRequestDetail(result);
         // Lý do chung (OTHER) là đề nghị huỷ không tố ai: không bên nào bị coi là vi phạm nên mặc định Mở lại
         const violatorId =
@@ -296,6 +392,21 @@ export function AdminComplaints() {
       active = false;
     };
   }, [detail]);
+
+  useEffect(() => {
+    const itemId = detail?.relatedItemId;
+    if (itemId === null || itemId === undefined) return;
+    let active = true;
+    adminItemApi
+      .detail(itemId)
+      .then((result) => {
+        if (active) setRelatedItem(result.summary);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [detail?.relatedItemId]);
 
   useEffect(() => {
     if (selectedId === null) opener.current?.focus();
@@ -403,19 +514,35 @@ export function AdminComplaints() {
   const isCancelWithoutAccusation =
     detail?.report.targetType === 'REQUEST' && detail.report.reason === 'OTHER';
   const detailIsConcluded = detail && concluded(detail.report.status);
+  const modalMainItem: ComplaintItemDisplay | null = relatedRequestDetail?.item
+    ? {
+        id: relatedRequestDetail.item.itemId,
+        title: relatedRequestDetail.item.title,
+        imageUrl: relatedRequestDetail.item.imageUrl,
+      }
+    : itemFromSummary(relatedItem, detail?.relatedItemId, detail?.relatedItemTitle);
+  const modalOfferedItem: ComplaintItemDisplay | null = relatedRequestDetail?.offeredItem
+    ? {
+        id: relatedRequestDetail.offeredItem.itemId,
+        title: relatedRequestDetail.offeredItem.title,
+        imageUrl: relatedRequestDetail.offeredItem.imageUrl,
+      }
+    : null;
 
   return (
-    <section>
-      <PageHeader
-        title="Khiếu nại và báo cáo"
-        description="Xem xét sự việc, đối chiếu minh chứng và kết luận từng hồ sơ."
-      />
+    <section className="admin-complaints-page">
+      <div className="admin-complaints-header">
+        <PageHeader
+          title="Khiếu nại và báo cáo"
+          description="Xem xét sự việc, đối chiếu minh chứng và kết luận từng hồ sơ."
+        />
+      </div>
       {notice && selectedId === null && (
         <div className="mb-4" role="status">
           <Alert tone={noticeTone}>{notice}</Alert>
         </div>
       )}
-      <div className="mb-4 space-y-3 rounded-lg border border-border bg-surface p-4">
+      <div className="admin-complaints-filters">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <p className="label">Trạng thái</p>
@@ -438,21 +565,23 @@ export function AdminComplaints() {
               ))}
             </div>
           </div>
-          <Select
-            label="Loại hồ sơ"
-            value={targetType}
-            disabled={submitting}
-            onChange={(event) => {
-              setTargetType(event.target.value as ReportTargetType | '');
-              setPage(0);
-              closeDetail();
-            }}
-          >
-            <option value="">Tất cả loại hồ sơ</option>
-            <option value="REQUEST">Khiếu nại giao dịch</option>
-            <option value="ITEM">Báo cáo bài đăng</option>
-            <option value="USER">Báo cáo người dùng</option>
-          </Select>
+          <div className="admin-complaints-filter-type">
+            <Select
+              label="Loại hồ sơ"
+              value={targetType}
+              disabled={submitting}
+              onChange={(event) => {
+                setTargetType(event.target.value as ReportTargetType | '');
+                setPage(0);
+                closeDetail();
+              }}
+            >
+              <option value="">Tất cả loại hồ sơ</option>
+              <option value="REQUEST">Khiếu nại giao dịch</option>
+              <option value="ITEM">Báo cáo bài đăng</option>
+              <option value="USER">Báo cáo người dùng</option>
+            </Select>
+          </div>
         </div>
         {status === 'AWAITING_RESPONSE' && (
           <p className="text-sm text-text-secondary">
@@ -469,59 +598,73 @@ export function AdminComplaints() {
         </div>
       ) : list?.items.length ? (
         <>
-          <ul
-            aria-label="Danh sách hồ sơ"
-            className="divide-y divide-border rounded-lg border border-border bg-surface"
-          >
-            {list.items.map((report) => (
-              <li
-                key={report.id}
-                className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-              >
-                <div className="min-w-0 space-y-1">
-                  <p className="flex flex-wrap items-center gap-x-2 text-xs font-semibold text-text-secondary">
-                    <span>{targetLabels[report.targetType]}</span>
-                  </p>
-                  <h2
-                    id={`report-row-${report.id}`}
-                    className="break-words text-base font-semibold"
-                  >
-                    {report.targetName || 'Đối tượng không còn khả dụng'}
-                  </h2>
-                  <p className="break-words text-sm text-text-secondary">
-                    {reportReasonLabel(report)}
-                  </p>
-                  <p className="break-words text-xs leading-5 text-text-secondary">
-                    {report.reporterName || 'Người dùng đã xóa'} · {date(report.createdAt)}
-                    {report.newReporterAccount ? (
-                      <span className="ml-2 rounded-sm bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning">
-                        Tài khoản mới
-                      </span>
-                    ) : null}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
-                  <ReportStatusBadge status={report.status} />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={submitting}
-                    aria-describedby={`report-row-${report.id}`}
-                    onClick={(event) => {
-                      opener.current = event.currentTarget;
-                      setNotice('');
-                      setDetail(null);
-                      setDetailError('');
-                      setSelectedId(report.id);
-                    }}
-                  >
-                    Xem chi tiết
-                    <Icon name="caretRight" className="size-4" />
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <div className="admin-complaints-table-wrap">
+            <table className="admin-complaints-table" aria-label="Danh sách hồ sơ">
+              <thead>
+                <tr>
+                  <th>Mã hồ sơ</th>
+                  <th>Bài đăng liên quan</th>
+                  <th>Loại khiếu nại/báo cáo</th>
+                  <th>Người gửi báo cáo</th>
+                  <th>Người bị báo cáo</th>
+                  <th>Lý do báo cáo</th>
+                  <th>Ngày gửi</th>
+                  <th>Trạng thái xử lý</th>
+                  <th>Xem chi tiết</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.items.map((report) => {
+                  const enrichment = listEnrichment[report.id];
+                  const relatedItem = itemFromSummary(
+                    enrichment?.item ?? null,
+                    enrichment?.detail?.relatedItemId ?? report.itemId,
+                    enrichment?.detail?.relatedItemTitle ?? (report.targetType === 'USER' ? null : report.targetName),
+                  );
+                  return (
+                    <tr key={report.id}>
+                      <td className="admin-complaints-code">{reportCode(report.id)}</td>
+                      <td>
+                        <ComplaintItem item={relatedItem} compact />
+                      </td>
+                      <td>{targetLabels[report.targetType]}</td>
+                      <td>
+                        <span className="admin-complaints-person">{report.reporterName || 'Người dùng đã xóa'}</span>
+                        {report.newReporterAccount ? (
+                          <span className="admin-complaints-new-account">Tài khoản mới</span>
+                        ) : null}
+                      </td>
+                      <td className="admin-complaints-person">{listReportedUser(report, enrichment)}</td>
+                      <td className="admin-complaints-reason" title={reportReasonLabel(report)}>
+                        {reportReasonLabel(report)}
+                      </td>
+                      <td className="admin-complaints-time">{date(report.createdAt)}</td>
+                      <td className="admin-complaints-status-cell">
+                        <ReportStatusBadge status={report.status} />
+                      </td>
+                      <td className="admin-complaints-action">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={submitting}
+                          aria-label="Xem chi tiết"
+                          onClick={(event) => {
+                            opener.current = event.currentTarget;
+                            setNotice('');
+                            setDetail(null);
+                            setDetailError('');
+                            setSelectedId(report.id);
+                          }}
+                        >
+                          Xem chi tiết
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm text-text-secondary">
               {list.totalElements} hồ sơ · Trang {page + 1}/{list.totalPages}
@@ -551,14 +694,14 @@ export function AdminComplaints() {
         <DialogFrame
           labelledBy="report-detail-title"
           size="xl"
-          className="md:max-w-5xl"
+          className="admin-complaints-dialog md:max-w-5xl"
           busy={submitting}
           onClose={closeDetail}
         >
-          <header className="mb-5 flex items-start justify-between gap-3 border-b border-border pb-4">
+          <header className="admin-complaints-dialog-header mb-5 flex items-start justify-between gap-3 border-b border-border pb-4">
             <div className="min-w-0">
               <p className="mb-1 text-xs font-semibold text-text-secondary">
-                Chi tiết hồ sơ
+                Chi tiết hồ sơ {detail ? reportCode(detail.report.id) : ''}
                 {detail ? ` · ${targetLabels[detail.report.targetType]}` : ''}
               </p>
               <div className="flex flex-wrap items-center gap-2">
@@ -612,7 +755,9 @@ export function AdminComplaints() {
                 <div className="min-w-0">
                   <dt className="label">Người gửi</dt>
                   <dd className="break-words font-semibold">
-                    {detail.reporter.fullName ?? 'Người dùng'}
+                    <Link to={`/admin/users/${detail.reporter.id}`} className="text-primary hover:underline">
+                      {detail.reporter.fullName ?? 'Người dùng'}
+                    </Link>
                     {detail.report.newReporterAccount ? (
                       <span className="ml-2 rounded-sm bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning">
                         Tài khoản mới
@@ -622,17 +767,66 @@ export function AdminComplaints() {
                 </div>
                 <div className="min-w-0">
                   <dt className="label">Người bị báo cáo</dt>
-                  <dd className="break-words font-semibold">{reportedUserName(detail)}</dd>
+                  <dd className="break-words font-semibold">
+                    {detail.reportedUser ? (
+                      <Link to={`/admin/users/${detail.reportedUser.id}`} className="text-primary hover:underline">
+                        {reportedUserName(detail)}
+                      </Link>
+                    ) : (
+                      reportedUserName(detail)
+                    )}
+                  </dd>
                 </div>
                 {detail.relatedItemId !== null && (
                   <div className="min-w-0">
                     <dt className="label">Bài đăng liên quan</dt>
                     <dd className="break-words">
-                      {detail.relatedItemTitle ?? 'Bài đăng đã bị xóa'}
+                      <Link to={`/admin/items/${detail.relatedItemId}`} className="font-semibold text-primary hover:underline">
+                        {detail.relatedItemTitle ?? 'Xem bài đăng liên quan'}
+                      </Link>
+                    </dd>
+                  </div>
+                )}
+                {detail.report.requestId !== null && (
+                  <div className="min-w-0">
+                    <dt className="label">Giao dịch liên quan</dt>
+                    <dd>
+                      <Link to={`/admin/transactions/${detail.report.requestId}`} className="font-semibold text-primary hover:underline">
+                        Xem chi tiết giao dịch
+                      </Link>
                     </dd>
                   </div>
                 )}
               </dl>
+              {modalMainItem ? (
+                <section className="admin-complaints-related-items">
+                  <div className="admin-complaints-related-heading">
+                    <div>
+                      <h3 className="font-semibold">Bài đăng liên quan</h3>
+                      <p className="text-xs text-text-secondary">
+                        {relatedRequestDetail?.type === 'SWAP' ? 'Hai món đồ trong giao dịch trao đổi' : 'Món đồ được cho tặng hoặc bị báo cáo'}
+                      </p>
+                    </div>
+                    {detail.report.requestId !== null ? (
+                      <Link to={`/admin/transactions/${detail.report.requestId}`} className="admin-complaints-related-link">
+                        Xem giao dịch
+                      </Link>
+                    ) : null}
+                  </div>
+                  <div className={`admin-complaints-related-grid ${modalOfferedItem ? 'sm:grid-cols-2' : ''}`}>
+                    <div className="admin-complaints-related-card">
+                      <p className="label">{relatedRequestDetail?.type === 'SWAP' ? 'Món đồ chủ bài' : 'Món đồ liên quan'}</p>
+                      <ComplaintItem item={modalMainItem} />
+                    </div>
+                    {modalOfferedItem ? (
+                      <div className="admin-complaints-related-card">
+                        <p className="label">Món đem đổi</p>
+                        <ComplaintItem item={modalOfferedItem} />
+                      </div>
+                    ) : null}
+                  </div>
+                </section>
+              ) : null}
               <div className="grid gap-4 md:grid-cols-2">
                 <section className="min-w-0 space-y-3 rounded-lg border border-border p-4">
                   <h3 className="font-semibold">Nội dung người gửi</h3>
