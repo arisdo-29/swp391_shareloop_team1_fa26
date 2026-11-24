@@ -174,7 +174,6 @@
   text-decoration: underline;
 }
 
- fix/frontend-message-layout
 .admin-complaint-target {
   display: flex;
   min-width: 0;
@@ -203,8 +202,6 @@ a.admin-complaint-target:hover .admin-complaint-target-name {
   text-decoration: underline;
 }
 
-
- develop
 .admin-complaints-person {
   font-weight: 600;
   line-height: 1.4;

@@ -155,11 +155,7 @@ describe('AdminComplaints', () => {
 
     const table = await screen.findByRole('table', { name: 'Danh sách hồ sơ' });
     expect(within(table).getByRole('columnheader', { name: 'Mã hồ sơ' })).toBeTruthy();
- fix/frontend-message-layout
     expect(within(table).getByRole('columnheader', { name: 'Đối tượng báo cáo' })).toBeTruthy();
-
-    expect(within(table).getByRole('columnheader', { name: 'Bài đăng liên quan' })).toBeTruthy();
- develop
     expect(within(table).getByRole('columnheader', { name: 'Loại khiếu nại/báo cáo' })).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Người gửi báo cáo' })).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Lý do báo cáo' })).toBeTruthy();
@@ -172,7 +168,6 @@ describe('AdminComplaints', () => {
     expect(adminItemApi.detail).toHaveBeenCalledWith(5);
   });
 
- fix/frontend-message-layout
   it('báo cáo người dùng hiện avatar mặc định, tên và liên kết hồ sơ thay vì dấu gạch ngang', async () => {
     const userReport = report({
       id: 23,
@@ -208,8 +203,6 @@ describe('AdminComplaints', () => {
     expect(within(row as HTMLTableRowElement).queryByText('—')).toBeNull();
   });
 
-
- develop
   it('lọc được riêng khiếu nại giao dịch đang chờ giải trình', async () => {
     const user = userEvent.setup();
     vi.mocked(reportApi.list).mockResolvedValue({
