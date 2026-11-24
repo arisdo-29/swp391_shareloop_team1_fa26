@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Pagination } from '../../components/Pagination';
-import { Alert, Button, Field, PageHeader, SearchField, Select, SkeletonRows } from '../../components/ui';
+import { Alert, Button, Field, Icon, PageHeader, SearchField, Select, SkeletonRows } from '../../components/ui';
 import {
   adminFinanceApi,
   type AdminLedgerFilters,
   type AdminLedgerPage,
+  type AdminLedgerRow,
   type LedgerTxType,
 } from '../../services/adminFinanceApi';
 import type { AdminUserSummary } from '../../services/adminUserApi';
@@ -13,6 +14,7 @@ import { useDebouncedValue } from '../../utils/useDebouncedValue';
 import { adminErrorMessage } from './adminErrors';
 import { ledgerTypeLabels } from './adminItemDisplay';
 import { AdminUserPicker } from './AdminUserPicker';
+import './admin-ledger.css';
 
 const PAGE_SIZE = 20;
 
@@ -24,9 +26,94 @@ function signed(amount: number) {
   return amount > 0 ? `+${amount.toLocaleString('vi-VN')}` : amount.toLocaleString('vi-VN');
 }
 
-function shortCode(orderCode: string) {
-  if (orderCode.length <= 10) return `#${orderCode.toUpperCase()}`;
-  return `#${orderCode.slice(0, 4).toUpperCase()}...${orderCode.slice(-4).toUpperCase()}`;
+function ledgerTypeClass(type: LedgerTxType) {
+  if (type === 'TOP_UP') return 'admin-ledger-type--in';
+  if (type === 'ADMIN_ADJUST') return 'admin-ledger-type--adjust';
+  if (type === 'AI_SEARCH_FEE') return 'admin-ledger-type--ai';
+  return 'admin-ledger-type--fee';
+}
+
+interface TransactionContent {
+  prefix: string;
+  detail?: string;
+  separator?: ': ' | ' – ';
+  to?: string;
+  code?: boolean;
+}
+
+function transactionContent(row: AdminLedgerRow): TransactionContent {
+  const itemContent = (prefix: string): TransactionContent => ({
+    prefix,
+    ...(row.itemTitle ? { detail: row.itemTitle, separator: ': ' as const } : {}),
+    ...(row.itemId && row.itemTitle ? { to: `/admin/items/${row.itemId}` } : {}),
+  });
+
+  switch (row.type) {
+    case 'TOP_UP':
+      return {
+        prefix: 'Nạp Credit thành công',
+        ...(row.orderCode
+          ? {
+              detail: `Mã đơn: ${row.orderCode}`,
+              separator: ' – ' as const,
+              to: `/admin/finance/topup-orders?q=${encodeURIComponent(row.orderCode)}`,
+              code: true,
+            }
+          : {}),
+      };
+    case 'POST_FEE':
+      return itemContent('Trừ Credit đăng bài');
+    case 'EDIT_FEE':
+      return itemContent('Trừ Credit sửa bài');
+    case 'RENEW_FEE':
+      return itemContent('Trừ Credit gia hạn bài');
+    case 'BOOST_FEE':
+      return itemContent('Trừ Credit đẩy bài');
+    case 'AI_SEARCH_FEE': {
+      const note = row.note?.trim();
+      return note?.startsWith('Hoàn phí AI #')
+        ? { prefix: 'Hoàn Credit', detail: note, separator: ' – ' }
+        : { prefix: 'Trừ Credit sử dụng Trợ lý AI' };
+    }
+    case 'ADMIN_ADJUST': {
+      const note = row.note?.trim();
+      return {
+        prefix: row.amount > 0 ? 'Admin cộng Credit' : 'Admin trừ Credit',
+        ...(note ? { detail: note, separator: ' – ' as const } : {}),
+      };
+    }
+  }
+}
+
+function TransactionContentCell({ row }: { row: AdminLedgerRow }) {
+  const content = transactionContent(row);
+  const fullText = `${content.prefix}${content.detail ? `${content.separator}${content.detail}` : ''}`;
+  const detail = content.detail ? (
+    content.to ? (
+      <Link
+        className={`${content.code ? 'font-mono' : ''} font-semibold text-primary hover:underline`}
+        to={content.to}
+      >
+        {content.detail}
+      </Link>
+    ) : (
+      <span>{content.detail}</span>
+    )
+  ) : null;
+
+  return (
+    <td className="admin-ledger-content" title={fullText}>
+      <div className="admin-ledger-content-clamp">
+        <span>{content.prefix}</span>
+        {detail ? (
+          <>
+            {content.separator}
+            {detail}
+          </>
+        ) : null}
+      </div>
+    </td>
+  );
 }
 
 function downloadBlob(blob: Blob, fileName: string) {
@@ -109,24 +196,27 @@ export function AdminLedger() {
   };
 
   return (
-    <section className="space-y-5">
-      <PageHeader
-        title="Lịch sử giao dịch Credit"
-        description="Mọi biến động Credit của toàn hệ thống, dùng để đối soát."
-        action={
-          <div className="flex gap-2">
-            <Button variant="outline" disabled={exporting} onClick={() => void exportCsv()}>
-              {exporting ? 'Đang xuất...' : 'Xuất CSV'}
-            </Button>
-            <Button variant="outline" disabled={loading} onClick={() => setReloadKey((current) => current + 1)}>
-              Tải lại
-            </Button>
-          </div>
-        }
-      />
+    <section className="admin-ledger-page">
+      <div className="admin-ledger-header">
+        <PageHeader
+          title="Lịch sử giao dịch Credit"
+          description="Mọi biến động Credit của toàn hệ thống, dùng để đối soát."
+          action={
+            <div className="flex gap-2">
+              <Button variant="outline" disabled={exporting} onClick={() => void exportCsv()}>
+                {exporting ? 'Đang xuất...' : 'Xuất CSV'}
+              </Button>
+              <Button variant="outline" disabled={loading} onClick={() => setReloadKey((current) => current + 1)}>
+                Tải lại
+              </Button>
+            </div>
+          }
+        />
+      </div>
 
-      <div className="grid gap-4 rounded-lg bg-white p-4 ring-1 ring-border md:grid-cols-2 lg:grid-cols-4">
-        <div className="md:col-span-2 lg:col-span-4">
+      <div className="admin-ledger-filters">
+        <div className="admin-ledger-filter-search">
+          <span className="label">Tìm kiếm giao dịch</span>
           <SearchField
             aria-label="Tìm giao dịch Credit"
             placeholder="Tìm theo tên, email, ghi chú hoặc mã đơn nạp..."
@@ -135,6 +225,7 @@ export function AdminLedger() {
           />
         </div>
         <Select
+          className="admin-ledger-filter-type"
           label="Loại giao dịch"
           value={type}
           onChange={(event) => setType(event.target.value as LedgerTxType | '')}
@@ -146,38 +237,54 @@ export function AdminLedger() {
             </option>
           ))}
         </Select>
-        <Field
-          label="Từ ngày"
-          type="date"
-          value={fromDate}
-          error={dateRangeError || undefined}
-          onChange={(event) => setFromDate(event.target.value)}
-        />
-        <Field
-          label="Đến ngày"
-          type="date"
-          value={toDate}
-          onChange={(event) => setToDate(event.target.value)}
-        />
-        <div className="md:col-span-2 lg:col-span-4">
+        <div className="admin-ledger-filter-from">
+          <Field
+            label="Từ ngày"
+            type="date"
+            value={fromDate}
+            error={dateRangeError || undefined}
+            onChange={(event) => setFromDate(event.target.value)}
+          />
+        </div>
+        <div className="admin-ledger-filter-to">
+          <Field
+            label="Đến ngày"
+            type="date"
+            value={toDate}
+            onChange={(event) => setToDate(event.target.value)}
+          />
+        </div>
+        <div className="admin-ledger-filter-user">
           <p className="label">Người dùng</p>
           <AdminUserPicker selected={user} disabled={loading} onSelect={setUser} />
         </div>
       </div>
 
       {result ? (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-lg bg-white p-3 ring-1 ring-border">
-            <p className="text-xs text-text-muted">Tổng vào trong khoảng lọc</p>
-            <p className="text-xl font-bold tabular-nums text-success">{signed(result.totalIn)} Credit</p>
+        <div className="admin-ledger-stats">
+          <div className="admin-ledger-stat admin-ledger-stat--in">
+            <span className="admin-ledger-stat-icon"><Icon name="topup" className="size-4" weight="bold" /></span>
+            <div>
+              <p className="admin-ledger-stat-label">Tổng Credit vào</p>
+              <p className="admin-ledger-stat-value">{signed(result.totalIn)} Credit</p>
+              <p className="admin-ledger-stat-context">Trong khoảng lọc hiện tại</p>
+            </div>
           </div>
-          <div className="rounded-lg bg-white p-3 ring-1 ring-border">
-            <p className="text-xs text-text-muted">Tổng ra trong khoảng lọc</p>
-            <p className="text-xl font-bold tabular-nums text-error">{signed(result.totalOut)} Credit</p>
+          <div className="admin-ledger-stat admin-ledger-stat--out">
+            <span className="admin-ledger-stat-icon"><Icon name="ledger" className="size-4" weight="bold" /></span>
+            <div>
+              <p className="admin-ledger-stat-label">Tổng Credit ra</p>
+              <p className="admin-ledger-stat-value">{signed(result.totalOut)} Credit</p>
+              <p className="admin-ledger-stat-context">Trong khoảng lọc hiện tại</p>
+            </div>
           </div>
-          <div className="rounded-lg bg-white p-3 ring-1 ring-border">
-            <p className="text-xs text-text-muted">Số dòng</p>
-            <p className="text-xl font-bold tabular-nums text-text-primary">{result.totalElements}</p>
+          <div className="admin-ledger-stat admin-ledger-stat--total">
+            <span className="admin-ledger-stat-icon"><Icon name="transactions" className="size-4" weight="bold" /></span>
+            <div>
+              <p className="admin-ledger-stat-label">Tổng giao dịch</p>
+              <p className="admin-ledger-stat-value">{result.totalElements}</p>
+              <p className="admin-ledger-stat-context">Trong khoảng lọc hiện tại</p>
+            </div>
           </div>
         </div>
       ) : null}
@@ -193,54 +300,45 @@ export function AdminLedger() {
       {loading && !result ? (
         <SkeletonRows label="Đang tải lịch sử giao dịch Credit" />
       ) : result ? (
-        <div>
-          <div className="table-wrap">
-            <table className="data-table">
+        <div className="admin-ledger-table-section">
+          <div className="table-wrap admin-ledger-table-wrap">
+            <table className="data-table admin-ledger-table">
               <thead>
                 <tr>
-                  <th>Thời gian</th>
+                  <th>Thời gian giao dịch</th>
                   <th>Người dùng</th>
-                  <th>Loại</th>
-                  <th className="text-right">Số Credit</th>
-                  <th className="text-right">Số dư sau</th>
-                  <th>Liên quan</th>
+                  <th>Loại giao dịch</th>
+                  <th className="text-right">Biến động Credit</th>
+                  <th className="text-right">Số dư sau giao dịch</th>
+                  <th>Nội dung giao dịch</th>
                   <th>Ghi chú</th>
                 </tr>
               </thead>
               <tbody>
                 {result.items.map((row) => (
-                  <tr key={row.id}>
-                    <td className="text-xs">{formatDateTime(row.createdAt)}</td>
+                  <tr key={row.id} className="admin-ledger-row">
+                    <td className="admin-ledger-time">{formatDateTime(row.createdAt)}</td>
                     <td>
-                      <p className="font-semibold text-text-primary">{row.userName || 'Người dùng đã xóa'}</p>
-                      {row.userEmail ? <p className="text-xs text-text-muted">{row.userEmail}</p> : null}
+                      <p className="truncate font-semibold text-text-primary">{row.userName || 'Người dùng đã xóa'}</p>
+                      {row.userEmail ? <p className="truncate text-xs text-text-muted">{row.userEmail}</p> : null}
                     </td>
-                    <td>{ledgerTypeLabels[row.type]}</td>
+                    <td>
+                      <span className={`admin-ledger-type ${ledgerTypeClass(row.type)}`}>
+                        {ledgerTypeLabels[row.type]}
+                      </span>
+                    </td>
                     <td
                       className={`text-right font-semibold tabular-nums ${row.amount >= 0 ? 'text-success' : 'text-error'}`}
                     >
                       {signed(row.amount)}
                     </td>
-                    <td className="text-right tabular-nums">{row.balanceAfter.toLocaleString('vi-VN')}</td>
-                    <td className="text-xs">
-                      {row.itemId ? (
-                        <Link className="font-semibold text-primary hover:underline" to={`/admin/items/${row.itemId}`}>
-                          {row.itemTitle || 'Bài đã xóa'}
-                        </Link>
-                      ) : null}
-                      {row.orderCode ? (
-                        <Link
-                          className="font-mono font-semibold text-primary hover:underline"
-                          to={`/admin/finance/topup-orders?q=${encodeURIComponent(row.orderCode)}`}
-                        >
-                          {shortCode(row.orderCode)}
-                        </Link>
-                      ) : null}
-                      {!row.itemId && !row.orderCode ? '—' : null}
-                    </td>
-                    <td className="max-w-56 text-xs text-text-muted">
-                      {row.note || '—'}
-                      {row.createdByName ? <p>Thực hiện bởi {row.createdByName}</p> : null}
+                    <td className="admin-ledger-balance">{row.balanceAfter.toLocaleString('vi-VN')}</td>
+                    <TransactionContentCell row={row} />
+                    <td className="admin-ledger-note">
+                      <div className="admin-ledger-note-content">
+                        {row.note || '—'}
+                        {row.createdByName ? <p>Thực hiện bởi {row.createdByName}</p> : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
