@@ -50,17 +50,19 @@ public class AdminTopUpController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "false") boolean paidDate,
             @RequestParam(defaultValue = "false") boolean needsReconcile,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return service.list(provider, status, q, from, to, needsReconcile, page, size);
+        return service.list(provider, status, q, from, to, paidDate, needsReconcile, page, size);
     }
 
     @GetMapping("/summary")
     public AdminTopUpSummary summary(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return service.summarize(from, to);
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "false") boolean paidDate) {
+        return service.summarize(from, to, paidDate);
     }
 
     @GetMapping("/export.csv")
@@ -70,8 +72,9 @@ public class AdminTopUpController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "false") boolean paidDate,
             @RequestParam(defaultValue = "false") boolean needsReconcile) {
-        byte[] body = service.exportCsv(provider, status, q, from, to, needsReconcile);
+        byte[] body = service.exportCsv(provider, status, q, from, to, paidDate, needsReconcile);
         return ResponseEntity.ok()
                 .header(
                         HttpHeaders.CONTENT_DISPOSITION,

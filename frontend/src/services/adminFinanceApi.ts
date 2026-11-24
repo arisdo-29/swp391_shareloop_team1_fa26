@@ -106,11 +106,13 @@ export interface AdminTopUpSummary {
   needsReconcileCount: number;
 }
 
-export interface AdminTopUpFilters {
+interface AdminTopUpDateParams extends AdminDateParams {
+  paidDate?: boolean;
+}
+
+export interface AdminTopUpFilters extends AdminTopUpDateParams {
   status?: PaymentOrderStatus;
   q?: string;
-  from?: string;
-  to?: string;
   needsReconcile?: boolean;
 }
 
@@ -166,7 +168,7 @@ export const adminFinanceApi = {
     );
     return data;
   },
-  async topUpSummary(params: AdminDateParams) {
+  async topUpSummary(params: AdminTopUpDateParams) {
     const { data } = await http.get<AdminTopUpSummary>(
       '/api/v1/admin/finance/topup-orders/summary',
       { params },

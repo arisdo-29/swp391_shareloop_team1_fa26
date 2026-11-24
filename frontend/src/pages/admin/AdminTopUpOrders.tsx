@@ -62,7 +62,7 @@ function statusClass(status: PaymentOrderStatus) {
 }
 
 function formatDateTime(value: string | null) {
-  return value ? new Date(value).toLocaleString('vi-VN') : '—';
+  return value ? new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—';
 }
 
 // Mã đơn dài 32 ký tự nên chỉ hiện đầu và cuối, nút sao chép giữ đủ mã.
@@ -82,21 +82,23 @@ function downloadBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
-const initialKeyword = () => new URLSearchParams(window.location.search).get('q') ?? '';
-
 export function AdminTopUpOrders() {
   const location = useLocation();
+  return <TopUpOrdersList key={location.search} location={location} />;
+}
+
+function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation> }) {
+  const query = new URLSearchParams(location.search);
+  const paidDate = query.get('paidDate') === 'true';
   const routeState = location.state as AdminLedgerRouteState | null;
   const ledgerReturn = routeState?.ledgerReturn;
   const [result, setResult] = useState<PageResponse<AdminTopUpOrder> | null>(null);
   const [summary, setSummary] = useState<AdminTopUpSummary | null>(null);
-  // '' là tất cả trạng thái: mở trang là thấy toàn bộ đơn, đơn mới nhất ở trên.
-  const [status, setStatus] = useState<PaymentOrderStatus | ''>('');
-  // Trang Lịch sử giao dịch Credit mở sang đây kèm ?q=mã đơn, nên lấy từ khoá ban đầu từ địa chỉ.
-  const [keywordInput, setKeywordInput] = useState(initialKeyword);
-  const [keyword, setKeyword] = useState(initialKeyword);
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  const [status, setStatus] = useState<PaymentOrderStatus | ''>(() => query.get('status') === 'SUCCESS' ? 'SUCCESS' : '');
+  const [keywordInput, setKeywordInput] = useState(() => query.get('q') ?? '');
+  const [keyword, setKeyword] = useState(keywordInput);
+  const [fromDate, setFromDate] = useState(() => query.get('from') ?? '');
+  const [toDate, setToDate] = useState(() => query.get('to') ?? '');
   const [needsReconcile, setNeedsReconcile] = useState(false);
   const [page, setPage] = useState(0);
   const [reloadKey, setReloadKey] = useState(0);
@@ -104,9 +106,11 @@ export function AdminTopUpOrders() {
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [openedCode, setOpenedCode] = useState<string | null>(routeState?.openTopUpOrder ?? null);
+  const fromLabel = paidDate ? 'Từ ngày thanh toán' : 'Từ ngày';
+  const toLabel = paidDate ? 'Đến ngày thanh toán' : 'Đến ngày';
 
   const dateRangeError =
-    fromDate && toDate && fromDate > toDate ? '"Từ ngày" không được sau "Đến ngày".' : '';
+    fromDate && toDate && fromDate > toDate ? `"${fromLabel}" không được sau "${toLabel}".` : '';
 
   // Chờ người dùng ngừng gõ rồi mới tìm, để mỗi phím không gọi API một lần.
   useEffect(() => {
@@ -123,9 +127,10 @@ export function AdminTopUpOrders() {
     if (keyword) filters.q = keyword;
     if (fromDate) filters.from = fromDate;
     if (toDate) filters.to = toDate;
+    if (paidDate) filters.paidDate = true;
     if (needsReconcile) filters.needsReconcile = true;
     return filters;
-  }, [status, keyword, fromDate, toDate, needsReconcile]);
+  }, [status, keyword, fromDate, toDate, paidDate, needsReconcile]);
 
   useEffect(() => {
     if (dateRangeError) return;
@@ -162,7 +167,7 @@ export function AdminTopUpOrders() {
     if (dateRangeError) return;
     let active = true;
     adminFinanceApi
-      .topUpSummary({ from: fromDate || undefined, to: toDate || undefined })
+      .topUpSummary({ from: fromDate || undefined, to: toDate || undefined, ...(paidDate && { paidDate }) })
       .then((response) => {
         if (active) setSummary(response);
       })
@@ -172,7 +177,7 @@ export function AdminTopUpOrders() {
     return () => {
       active = false;
     };
-  }, [dateRangeError, fromDate, toDate, reloadKey]);
+  }, [dateRangeError, fromDate, toDate, paidDate, reloadKey]);
 
   const reload = () => setReloadKey((current) => current + 1);
 
@@ -255,7 +260,7 @@ export function AdminTopUpOrders() {
           ))}
         </Select>
         <Field
-          label="Từ ngày"
+          label={fromLabel}
           type="date"
           value={fromDate}
           error={dateRangeError || undefined}
@@ -265,7 +270,7 @@ export function AdminTopUpOrders() {
           }}
         />
         <Field
-          label="Đến ngày"
+          label={toLabel}
           type="date"
           value={toDate}
           onChange={(event) => {

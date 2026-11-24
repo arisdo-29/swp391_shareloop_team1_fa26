@@ -15,6 +15,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long> {
+    String ADMIN_DATE_RANGE = "((:paidDate = false and o.createdAt >= :from and o.createdAt < :to)"
+            + " or (:paidDate = true and o.paidAt >= :from and o.paidAt < :to))";
 
     /**
      * Danh sách đơn cho trang Giao dịch nạp tiền của Admin. provider và status null là không lọc. keywordPattern null
@@ -24,7 +26,7 @@ public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long
     @Query("select o from PaymentOrder o where (:provider is null or o.provider = :provider)"
             + " and (:status is null or o.status = :status)"
             + " and (:keywordPattern is null or lower(o.orderCode) like :keywordPattern or o.userId in :userIds)"
-            + " and o.createdAt >= :from and o.createdAt < :to"
+            + " and " + ADMIN_DATE_RANGE
             + " and (:reconcileOnly = false or (o.provider = com.shareloop.wallet.entity.PaymentProvider.VNPAY"
             + "   and o.status in (com.shareloop.wallet.entity.PaymentOrderStatus.FAILED,"
             + "     com.shareloop.wallet.entity.PaymentOrderStatus.CANCELLED,"
@@ -37,26 +39,29 @@ public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long
             @Param("userIds") Collection<Long> userIds,
             @Param("from") Instant from,
             @Param("to") Instant to,
+            @Param("paidDate") boolean paidDate,
             @Param("reconcileOnly") boolean reconcileOnly,
             org.springframework.data.domain.Pageable pageable);
 
-    /** Số đơn và tổng tiền theo từng trạng thái, lọc theo ngày tạo trong [from, to), cho khối tổng hợp của Admin. */
+    /** Số đơn và tổng tiền theo từng trạng thái trong khoảng lọc của Admin. */
     @Query("select o.status as status, count(o) as orderCount, coalesce(sum(o.amountVnd), 0) as amountVnd"
-            + " from PaymentOrder o where o.createdAt >= :from and o.createdAt < :to group by o.status")
-    List<StatusTotalView> summarizeByStatus(@Param("from") Instant from, @Param("to") Instant to);
+            + " from PaymentOrder o where " + ADMIN_DATE_RANGE + " group by o.status")
+    List<StatusTotalView> summarizeByStatus(
+            @Param("from") Instant from, @Param("to") Instant to, @Param("paidDate") boolean paidDate);
 
     /** Mã đơn của nhiều đơn theo id, dùng để gắn mã vào dòng sổ cái. */
     @Query("select o.id as id, o.orderCode as orderCode from PaymentOrder o where o.id in :ids")
     List<OrderCodeView> findCodesByIds(@Param("ids") Collection<Long> ids);
 
-    /** Số đơn cần đối soát trong khoảng ngày tạo [from, to). */
-    @Query("select count(o) from PaymentOrder o where o.createdAt >= :from and o.createdAt < :to"
+    /** Số đơn cần đối soát trong khoảng lọc của Admin. */
+    @Query("select count(o) from PaymentOrder o where " + ADMIN_DATE_RANGE
             + " and o.provider = com.shareloop.wallet.entity.PaymentProvider.VNPAY"
             + " and o.status in (com.shareloop.wallet.entity.PaymentOrderStatus.FAILED,"
             + "   com.shareloop.wallet.entity.PaymentOrderStatus.CANCELLED,"
             + "   com.shareloop.wallet.entity.PaymentOrderStatus.EXPIRED)"
             + " and o.paidAt is not null and o.reviewedAt is null")
-    long countNeedingReconcile(@Param("from") Instant from, @Param("to") Instant to);
+    long countNeedingReconcile(
+            @Param("from") Instant from, @Param("to") Instant to, @Param("paidDate") boolean paidDate);
 
     /** Đọc nhẹ id, chủ đơn, trạng thái và số Credit theo mã đơn; không khoá, không tạo entity managed. */
     @Query(
