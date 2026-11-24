@@ -85,7 +85,10 @@ class OfferTypeConversionIT extends IntegrationTest {
         long giveItemId = insertItem(donorId, "GIVE", "APPROVED");
         long offeredItemId = insertItem(receiverId, "GIVE", "APPROVED");
 
-        jdbc.update("UPDATE items SET reference_price = 280000 WHERE id = ?", offeredItemId);
+        long offeredAreaId =
+                jdbc.queryForObject("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1 OFFSET 1", Long.class);
+        jdbc.update(
+                "UPDATE items SET reference_price = 280000, area_id = ? WHERE id = ?", offeredAreaId, offeredItemId);
 
         // when
         JsonNode response = createRequestViaApi(giveItemId, receiverId, new CreateRequest(offeredItemId));
@@ -98,7 +101,8 @@ class OfferTypeConversionIT extends IntegrationTest {
         mockMvc.perform(get("/api/v1/items/{id}/requests", giveItemId)
                         .header("Authorization", "Bearer " + jwtService.issue(donorId, false)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].offeredItemReferencePrice").value(280000));
+                .andExpect(jsonPath("$[0].offeredItemReferencePrice").value(280000))
+                .andExpect(jsonPath("$[0].offeredItemAreaId").value(Math.toIntExact(offeredAreaId)));
     }
 
     @Test

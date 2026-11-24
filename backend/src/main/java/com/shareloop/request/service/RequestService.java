@@ -3245,8 +3245,10 @@ public class RequestService {
                 : itemQueryService.findOfferedItemDetails(offeredItemId).orElse(null);
         String offeredItemTitle = offeredItem == null ? null : offeredItem.title();
         Long offeredItemReferencePrice = offeredItem == null ? null : offeredItem.referencePrice();
+        Long offeredItemAreaId = offeredItem == null ? null : offeredItem.areaId();
         if (card == null) {
-            return new RequestItemInfo(null, null, null, null, offeredItemTitle, null, offeredItemReferencePrice);
+            return new RequestItemInfo(
+                    null, null, null, null, offeredItemTitle, null, offeredItemReferencePrice, offeredItemAreaId);
         }
         String itemOfferType = card.offerType() != null ? card.offerType().name() : null;
         return new RequestItemInfo(
@@ -3256,7 +3258,8 @@ public class RequestService {
                 findUserName(card.donorId()),
                 offeredItemTitle,
                 itemOfferType,
-                offeredItemReferencePrice);
+                offeredItemReferencePrice,
+                offeredItemAreaId);
     }
 
     // Bài đã xoá hoặc service chưa sẵn sàng thì trả null để API vẫn trả được phần còn lại.

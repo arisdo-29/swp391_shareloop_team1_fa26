@@ -954,6 +954,7 @@ export function Activities() {
                       itemStatus={item.status}
                       hasAcceptedRequest={hasAcceptedRequest}
                       itemRequests={itemRequests}
+                      areas={editAreas}
                       allowAccept={Boolean(currentUserId)}
                       onAccept={(requestId) => {
                         setAcceptError('');
@@ -2006,12 +2007,14 @@ function RequestPanel({
   itemStatus,
   hasAcceptedRequest,
   itemRequests,
+  areas,
   allowAccept,
   onAccept,
 }: {
   itemStatus: string;
   hasAcceptedRequest: boolean;
   itemRequests: ItemRequest[];
+  areas: AreaOption[];
   allowAccept: boolean;
   onAccept: (requestId: string) => void;
 }) {
@@ -2032,6 +2035,7 @@ function RequestPanel({
       <div className="space-y-2">
         {itemRequests.map((request) => {
           const requesterName = requesterDisplayName(request);
+          const offeredArea = areas.find((area) => area.id === request.offeredItemAreaId)?.label;
           // requesterId dạng "api_12"; đổi về id số của backend để mở hồ sơ. Không đổi được thì không gắn link.
           const requesterUserId = toBackendUserId(request.requesterId);
           const profilePath = requesterUserId !== null ? userProfilePath(requesterUserId) : null;
@@ -2085,6 +2089,7 @@ function RequestPanel({
                       {request.offeredItemTitle ?? 'Xem chi tiết'}
                     </Link>
                     <span className="block">{formatReferencePrice(request.offeredItemReferencePrice)}</span>
+                    {offeredArea ? <span className="block">Khu vực: {offeredArea}</span> : null}
                   </p>
                 ) : null}
                 {request.status === 'PENDING'

@@ -94,19 +94,19 @@ public class ItemQueryService {
         return titles;
     }
 
-    /** Giá và tiêu đề để thành viên xem lại món được đề nghị trong yêu cầu, kể cả bài đã xoá mềm. */
+    /** Tiêu đề, giá và khu vực công khai của món được đề nghị, kể cả bài đã xoá mềm. */
     public Optional<OfferedItemDetails> findOfferedItemDetails(long itemId) {
         if (jdbcClient == null) {
             return Optional.empty();
         }
         return jdbcClient
-                .sql("SELECT title, reference_price FROM items WHERE id = :itemId")
+                .sql("SELECT title, reference_price, area_id FROM items WHERE id = :itemId")
                 .param("itemId", itemId)
                 .query(OfferedItemDetails.class)
                 .optional();
     }
 
-    public record OfferedItemDetails(String title, Long referencePrice) {}
+    public record OfferedItemDetails(String title, Long referencePrice, Long areaId) {}
 
     // JdbcClient tự map cột id, title vào record theo tên thành phần.
 
