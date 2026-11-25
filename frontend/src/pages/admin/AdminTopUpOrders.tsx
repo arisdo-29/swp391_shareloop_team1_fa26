@@ -26,6 +26,7 @@ import type { PaymentOrderStatus } from '../../services/paymentApi';
 import { formatVnd } from '../../utils/formatting';
 import { adminErrorMessage } from './adminErrors';
 import type { AdminLedgerRouteState, AdminLedgerViewState } from './adminLedgerNavigation';
+import { DashboardGrid, DashboardStatCard, type DashboardAccent } from './AdminDashboardCards';
 import './admin-topup-orders.css';
 
 const PAGE_SIZE = 10;
@@ -99,7 +100,9 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
   const [keyword, setKeyword] = useState(keywordInput);
   const [fromDate, setFromDate] = useState(() => query.get('from') ?? '');
   const [toDate, setToDate] = useState(() => query.get('to') ?? '');
-  const [needsReconcile, setNeedsReconcile] = useState(() => query.get('needsReconcile') === 'true');
+  const [needsReconcile, setNeedsReconcile] = useState(
+    () => query.get('needsReconcile') === 'true',
+  );
   const [page, setPage] = useState(0);
   const [reloadKey, setReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -384,48 +387,55 @@ function SummaryCards({
   onReconcile: () => void;
 }) {
   if (!summary) return null;
-  const cardClass = (active: boolean, modifier: string) =>
-    `admin-topup-stat ${modifier} ${active ? 'admin-topup-stat--active' : ''}`;
+  const appearances: Record<
+    PaymentOrderStatus,
+    { icon: 'completed' | 'expiring' | 'banned'; accent: DashboardAccent }
+  > = {
+    SUCCESS: { icon: 'completed', accent: 'green' },
+    PENDING: { icon: 'expiring', accent: 'gold' },
+    FAILED: { icon: 'banned', accent: 'red' },
+    EXPIRED: { icon: 'expiring', accent: 'red' },
+    CANCELLED: { icon: 'banned', accent: 'red' },
+  };
   return (
-    <div className="admin-topup-stats">
-      <button
-        type="button"
-        className={cardClass(reconcileOnly, 'admin-topup-stat--reconcile')}
-        onClick={onReconcile}
-      >
-        <p className="admin-topup-stat-label">Cần đối soát</p>
-        <p className="admin-topup-stat-value">{summary.needsReconcileCount} đơn</p>
-        <p className="admin-topup-stat-context">Cần kiểm tra thủ công</p>
-      </button>
-      {summary.byStatus.map((total) => {
-        const context =
-          total.status === 'SUCCESS'
-            ? 'Tiền thực thu'
-            : total.status === 'PENDING'
-              ? 'Giá trị chưa thanh toán'
-              : total.status === 'FAILED'
-                ? 'Giá trị thanh toán thất bại'
-                : total.status === 'EXPIRED'
-                  ? 'Giá trị đơn hết hạn'
-                  : 'Giá trị đơn đã hủy';
-        return (
-          <button
-            key={total.status}
-            type="button"
-            className={cardClass(
-              activeStatus === total.status,
-              `admin-topup-stat--${total.status.toLowerCase()}`,
-            )}
-            onClick={() => onStatus(total.status)}
-          >
-            <p className="admin-topup-stat-label">{statusLabels[total.status]}</p>
-            <p className="admin-topup-stat-value">{formatVnd(total.amountVnd)}</p>
-            <p className="admin-topup-stat-context">
-              {context} · {total.orderCount} đơn
-            </p>
-          </button>
-        );
-      })}
+    <div className="admin-dash-vars" aria-label="Thống kê đơn nạp">
+      <DashboardGrid columns={6}>
+        <DashboardStatCard
+          variant="finance"
+          icon="reconcile"
+          accent="red"
+          label="Cần đối soát"
+          value={`${summary.needsReconcileCount} đơn`}
+          note="Cần kiểm tra thủ công"
+          active={reconcileOnly}
+          onClick={onReconcile}
+        />
+        {summary.byStatus.map((total) => {
+          const context =
+            total.status === 'SUCCESS'
+              ? 'Tiền thực thu'
+              : total.status === 'PENDING'
+                ? 'Giá trị chưa thanh toán'
+                : total.status === 'FAILED'
+                  ? 'Giá trị thanh toán thất bại'
+                  : total.status === 'EXPIRED'
+                    ? 'Giá trị đơn hết hạn'
+                    : 'Giá trị đơn đã hủy';
+          return (
+            <DashboardStatCard
+              key={total.status}
+              variant="finance"
+              icon={appearances[total.status].icon}
+              accent={appearances[total.status].accent}
+              label={statusLabels[total.status]}
+              value={formatVnd(total.amountVnd)}
+              note={`${context} · ${total.orderCount} đơn`}
+              active={activeStatus === total.status}
+              onClick={() => onStatus(total.status)}
+            />
+          );
+        })}
+      </DashboardGrid>
     </div>
   );
 }

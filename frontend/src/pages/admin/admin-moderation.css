@@ -17,52 +17,19 @@
   line-height: 1.45;
 }
 
-/* Thẻ thống kê */
-.admin-moderation-stats {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
+[aria-label='Thống kê bài chờ duyệt'] .admin-dash-card:nth-child(1) {
+  --accent: #c49a45;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, white);
 }
 
-.admin-moderation-stat {
-  min-width: 0;
-  min-height: 82px;
-  padding: 12px 14px;
-  border: 1px solid var(--color-border);
-  border-left-width: 3px;
-  border-radius: 8px;
-  background: white;
+[aria-label='Thống kê bài chờ duyệt'] .admin-dash-card:nth-child(2) {
+  --accent: #176b4b;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, white);
 }
 
-.admin-moderation-stat p,
-.admin-moderation-stat span {
-  display: block;
-  color: var(--color-text-muted);
-  font-size: 0.6875rem;
-  line-height: 1.35;
-}
-
-.admin-moderation-stat strong {
-  display: block;
-  margin: 2px 0;
-  font-size: 1.125rem;
-  line-height: 1.3;
-  font-variant-numeric: tabular-nums;
-}
-
-.admin-moderation-stat--total {
-  border-left-color: var(--color-warning);
-  color: var(--color-warning);
-}
-
-.admin-moderation-stat--give {
-  border-left-color: var(--color-success);
-  color: var(--color-success);
-}
-
-.admin-moderation-stat--swap {
-  border-left-color: var(--color-info);
-  color: var(--color-info);
+[aria-label='Thống kê bài chờ duyệt'] .admin-dash-card:nth-child(3) {
+  --accent: #527f9d;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, white);
 }
 
 /* Bộ lọc */
@@ -266,10 +233,6 @@
 }
 
 @media (min-width: 640px) {
-  .admin-moderation-stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
   .admin-moderation-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

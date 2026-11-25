@@ -17,7 +17,12 @@ import {
 } from '../../components/ui';
 import { DialogFrame } from '../../components/Dialog';
 import { Pagination } from '../../components/Pagination';
-import { adminLexiconApi, type AdminLexiconEntry, type AdminLexiconRequest, type LexiconMatch } from '../../services/adminLexiconApi';
+import {
+  adminLexiconApi,
+  type AdminLexiconEntry,
+  type AdminLexiconRequest,
+  type LexiconMatch,
+} from '../../services/adminLexiconApi';
 import {
   adminCategoryApi,
   type AdminCategoryAttributeRequest,
@@ -25,7 +30,11 @@ import {
   type AdminCategoryRequest,
   type AdminCategoryResponse,
 } from '../../services/adminCategoryApi';
-import { adminAreaApi, type AdminAreaRequest, type AdminAreaResponse } from '../../services/adminAreaApi';
+import {
+  adminAreaApi,
+  type AdminAreaRequest,
+  type AdminAreaResponse,
+} from '../../services/adminAreaApi';
 import type { AttributeDataType } from '../../services/catalogApi';
 import {
   ADMIN_CHECKLIST_DESCRIPTION_MAX_LENGTH,
@@ -33,6 +42,7 @@ import {
   adminChecklistApi,
   type AdminChecklistEntry,
 } from '../../services/adminChecklistApi';
+import { DashboardGrid, DashboardStatCard } from './AdminDashboardCards';
 import {
   adminAuditApi,
   type ActivityLogParams,
@@ -46,15 +56,17 @@ function Panel({
   title,
   description,
   action,
+  className = '',
   children,
 }: {
   title: string;
   description?: string;
   action?: ReactNode;
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <section>
+    <section className={className}>
       <PageHeader title={title} description={description} action={action} />
       {children}
     </section>
@@ -112,8 +124,17 @@ export function AdminAuditLogs() {
 
   useEffect(() => {
     let active = true;
-    adminAuditApi.types().then((types) => { if (active) setActionTypes(types); }).catch(() => { /* Backend cũ vẫn dùng danh sách nhãn sẵn có. */ });
-    return () => { active = false; };
+    adminAuditApi
+      .types()
+      .then((types) => {
+        if (active) setActionTypes(types);
+      })
+      .catch(() => {
+        /* Backend cũ vẫn dùng danh sách nhãn sẵn có. */
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -178,18 +199,47 @@ export function AdminAuditLogs() {
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <div>
             <span className="label">Người thực hiện</span>
-            <AdminUserPicker searchLabel="Tìm người thực hiện" selected={actorUser} disabled={loading} onSelect={setActorUser} />
+            <AdminUserPicker
+              searchLabel="Tìm người thực hiện"
+              selected={actorUser}
+              disabled={loading}
+              onSelect={setActorUser}
+            />
           </div>
-          <Select label="Hành động" value={actionType} onChange={(event) => setActionType(event.target.value)}>
+          <Select
+            label="Hành động"
+            value={actionType}
+            onChange={(event) => setActionType(event.target.value)}
+          >
             <option value="">Tất cả hành động</option>
-            {(actionTypes.length ? actionTypes.map((entry) => [entry.type, activityTypeOptionLabel(entry.type, entry.label)]) : Object.entries(activityLogTypeLabels)).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
+            {(actionTypes.length
+              ? actionTypes.map((entry) => [
+                  entry.type,
+                  activityTypeOptionLabel(entry.type, entry.label),
+                ])
+              : Object.entries(activityLogTypeLabels)
+            ).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
             ))}
           </Select>
-          <Field label="Từ ngày" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-          <Field label="Đến ngày" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+          <Field
+            label="Từ ngày"
+            type="date"
+            value={from}
+            onChange={(event) => setFrom(event.target.value)}
+          />
+          <Field
+            label="Đến ngày"
+            type="date"
+            value={to}
+            onChange={(event) => setTo(event.target.value)}
+          />
           <div className="flex items-end">
-            <Button type="submit" className="w-full" disabled={loading}>Lọc nhật ký</Button>
+            <Button type="submit" className="w-full" disabled={loading}>
+              Lọc nhật ký
+            </Button>
           </div>
         </div>
       </form>
@@ -199,14 +249,21 @@ export function AdminAuditLogs() {
       ) : error ? (
         <div className="rounded-md bg-error-soft p-4 text-sm leading-6 text-error">
           <p>{error}</p>
-          <Button className="mt-3" variant="outline" onClick={() => setReloadKey((value) => value + 1)}>
+          <Button
+            className="mt-3"
+            variant="outline"
+            onClick={() => setReloadKey((value) => value + 1)}
+          >
             Thử lại
           </Button>
         </div>
       ) : (
         <>
           {logs.length === 0 ? (
-            <EmptyState title="Chưa có nhật ký" text="Không có hành động nào phù hợp với bộ lọc hiện tại." />
+            <EmptyState
+              title="Chưa có nhật ký"
+              text="Không có hành động nào phù hợp với bộ lọc hiện tại."
+            />
           ) : (
             <div className="table-wrap">
               <table className="data-table">
@@ -226,7 +283,9 @@ export function AdminAuditLogs() {
                       <td>{log.actorName ?? (log.actorId ? 'Quản trị viên' : 'Hệ thống')}</td>
                       <td>{activityLogLabel(log) ?? activityLogTypeLabel(log.type)}</td>
                       <td>{activityLogTarget(log)}</td>
-                      <td><ActivityLogDetail log={log} /></td>
+                      <td>
+                        <ActivityLogDetail log={log} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -235,7 +294,8 @@ export function AdminAuditLogs() {
           )}
           <div className="mt-4 flex flex-col gap-3 rounded-lg bg-white p-3 text-sm text-text-secondary ring-1 ring-border/80 sm:flex-row sm:items-center sm:justify-between">
             <p>
-              {totalElements.toLocaleString('vi-VN')} bản ghi · Trang {page + 1}/{Math.max(totalPages, 1)}
+              {totalElements.toLocaleString('vi-VN')} bản ghi · Trang {page + 1}/
+              {Math.max(totalPages, 1)}
             </p>
             <nav
               aria-label="Phân trang nhật ký"
@@ -309,7 +369,8 @@ interface ActivityLogCheck {
 
 function ActivityLogDetail({ log }: { log: ActivityLogResponse }) {
   const [expanded, setExpanded] = useState(false);
-  const content = activityLogDetail(log)?.trim() || log.reason?.trim() || 'Không có thông tin chi tiết';
+  const content =
+    activityLogDetail(log)?.trim() || log.reason?.trim() || 'Không có thông tin chi tiết';
   const checks = activityLogChecks(log, content);
   const isStructured = checks.length > 0 || /^[{[]/.test(content);
 
@@ -379,13 +440,18 @@ function activityLogChecksFromValue(value: unknown): ActivityLogCheck[] {
   const entries = Array.isArray(value)
     ? value
     : value && typeof value === 'object' && Array.isArray((value as Record<string, unknown>).checks)
-      ? (value as Record<string, unknown>).checks as unknown[]
+      ? ((value as Record<string, unknown>).checks as unknown[])
       : [];
 
   return entries.flatMap((entry) => {
     if (!entry || typeof entry !== 'object') return [];
     const record = entry as Record<string, unknown>;
-    const question = typeof record.statement === 'string' ? record.statement.trim() : typeof record.question === 'string' ? record.question.trim() : '';
+    const question =
+      typeof record.statement === 'string'
+        ? record.statement.trim()
+        : typeof record.question === 'string'
+          ? record.question.trim()
+          : '';
     const passed = record.passed === true || record.passed === 'true';
     return question ? [{ passed, question }] : [];
   });
@@ -471,7 +537,13 @@ function lexiconLevelBadgeClass(level: string) {
 
 // Bỏ dấu và chữ hoa để "zalo" khớp "Zalo", "ma tuy" khớp "ma túy".
 function normalizeLexiconSearch(value: string) {
-  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().trim();
+  return value
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim();
 }
 
 type LexiconStatusFilter = '' | 'active' | 'inactive';
@@ -494,14 +566,18 @@ function ApiAdminKeywords() {
   const [levelFilter, setLevelFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<LexiconStatusFilter>('');
   const searchTerm = normalizeLexiconSearch(search);
-  const filteredEntries = entries.filter((entry) =>
-    (!searchTerm || normalizeLexiconSearch(entry.keyword).includes(searchTerm))
-    && (!groupFilter || entry.group.trim().toUpperCase() === groupFilter)
-    && (!levelFilter || entry.level.trim().toUpperCase() === levelFilter)
-    && (!statusFilter || entry.active === (statusFilter === 'active')),
+  const filteredEntries = entries.filter(
+    (entry) =>
+      (!searchTerm || normalizeLexiconSearch(entry.keyword).includes(searchTerm)) &&
+      (!groupFilter || entry.group.trim().toUpperCase() === groupFilter) &&
+      (!levelFilter || entry.level.trim().toUpperCase() === levelFilter) &&
+      (!statusFilter || entry.active === (statusFilter === 'active')),
   );
   // Lọc theo trạng thái rồi tạm ngưng một dòng có thể làm danh sách ngắn lại: không để trang hiện tại trống.
-  const currentPage = Math.min(page, Math.max(0, Math.ceil(filteredEntries.length / LEXICON_PAGE_SIZE) - 1));
+  const currentPage = Math.min(
+    page,
+    Math.max(0, Math.ceil(filteredEntries.length / LEXICON_PAGE_SIZE) - 1),
+  );
   const pageEntries = filteredEntries.slice(
     currentPage * LEXICON_PAGE_SIZE,
     (currentPage + 1) * LEXICON_PAGE_SIZE,
@@ -516,7 +592,8 @@ function ApiAdminKeywords() {
     let active = true;
     setLoading(true);
     setError('');
-    adminLexiconApi.list()
+    adminLexiconApi
+      .list()
       .then((response) => {
         if (active) setEntries(response);
       })
@@ -526,19 +603,24 @@ function ApiAdminKeywords() {
       .finally(() => {
         if (active) setLoading(false);
       });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [reloadKey]);
 
   const save = async (input: AdminLexiconRequest) => {
-    setSavingId(editing === 'new' ? 0 : editing?.id ?? null);
+    setSavingId(editing === 'new' ? 0 : (editing?.id ?? null));
     setError('');
     try {
-      const saved = editing === 'new'
-        ? await adminLexiconApi.create(input)
-        : await adminLexiconApi.update(editing!.id, input);
-      setEntries((current) => editing === 'new'
-        ? [...current, saved]
-        : current.map((entry) => entry.id === saved.id ? saved : entry));
+      const saved =
+        editing === 'new'
+          ? await adminLexiconApi.create(input)
+          : await adminLexiconApi.update(editing!.id, input);
+      setEntries((current) =>
+        editing === 'new'
+          ? [...current, saved]
+          : current.map((entry) => (entry.id === saved.id ? saved : entry)),
+      );
       setEditing(null);
       setNotice(editing === 'new' ? 'Đã thêm từ khóa.' : 'Đã cập nhật từ khóa.');
     } catch (apiError) {
@@ -554,7 +636,7 @@ function ApiAdminKeywords() {
     setError('');
     try {
       const updated = await adminLexiconApi.setActive(entry.id, !entry.active);
-      setEntries((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setEntries((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     } catch (apiError) {
       const response = apiError as ApiError;
       setError(response.message || 'Không cập nhật được trạng thái từ khóa.');
@@ -580,59 +662,210 @@ function ApiAdminKeywords() {
   return (
     <Panel
       title="Từ khóa kiểm duyệt"
+      className="admin-keywords-page"
       action={<Button onClick={() => setEditing('new')}>Thêm từ khóa</Button>}
     >
-      {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
-      {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
-      {!loading && !error ? <ActiveCountStats entries={entries} ariaLabel="Thống kê từ khóa" labels={['Tổng từ khóa', 'Đang hoạt động', 'Đã tạm ngưng']} totalIcon="checklist" /> : null}
-      <section className="mb-5 rounded-lg bg-white p-4 ring-1 ring-border/80">
-        <TextArea label="Kiểm tra nội dung" inputClassName="!min-h-0 h-[100px]" value={testText} onChange={(event) => setTestText(event.target.value)} placeholder="Nhập nội dung cần đối chiếu với từ điển..." />
-        <div className="mt-3 flex justify-end">
-          <Button variant="outline" disabled={testing || !testText.trim()} onClick={() => void testLexicon()}>{testing ? 'Đang kiểm tra...' : 'Kiểm tra'}</Button>
+      {notice ? (
+        <div className="mb-4">
+          <Alert tone="success">{notice}</Alert>
         </div>
-        {testMatches.length ? <div className="mt-3 space-y-1 text-xs text-text-secondary">{testMatches.map((match, index) => <p key={`${match.keyword}-${index}`}><strong>{match.keyword}</strong> · {getLexiconLabel(lexiconLevelLabels, match.level)} · {getLexiconLabel(lexiconGroupLabels, match.group)} · {match.matchedAs}</p>)}</div> : null}
+      ) : null}
+      {error ? (
+        <div className="mb-4 space-y-3">
+          <Alert tone="error">{error}</Alert>
+          <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
+            Tải lại
+          </Button>
+        </div>
+      ) : null}
+      {!loading && !error ? (
+        <ActiveCountStats
+          entries={entries}
+          ariaLabel="Thống kê từ khóa"
+          labels={['Tổng từ khóa', 'Đang hoạt động', 'Đã tạm ngưng']}
+          totalIcon="checklist"
+        />
+      ) : null}
+      <section className="admin-keywords-test mb-5 rounded-lg bg-white p-4 ring-1 ring-border/80">
+        <TextArea
+          label="Kiểm tra nội dung"
+          inputClassName="!min-h-0 h-[100px]"
+          value={testText}
+          onChange={(event) => setTestText(event.target.value)}
+          placeholder="Nhập nội dung cần đối chiếu với từ điển..."
+        />
+        <div className="mt-3 flex justify-end">
+          <Button
+            variant="outline"
+            disabled={testing || !testText.trim()}
+            onClick={() => void testLexicon()}
+          >
+            {testing ? 'Đang kiểm tra...' : 'Kiểm tra'}
+          </Button>
+        </div>
+        {testMatches.length ? (
+          <div className="mt-3 space-y-1 text-xs text-text-secondary">
+            {testMatches.map((match, index) => (
+              <p key={`${match.keyword}-${index}`}>
+                <strong>{match.keyword}</strong> ·{' '}
+                {getLexiconLabel(lexiconLevelLabels, match.level)} ·{' '}
+                {getLexiconLabel(lexiconGroupLabels, match.group)} · {match.matchedAs}
+              </p>
+            ))}
+          </div>
+        ) : null}
       </section>
       {!loading && entries.length ? (
-        <div className="mb-4 grid gap-3 rounded-lg bg-white p-4 ring-1 ring-border/80 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+        <div className="admin-keywords-filters mb-4 grid gap-3 rounded-lg bg-white p-4 ring-1 ring-border/80 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
           <div className="sm:col-span-2 lg:col-span-6">
             <span className="label">Tìm kiếm</span>
-            <SearchField aria-label="Tìm từ khóa" placeholder="Tìm theo từ khóa..." value={search} onChange={(event) => changeFilter(() => setSearch(event.target.value))} />
+            <SearchField
+              aria-label="Tìm từ khóa"
+              placeholder="Tìm theo từ khóa..."
+              value={search}
+              onChange={(event) => changeFilter(() => setSearch(event.target.value))}
+            />
           </div>
-          <Select className="lg:col-span-2" label="Nhóm" value={groupFilter} onChange={(event) => changeFilter(() => setGroupFilter(event.target.value))}>
+          <Select
+            className="lg:col-span-2"
+            label="Nhóm"
+            value={groupFilter}
+            onChange={(event) => changeFilter(() => setGroupFilter(event.target.value))}
+          >
             <option value="">Tất cả nhóm</option>
-            {Object.entries(lexiconGroupLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            {Object.entries(lexiconGroupLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
           </Select>
-          <Select className="lg:col-span-2" label="Mức độ" value={levelFilter} onChange={(event) => changeFilter(() => setLevelFilter(event.target.value))}>
+          <Select
+            className="lg:col-span-2"
+            label="Mức độ"
+            value={levelFilter}
+            onChange={(event) => changeFilter(() => setLevelFilter(event.target.value))}
+          >
             <option value="">Tất cả mức độ</option>
-            {Object.entries(lexiconLevelLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            {Object.entries(lexiconLevelLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
           </Select>
-          <Select className="lg:col-span-2" label="Trạng thái" value={statusFilter} onChange={(event) => changeFilter(() => setStatusFilter(event.target.value as LexiconStatusFilter))}>
+          <Select
+            className="lg:col-span-2"
+            label="Trạng thái"
+            value={statusFilter}
+            onChange={(event) =>
+              changeFilter(() => setStatusFilter(event.target.value as LexiconStatusFilter))
+            }
+          >
             <option value="">Tất cả trạng thái</option>
             <option value="active">Đang hoạt động</option>
             <option value="inactive">Đã tạm ngưng</option>
           </Select>
         </div>
       ) : null}
-      {loading ? <SkeletonRows label="Đang tải từ điển" /> : entries.length ? (
-        filteredEntries.length ? <>
-          <div className="table-wrap"><table className="data-table"><thead><tr><th>Từ khóa</th><th>Nhóm</th><th className="text-center">Mức độ</th><th>Phạm vi</th><th className="text-center">Trạng thái</th><th className="text-center">Thao tác</th></tr></thead><tbody>
-            {pageEntries.map((entry) => <tr key={entry.id}><td className="font-semibold">{entry.keyword}</td><td>{getLexiconLabel(lexiconGroupLabels, entry.group)}</td><td className="text-center"><span className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-xs font-semibold ${lexiconLevelBadgeClass(entry.level)}`}>{getLexiconLabel(lexiconLevelLabels, entry.level)}</span></td><td>{getLexiconLabel(lexiconScopeLabels, entry.scope)}</td><td className="text-center"><span className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-xs font-semibold ${entry.active ? 'bg-success-soft text-success' : 'bg-surface-low text-text-muted'}`}>{entry.active ? 'Đang hoạt động' : 'Đã tạm ngưng'}</span></td><td><div className="flex flex-nowrap items-center justify-center gap-2"><Button variant="outline" disabled={savingId === entry.id} onClick={() => setEditing(entry)}>Sửa</Button><Button variant="outline" disabled={savingId === entry.id} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ngưng' : 'Kích hoạt'}</Button></div></td></tr>)}
-          </tbody></table></div>
-          <Pagination
-            page={currentPage}
-            size={LEXICON_PAGE_SIZE}
-            totalElements={filteredEntries.length}
-            disabled={savingId !== null}
-            onPageChange={setPage}
+      {loading ? (
+        <SkeletonRows label="Đang tải từ điển" />
+      ) : entries.length ? (
+        filteredEntries.length ? (
+          <>
+            <div className="table-wrap">
+              <table className="data-table admin-keywords-table">
+                <thead>
+                  <tr>
+                    <th>Từ khóa</th>
+                    <th>Nhóm</th>
+                    <th className="text-center">Mức độ</th>
+                    <th>Phạm vi</th>
+                    <th className="text-center">Trạng thái</th>
+                    <th className="text-center">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageEntries.map((entry) => (
+                    <tr key={entry.id}>
+                      <td className="font-semibold">{entry.keyword}</td>
+                      <td>{getLexiconLabel(lexiconGroupLabels, entry.group)}</td>
+                      <td className="text-center">
+                        <span
+                          className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-xs font-semibold ${lexiconLevelBadgeClass(entry.level)}`}
+                        >
+                          {getLexiconLabel(lexiconLevelLabels, entry.level)}
+                        </span>
+                      </td>
+                      <td>{getLexiconLabel(lexiconScopeLabels, entry.scope)}</td>
+                      <td className="text-center">
+                        <span
+                          className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-xs font-semibold ${entry.active ? 'bg-success-soft text-success' : 'bg-surface-low text-text-muted'}`}
+                        >
+                          {entry.active ? 'Đang hoạt động' : 'Đã tạm ngưng'}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="flex flex-nowrap items-center justify-center gap-2">
+                          <Button
+                            variant="outline"
+                            disabled={savingId === entry.id}
+                            onClick={() => setEditing(entry)}
+                          >
+                            Sửa
+                          </Button>
+                          <Button
+                            variant="outline"
+                            disabled={savingId === entry.id}
+                            onClick={() => void toggleActive(entry)}
+                          >
+                            {entry.active ? 'Tạm ngưng' : 'Kích hoạt'}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              page={currentPage}
+              size={LEXICON_PAGE_SIZE}
+              totalElements={filteredEntries.length}
+              disabled={savingId !== null}
+              onPageChange={setPage}
+            />
+          </>
+        ) : (
+          <EmptyState
+            title="Không tìm thấy từ khóa phù hợp"
+            text="Hãy thử đổi từ khóa tìm kiếm hoặc bộ lọc."
           />
-        </> : <EmptyState title="Không tìm thấy từ khóa phù hợp" text="Hãy thử đổi từ khóa tìm kiếm hoặc bộ lọc." />
-      ) : <EmptyState title="Chưa có từ khóa" text="Hiện chưa có mục từ điển kiểm duyệt nào." />}
-      {editing ? <ApiLexiconModal entry={editing === 'new' ? null : editing} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
+        )
+      ) : (
+        <EmptyState title="Chưa có từ khóa" text="Hiện chưa có mục từ điển kiểm duyệt nào." />
+      )}
+      {editing ? (
+        <ApiLexiconModal
+          entry={editing === 'new' ? null : editing}
+          saving={savingId !== null}
+          onClose={() => setEditing(null)}
+          onSave={(input) => void save(input)}
+        />
+      ) : null}
     </Panel>
   );
 }
 
-function ApiLexiconModal({ entry, saving, onClose, onSave }: { entry: AdminLexiconEntry | null; saving: boolean; onClose: () => void; onSave: (input: AdminLexiconRequest) => void }) {
+function ApiLexiconModal({
+  entry,
+  saving,
+  onClose,
+  onSave,
+}: {
+  entry: AdminLexiconEntry | null;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (input: AdminLexiconRequest) => void;
+}) {
   const [keyword, setKeyword] = useState(entry?.keyword ?? '');
   const [group, setGroup] = useState(entry?.group ?? '');
   const [level, setLevel] = useState(entry?.level ?? '');
@@ -641,10 +874,81 @@ function ApiLexiconModal({ entry, saving, onClose, onSave }: { entry: AdminLexic
   const [exceptions, setExceptions] = useState(entry?.exceptions.join(', ') ?? '');
   const valid = keyword.trim() && group.trim() && level.trim() && scope.trim();
   const messageScope = scope.trim().toUpperCase() === 'MESSAGE' ? 'MESSAGE' : 'CHAT';
-  return <Modal title={entry ? 'Sửa từ khóa' : 'Thêm từ khóa'} onClose={onClose}>
-    <div className="space-y-4"><Field label="Từ khóa" value={keyword} onChange={(event) => setKeyword(event.target.value)} /><Select label="Nhóm" value={group} onChange={(event) => setGroup(event.target.value)}><option value="">Chọn nhóm</option>{group && !lexiconGroupLabels[group.trim().toUpperCase()] ? <option value={group}>Khác</option> : null}{Object.entries(lexiconGroupLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select><Select label="Mức độ" value={level} onChange={(event) => setLevel(event.target.value)}><option value="">Chọn mức độ</option>{level && !lexiconLevelLabels[level.trim().toUpperCase()] ? <option value={level}>Khác</option> : null}{Object.entries(lexiconLevelLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select><Select label="Phạm vi" value={scope} onChange={(event) => setScope(event.target.value)}><option value="">Chọn phạm vi</option>{scope && !lexiconScopeLabels[scope.trim().toUpperCase()] ? <option value={scope}>Khác</option> : null}<option value="POST">Bài đăng</option><option value={messageScope}>Tin nhắn</option><option value="BOTH">Bài đăng và tin nhắn</option></Select><Field label="Chế độ khớp (không bắt buộc)" value={matchMode} onChange={(event) => setMatchMode(event.target.value)} /><Field label="Ngoại lệ, phân cách bằng dấu phẩy" value={exceptions} onChange={(event) => setExceptions(event.target.value)} /></div>
-    <div className="mt-6 flex justify-end gap-2"><Button variant="outline" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !valid} onClick={() => onSave({ keyword: keyword.trim(), group: group.trim(), level: level.trim(), scope: scope.trim(), ...(matchMode.trim() ? { matchMode: matchMode.trim() } : {}), exceptions: exceptions.split(',').map((value) => value.trim()).filter(Boolean) })}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
-  </Modal>;
+  return (
+    <Modal title={entry ? 'Sửa từ khóa' : 'Thêm từ khóa'} onClose={onClose}>
+      <div className="space-y-4">
+        <Field
+          label="Từ khóa"
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+        />
+        <Select label="Nhóm" value={group} onChange={(event) => setGroup(event.target.value)}>
+          <option value="">Chọn nhóm</option>
+          {group && !lexiconGroupLabels[group.trim().toUpperCase()] ? (
+            <option value={group}>Khác</option>
+          ) : null}
+          {Object.entries(lexiconGroupLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </Select>
+        <Select label="Mức độ" value={level} onChange={(event) => setLevel(event.target.value)}>
+          <option value="">Chọn mức độ</option>
+          {level && !lexiconLevelLabels[level.trim().toUpperCase()] ? (
+            <option value={level}>Khác</option>
+          ) : null}
+          {Object.entries(lexiconLevelLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </Select>
+        <Select label="Phạm vi" value={scope} onChange={(event) => setScope(event.target.value)}>
+          <option value="">Chọn phạm vi</option>
+          {scope && !lexiconScopeLabels[scope.trim().toUpperCase()] ? (
+            <option value={scope}>Khác</option>
+          ) : null}
+          <option value="POST">Bài đăng</option>
+          <option value={messageScope}>Tin nhắn</option>
+          <option value="BOTH">Bài đăng và tin nhắn</option>
+        </Select>
+        <Field
+          label="Chế độ khớp (không bắt buộc)"
+          value={matchMode}
+          onChange={(event) => setMatchMode(event.target.value)}
+        />
+        <Field
+          label="Ngoại lệ, phân cách bằng dấu phẩy"
+          value={exceptions}
+          onChange={(event) => setExceptions(event.target.value)}
+        />
+      </div>
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="outline" disabled={saving} onClick={onClose}>
+          Hủy
+        </Button>
+        <Button
+          disabled={saving || !valid}
+          onClick={() =>
+            onSave({
+              keyword: keyword.trim(),
+              group: group.trim(),
+              level: level.trim(),
+              scope: scope.trim(),
+              ...(matchMode.trim() ? { matchMode: matchMode.trim() } : {}),
+              exceptions: exceptions
+                .split(',')
+                .map((value) => value.trim())
+                .filter(Boolean),
+            })
+          }
+        >
+          {saving ? 'Đang lưu...' : 'Lưu'}
+        </Button>
+      </div>
+    </Modal>
+  );
 }
 
 function areaLevelLabel(level: number) {
@@ -658,7 +962,10 @@ type AreaStatusFilter = '' | 'active' | 'inactive';
 function ApiAdminAreas() {
   const [areas, setAreas] = useState<AdminAreaResponse[]>([]);
   const [editing, setEditing] = useState<AdminAreaResponse | null | 'new'>(null);
-  const [pendingDeactivate, setPendingDeactivate] = useState<{ area: AdminAreaResponse; count: number } | null>(null);
+  const [pendingDeactivate, setPendingDeactivate] = useState<{
+    area: AdminAreaResponse;
+    count: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState('');
@@ -670,34 +977,47 @@ function ApiAdminAreas() {
   const [statusFilter, setStatusFilter] = useState<AreaStatusFilter>('');
   const searchTerm = normalizeLexiconSearch(search);
   const levels = [...new Set(areas.map((area) => area.level))].sort((a, b) => a - b);
-  const filteredAreas = areas.filter((area) =>
-    (!searchTerm || normalizeLexiconSearch(area.name).includes(searchTerm))
-    && (!levelFilter || area.level === Number(levelFilter))
-    && (!statusFilter || area.active === (statusFilter === 'active')),
+  const filteredAreas = areas.filter(
+    (area) =>
+      (!searchTerm || normalizeLexiconSearch(area.name).includes(searchTerm)) &&
+      (!levelFilter || area.level === Number(levelFilter)) &&
+      (!statusFilter || area.active === (statusFilter === 'active')),
   );
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setError('');
-    adminAreaApi.list()
-      .then((response) => { if (active) setAreas(response); })
-      .catch((apiError: ApiError) => { if (active) setError(apiError.message || 'Không tải được danh sách khu vực.'); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    adminAreaApi
+      .list()
+      .then((response) => {
+        if (active) setAreas(response);
+      })
+      .catch((apiError: ApiError) => {
+        if (active) setError(apiError.message || 'Không tải được danh sách khu vực.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [reloadKey]);
 
   const save = async (input: AdminAreaRequest) => {
-    setSavingId(editing === 'new' ? 0 : editing?.id ?? null);
+    setSavingId(editing === 'new' ? 0 : (editing?.id ?? null));
     setError('');
     setNotice('');
     try {
-      const saved = editing === 'new'
-        ? await adminAreaApi.create(input)
-        : await adminAreaApi.update(editing!.id, input);
-      setAreas((current) => editing === 'new'
-        ? [...current, saved]
-        : current.map((entry) => entry.id === saved.id ? saved : entry));
+      const saved =
+        editing === 'new'
+          ? await adminAreaApi.create(input)
+          : await adminAreaApi.update(editing!.id, input);
+      setAreas((current) =>
+        editing === 'new'
+          ? [...current, saved]
+          : current.map((entry) => (entry.id === saved.id ? saved : entry)),
+      );
       setNotice(editing === 'new' ? 'Đã thêm khu vực.' : 'Đã cập nhật khu vực.');
       setEditing(null);
     } catch (apiError) {
@@ -733,7 +1053,7 @@ function ApiAdminAreas() {
     setNotice('');
     try {
       const updated = await adminAreaApi.setActive(area.id, !area.active);
-      setAreas((current) => current.map((entry) => entry.id === updated.id ? updated : entry));
+      setAreas((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
     } catch (apiError) {
       const response = apiError as ApiError;
       setError(response.message || 'Không cập nhật được trạng thái khu vực.');
@@ -742,46 +1062,211 @@ function ApiAdminAreas() {
     }
   };
 
-  return <Panel title="Khu vực" description="Quản lý tỉnh, thành phố và khu vực con dùng cho tìm kiếm và đăng bài." action={<Button onClick={() => setEditing('new')}>Thêm khu vực</Button>}>
-    {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
-    {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
-    {!loading && !error ? <ActiveCountStats entries={areas} ariaLabel="Thống kê khu vực" labels={['Tổng khu vực', 'Đang sử dụng', 'Đã tạm ẩn']} totalIcon="district" /> : null}
-    {!loading && areas.length ? (
-      <div className="mb-4 grid gap-3 rounded-lg bg-white p-4 ring-1 ring-border/80 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
-        <div className="sm:col-span-2 lg:col-span-6">
-          <span className="label">Tìm kiếm</span>
-          <SearchField aria-label="Tìm khu vực" placeholder="Tìm theo tên khu vực..." value={search} onChange={(event) => setSearch(event.target.value)} />
+  return (
+    <Panel
+      title="Khu vực"
+      description="Quản lý tỉnh, thành phố và khu vực con dùng cho tìm kiếm và đăng bài."
+      action={<Button onClick={() => setEditing('new')}>Thêm khu vực</Button>}
+    >
+      {notice ? (
+        <div className="mb-4">
+          <Alert tone="success">{notice}</Alert>
         </div>
-        <Select className="lg:col-span-3" label="Cấp khu vực" value={levelFilter} onChange={(event) => setLevelFilter(event.target.value)}>
-          <option value="">Tất cả cấp</option>
-          {levels.map((level) => <option key={level} value={level}>{areaLevelLabel(level)}</option>)}
-        </Select>
-        <Select className="lg:col-span-3" label="Trạng thái" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as AreaStatusFilter)}>
-          <option value="">Tất cả trạng thái</option>
-          <option value="active">Đang sử dụng</option>
-          <option value="inactive">Đã tạm ẩn</option>
-        </Select>
-      </div>
-    ) : null}
-    {loading ? <EmptyState title="Đang tải khu vực" text="Vui lòng chờ trong giây lát." /> : areas.length ? (
-      filteredAreas.length ? <div className="table-wrap"><table className="data-table admin-area-table"><thead><tr><th>Tên</th><th>Khu vực cha</th><th className="text-center">Cấp</th><th className="text-center">Trạng thái</th><th className="text-center">Thao tác</th></tr></thead><tbody>{filteredAreas.map((area) => <tr key={area.id}><td className="font-semibold">{area.name}</td><td>{areas.find((entry) => entry.id === area.parentId)?.name ?? <span className="text-text-muted">Không có</span>}</td><td className="whitespace-nowrap text-center">{areaLevelLabel(area.level)}</td><td className="text-center"><span className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-xs font-semibold ${area.active ? 'bg-success-soft text-success' : 'bg-surface-low text-text-muted'}`}>{area.active ? 'Đang sử dụng' : 'Đã tạm ẩn'}</span></td><td><div className="flex flex-nowrap items-center justify-center gap-2"><Button size="sm" variant="outline" disabled={savingId === area.id} onClick={() => setEditing(area)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId === area.id} onClick={() => void requestToggle(area)}>{area.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}</tbody></table></div>
-        : <EmptyState title="Không tìm thấy khu vực phù hợp" text="Hãy thử đổi tên tìm kiếm hoặc bộ lọc." />
-    ) : <EmptyState title="Chưa có khu vực" text="Hiện chưa có khu vực nào." />}
-    {pendingDeactivate ? <DeactivateConfirm name={pendingDeactivate.area.name} count={pendingDeactivate.count} onCancel={() => setPendingDeactivate(null)} onConfirm={() => void toggleActive(pendingDeactivate.area)} /> : null}
-    {editing ? <ApiAreaModal area={editing === 'new' ? null : editing} areas={areas} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
-  </Panel>;
+      ) : null}
+      {error ? (
+        <div className="mb-4 space-y-3">
+          <Alert tone="error">{error}</Alert>
+          <Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
+            Tải lại
+          </Button>
+        </div>
+      ) : null}
+      {!loading && !error ? (
+        <ActiveCountStats
+          entries={areas}
+          ariaLabel="Thống kê khu vực"
+          labels={['Tổng khu vực', 'Đang sử dụng', 'Đã tạm ẩn']}
+          totalIcon="district"
+        />
+      ) : null}
+      {!loading && areas.length ? (
+        <div className="mb-4 grid gap-3 rounded-lg bg-white p-4 ring-1 ring-border/80 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+          <div className="sm:col-span-2 lg:col-span-6">
+            <span className="label">Tìm kiếm</span>
+            <SearchField
+              aria-label="Tìm khu vực"
+              placeholder="Tìm theo tên khu vực..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+          <Select
+            className="lg:col-span-3"
+            label="Cấp khu vực"
+            value={levelFilter}
+            onChange={(event) => setLevelFilter(event.target.value)}
+          >
+            <option value="">Tất cả cấp</option>
+            {levels.map((level) => (
+              <option key={level} value={level}>
+                {areaLevelLabel(level)}
+              </option>
+            ))}
+          </Select>
+          <Select
+            className="lg:col-span-3"
+            label="Trạng thái"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as AreaStatusFilter)}
+          >
+            <option value="">Tất cả trạng thái</option>
+            <option value="active">Đang sử dụng</option>
+            <option value="inactive">Đã tạm ẩn</option>
+          </Select>
+        </div>
+      ) : null}
+      {loading ? (
+        <EmptyState title="Đang tải khu vực" text="Vui lòng chờ trong giây lát." />
+      ) : areas.length ? (
+        filteredAreas.length ? (
+          <div className="table-wrap">
+            <table className="data-table admin-area-table">
+              <thead>
+                <tr>
+                  <th>Tên</th>
+                  <th>Khu vực cha</th>
+                  <th className="text-center">Cấp</th>
+                  <th className="text-center">Trạng thái</th>
+                  <th className="text-center">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAreas.map((area) => (
+                  <tr key={area.id}>
+                    <td className="font-semibold">{area.name}</td>
+                    <td>
+                      {areas.find((entry) => entry.id === area.parentId)?.name ?? (
+                        <span className="text-text-muted">Không có</span>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap text-center">{areaLevelLabel(area.level)}</td>
+                    <td className="text-center">
+                      <span
+                        className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-xs font-semibold ${area.active ? 'bg-success-soft text-success' : 'bg-surface-low text-text-muted'}`}
+                      >
+                        {area.active ? 'Đang sử dụng' : 'Đã tạm ẩn'}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="flex flex-nowrap items-center justify-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={savingId === area.id}
+                          onClick={() => setEditing(area)}
+                        >
+                          Sửa
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={savingId === area.id}
+                          onClick={() => void requestToggle(area)}
+                        >
+                          {area.active ? 'Tạm ẩn' : 'Kích hoạt'}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState
+            title="Không tìm thấy khu vực phù hợp"
+            text="Hãy thử đổi tên tìm kiếm hoặc bộ lọc."
+          />
+        )
+      ) : (
+        <EmptyState title="Chưa có khu vực" text="Hiện chưa có khu vực nào." />
+      )}
+      {pendingDeactivate ? (
+        <DeactivateConfirm
+          name={pendingDeactivate.area.name}
+          count={pendingDeactivate.count}
+          onCancel={() => setPendingDeactivate(null)}
+          onConfirm={() => void toggleActive(pendingDeactivate.area)}
+        />
+      ) : null}
+      {editing ? (
+        <ApiAreaModal
+          area={editing === 'new' ? null : editing}
+          areas={areas}
+          saving={savingId !== null}
+          onClose={() => setEditing(null)}
+          onSave={(input) => void save(input)}
+        />
+      ) : null}
+    </Panel>
+  );
 }
 
-function ApiAreaModal({ area, areas, saving, onClose, onSave }: { area: AdminAreaResponse | null; areas: AdminAreaResponse[]; saving: boolean; onClose: () => void; onSave: (input: AdminAreaRequest) => void }) {
+function ApiAreaModal({
+  area,
+  areas,
+  saving,
+  onClose,
+  onSave,
+}: {
+  area: AdminAreaResponse | null;
+  areas: AdminAreaResponse[];
+  saving: boolean;
+  onClose: () => void;
+  onSave: (input: AdminAreaRequest) => void;
+}) {
   const [name, setName] = useState(area?.name ?? '');
   const [parentId, setParentId] = useState(area?.parentId ? String(area.parentId) : '');
-  return <Modal title={area ? 'Sửa khu vực' : 'Thêm khu vực'} onClose={onClose}>
-    <div className="space-y-4">
-      <Field label="Tên khu vực" value={name} onChange={(event) => setName(event.target.value)} disabled={saving} />
-      <Select label="Khu vực cha" value={parentId} onChange={(event) => setParentId(event.target.value)} disabled={saving}><option value="">Không có</option>{areas.filter((entry) => entry.id !== area?.id && entry.active).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</Select>
-    </div>
-    <div className="mt-6 flex justify-end gap-2"><Button variant="outline" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !name.trim()} onClick={() => onSave({ name: name.trim(), parentId: parentId ? Number(parentId) : null })}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
-  </Modal>;
+  return (
+    <Modal title={area ? 'Sửa khu vực' : 'Thêm khu vực'} onClose={onClose}>
+      <div className="space-y-4">
+        <Field
+          label="Tên khu vực"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          disabled={saving}
+        />
+        <Select
+          label="Khu vực cha"
+          value={parentId}
+          onChange={(event) => setParentId(event.target.value)}
+          disabled={saving}
+        >
+          <option value="">Không có</option>
+          {areas
+            .filter((entry) => entry.id !== area?.id && entry.active)
+            .map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.name}
+              </option>
+            ))}
+        </Select>
+      </div>
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="outline" disabled={saving} onClick={onClose}>
+          Hủy
+        </Button>
+        <Button
+          disabled={saving || !name.trim()}
+          onClick={() =>
+            onSave({ name: name.trim(), parentId: parentId ? Number(parentId) : null })
+          }
+        >
+          {saving ? 'Đang lưu...' : 'Lưu'}
+        </Button>
+      </div>
+    </Modal>
+  );
 }
 
 function sortAdminChecklist(entries: AdminChecklistEntry[]) {
@@ -831,17 +1316,21 @@ function ApiAdminChecklist() {
     let active = true;
     setLoading(true);
     setError('');
-    adminChecklistApi.list()
+    adminChecklistApi
+      .list()
       .then((response) => {
         if (active) setEntries(sortAdminChecklist(response));
       })
       .catch((apiError: ApiError) => {
-        if (active) setError(adminChecklistErrorMessage(apiError, 'Không tải được checklist duyệt bài.'));
+        if (active)
+          setError(adminChecklistErrorMessage(apiError, 'Không tải được checklist duyệt bài.'));
       })
       .finally(() => {
         if (active) setLoading(false);
       });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [reloadKey]);
 
   const save = async (question: string, description: string) => {
@@ -854,19 +1343,30 @@ function ApiAdminChecklist() {
       !trimmedQuestion ||
       trimmedQuestion.length > ADMIN_CHECKLIST_QUESTION_MAX_LENGTH ||
       trimmedDescription.length > ADMIN_CHECKLIST_DESCRIPTION_MAX_LENGTH
-    ) return;
+    )
+      return;
     mutationLock.current = true;
     setSavingId(currentEditing === 'new' ? 0 : currentEditing.id);
     setEditingError('');
     setNotice('');
     try {
-      const saved = currentEditing === 'new'
-        ? await adminChecklistApi.create({ question: trimmedQuestion, description: trimmedDescription })
-        : await adminChecklistApi.update(currentEditing.id, { question: trimmedQuestion, description: trimmedDescription });
-      setEntries((current) => sortAdminChecklist(currentEditing === 'new'
-        ? [...current, saved]
-        : current.map((entry) => entry.id === saved.id ? saved : entry)
-      ));
+      const saved =
+        currentEditing === 'new'
+          ? await adminChecklistApi.create({
+              question: trimmedQuestion,
+              description: trimmedDescription,
+            })
+          : await adminChecklistApi.update(currentEditing.id, {
+              question: trimmedQuestion,
+              description: trimmedDescription,
+            });
+      setEntries((current) =>
+        sortAdminChecklist(
+          currentEditing === 'new'
+            ? [...current, saved]
+            : current.map((entry) => (entry.id === saved.id ? saved : entry)),
+        ),
+      );
       setNotice(currentEditing === 'new' ? 'Đã thêm tiêu chí.' : 'Đã cập nhật tiêu chí.');
       setEditing(null);
     } catch (apiError) {
@@ -885,9 +1385,9 @@ function ApiAdminChecklist() {
     setNotice('');
     try {
       const updated = await adminChecklistApi.setActive(entry.id, !entry.active);
-      setEntries((current) => sortAdminChecklist(
-        current.map((item) => item.id === updated.id ? updated : item),
-      ));
+      setEntries((current) =>
+        sortAdminChecklist(current.map((item) => (item.id === updated.id ? updated : item))),
+      );
       setNotice(updated.active ? 'Đã kích hoạt tiêu chí.' : 'Đã tạm ngưng tiêu chí.');
     } catch (apiError) {
       setError(adminChecklistErrorMessage(apiError, 'Không cập nhật được trạng thái tiêu chí.'));
@@ -916,7 +1416,12 @@ function ApiAdminChecklist() {
       setEntries(sortAdminChecklist(updated));
       setNotice('Đã cập nhật thứ tự checklist.');
     } catch (apiError) {
-      setError(adminChecklistErrorMessage(apiError, 'Không cập nhật được thứ tự checklist. Thứ tự cũ được giữ nguyên.'));
+      setError(
+        adminChecklistErrorMessage(
+          apiError,
+          'Không cập nhật được thứ tự checklist. Thứ tự cũ được giữ nguyên.',
+        ),
+      );
     } finally {
       mutationLock.current = false;
       setSavingId(null);
@@ -924,64 +1429,254 @@ function ApiAdminChecklist() {
   };
 
   return (
-    <Panel title="Checklist duyệt bài" description="Quản lý và sắp xếp các tiêu chí mà quản trị viên phải xác nhận khi duyệt bài." action={<Button disabled={loading || savingId !== null} onClick={() => { setEditingError(''); setEditing('new'); }}>Thêm tiêu chí</Button>}>
-      {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
-      {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
-      {!loading && !error ? <ActiveCountStats entries={entries} ariaLabel="Thống kê tiêu chí" labels={['Tổng tiêu chí', 'Đang hoạt động', 'Đã tạm ẩn']} totalIcon="checklist" /> : null}
-      {loading ? <SkeletonRows label="Đang tải checklist" /> : entries.length ? (
-        <div className="table-wrap"><table className="data-table"><thead><tr><th className="text-center">Thứ tự</th><th>Tiêu chí</th><th className="whitespace-nowrap text-center">Trạng thái</th><th className="whitespace-nowrap text-center">Thao tác</th></tr></thead><tbody>
-          {entries.map((entry, index) => <tr key={entry.id}><td className="text-center">{index + 1}</td><td><p className="font-semibold">{entry.question}</p>{entry.description ? <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-text-secondary">{entry.description}</p> : <p className="mt-1 text-xs text-warning">Chưa có mô tả điều kiện đạt</p>}</td><td className="whitespace-nowrap text-center"><span className={`rounded-sm px-2 py-1 text-xs font-semibold ${entry.active ? 'bg-success-soft text-success' : 'bg-surface-low text-text-muted'}`}>{entry.active ? 'Đang hoạt động' : 'Không hoạt động'}</span></td><td><div className="flex flex-nowrap items-center justify-center gap-1"><Button className="!px-2.5 whitespace-nowrap" variant="outline" title="Đưa mục này lên trên một vị trí" aria-label={`Đưa ${entry.question} lên trên`} disabled={savingId !== null || index === 0} onClick={() => void move(index, -1)}><Icon name="arrowUp" weight="bold" className="size-4" /></Button><Button className="!px-2.5 whitespace-nowrap" variant="outline" title="Đưa mục này xuống dưới một vị trí" aria-label={`Đưa ${entry.question} xuống dưới`} disabled={savingId !== null || index === entries.length - 1} onClick={() => void move(index, 1)}><Icon name="arrowDown" weight="bold" className="size-4" /></Button><Button className="!px-2 whitespace-nowrap" variant="outline" title="Chỉnh sửa câu tiêu chí" disabled={savingId !== null} onClick={() => { setEditingError(''); setEditing(entry); }}>Sửa nội dung</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title={entry.active ? 'Không hiển thị mục này khi duyệt bài (không xoá)' : 'Hiển thị lại mục này khi duyệt bài'} disabled={savingId !== null} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}
-        </tbody></table></div>
-      ) : error ? null : <EmptyState title="Chưa có tiêu chí" text="Hiện chưa có tiêu chí duyệt bài nào." />}
-      {editing ? <ChecklistEditModal entry={editing === 'new' ? null : editing} saving={savingId !== null} error={editingError} onClose={() => { if (savingId === null) { setEditing(null); setEditingError(''); } }} onSave={(question, description) => void save(question, description)} /> : null}
+    <Panel
+      title="Checklist duyệt bài"
+      description="Quản lý và sắp xếp các tiêu chí mà quản trị viên phải xác nhận khi duyệt bài."
+      action={
+        <Button
+          disabled={loading || savingId !== null}
+          onClick={() => {
+            setEditingError('');
+            setEditing('new');
+          }}
+        >
+          Thêm tiêu chí
+        </Button>
+      }
+    >
+      {notice ? (
+        <div className="mb-4">
+          <Alert tone="success">{notice}</Alert>
+        </div>
+      ) : null}
+      {error ? (
+        <div className="mb-4 space-y-3">
+          <Alert tone="error">{error}</Alert>
+          <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
+            Tải lại
+          </Button>
+        </div>
+      ) : null}
+      {!loading && !error ? (
+        <ActiveCountStats
+          entries={entries}
+          ariaLabel="Thống kê tiêu chí"
+          labels={['Tổng tiêu chí', 'Đang hoạt động', 'Đã tạm ẩn']}
+          totalIcon="checklist"
+        />
+      ) : null}
+      {loading ? (
+        <SkeletonRows label="Đang tải checklist" />
+      ) : entries.length ? (
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th className="text-center">Thứ tự</th>
+                <th>Tiêu chí</th>
+                <th className="whitespace-nowrap text-center">Trạng thái</th>
+                <th className="whitespace-nowrap text-center">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((entry, index) => (
+                <tr key={entry.id}>
+                  <td className="text-center">{index + 1}</td>
+                  <td>
+                    <p className="font-semibold">{entry.question}</p>
+                    {entry.description ? (
+                      <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-text-secondary">
+                        {entry.description}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-xs text-warning">Chưa có mô tả điều kiện đạt</p>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap text-center">
+                    <span
+                      className={`rounded-sm px-2 py-1 text-xs font-semibold ${entry.active ? 'bg-success-soft text-success' : 'bg-surface-low text-text-muted'}`}
+                    >
+                      {entry.active ? 'Đang hoạt động' : 'Không hoạt động'}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="flex flex-nowrap items-center justify-center gap-1">
+                      <Button
+                        className="!px-2.5 whitespace-nowrap"
+                        variant="outline"
+                        title="Đưa mục này lên trên một vị trí"
+                        aria-label={`Đưa ${entry.question} lên trên`}
+                        disabled={savingId !== null || index === 0}
+                        onClick={() => void move(index, -1)}
+                      >
+                        <Icon name="arrowUp" weight="bold" className="size-4" />
+                      </Button>
+                      <Button
+                        className="!px-2.5 whitespace-nowrap"
+                        variant="outline"
+                        title="Đưa mục này xuống dưới một vị trí"
+                        aria-label={`Đưa ${entry.question} xuống dưới`}
+                        disabled={savingId !== null || index === entries.length - 1}
+                        onClick={() => void move(index, 1)}
+                      >
+                        <Icon name="arrowDown" weight="bold" className="size-4" />
+                      </Button>
+                      <Button
+                        className="!px-2 whitespace-nowrap"
+                        variant="outline"
+                        title="Chỉnh sửa câu tiêu chí"
+                        disabled={savingId !== null}
+                        onClick={() => {
+                          setEditingError('');
+                          setEditing(entry);
+                        }}
+                      >
+                        Sửa nội dung
+                      </Button>
+                      <Button
+                        className="!px-2 whitespace-nowrap"
+                        variant="outline"
+                        title={
+                          entry.active
+                            ? 'Không hiển thị mục này khi duyệt bài (không xoá)'
+                            : 'Hiển thị lại mục này khi duyệt bài'
+                        }
+                        disabled={savingId !== null}
+                        onClick={() => void toggleActive(entry)}
+                      >
+                        {entry.active ? 'Tạm ẩn' : 'Kích hoạt'}
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : error ? null : (
+        <EmptyState title="Chưa có tiêu chí" text="Hiện chưa có tiêu chí duyệt bài nào." />
+      )}
+      {editing ? (
+        <ChecklistEditModal
+          entry={editing === 'new' ? null : editing}
+          saving={savingId !== null}
+          error={editingError}
+          onClose={() => {
+            if (savingId === null) {
+              setEditing(null);
+              setEditingError('');
+            }
+          }}
+          onSave={(question, description) => void save(question, description)}
+        />
+      ) : null}
     </Panel>
   );
 }
 
-function ChecklistEditModal({ entry, saving, error, onClose, onSave }: { entry: AdminChecklistEntry | null; saving: boolean; error: string; onClose: () => void; onSave: (question: string, description: string) => void }) {
+function ChecklistEditModal({
+  entry,
+  saving,
+  error,
+  onClose,
+  onSave,
+}: {
+  entry: AdminChecklistEntry | null;
+  saving: boolean;
+  error: string;
+  onClose: () => void;
+  onSave: (question: string, description: string) => void;
+}) {
   const [question, setQuestion] = useState(entry?.question ?? '');
   const [description, setDescription] = useState(entry?.description ?? '');
   const questionTooLong = question.length > ADMIN_CHECKLIST_QUESTION_MAX_LENGTH;
   const descriptionTooLong = description.length > ADMIN_CHECKLIST_DESCRIPTION_MAX_LENGTH;
-  return <Modal title={entry ? 'Sửa tiêu chí' : 'Thêm tiêu chí'} onClose={onClose}>
-    <TextArea
-      label="Nội dung tiêu chí"
-      value={question}
-      onChange={(event) => setQuestion(event.target.value)}
-      disabled={saving}
-      error={questionTooLong ? `Nội dung không được vượt quá ${ADMIN_CHECKLIST_QUESTION_MAX_LENGTH} ký tự.` : undefined}
-    />
-    <p className={`mt-1.5 text-right text-xs ${questionTooLong ? 'text-error' : 'text-text-muted'}`}>
-      {question.length}/{ADMIN_CHECKLIST_QUESTION_MAX_LENGTH} ký tự
-    </p>
-    <TextArea
-      label="Mô tả điều kiện đạt"
-      placeholder="Đạt khi ... Từ chối nếu ..."
-      value={description}
-      onChange={(event) => setDescription(event.target.value)}
-      disabled={saving}
-      error={descriptionTooLong ? `Mô tả không được vượt quá ${ADMIN_CHECKLIST_DESCRIPTION_MAX_LENGTH} ký tự.` : undefined}
-    />
-    <p className={`mt-1.5 text-right text-xs ${descriptionTooLong ? 'text-error' : 'text-text-muted'}`}>
-      {description.length}/{ADMIN_CHECKLIST_DESCRIPTION_MAX_LENGTH} ký tự. Người duyệt thấy mô tả này ngay dưới tiêu chí.
-    </p>
-    {error ? <div className="mt-4"><Alert tone="error">{error}</Alert></div> : null}
-    <div className="mt-6 flex justify-end gap-2"><Button variant="outline" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !question.trim() || questionTooLong || descriptionTooLong} onClick={() => onSave(question.trim(), description.trim())}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
-  </Modal>;
+  return (
+    <Modal title={entry ? 'Sửa tiêu chí' : 'Thêm tiêu chí'} onClose={onClose}>
+      <TextArea
+        label="Nội dung tiêu chí"
+        value={question}
+        onChange={(event) => setQuestion(event.target.value)}
+        disabled={saving}
+        error={
+          questionTooLong
+            ? `Nội dung không được vượt quá ${ADMIN_CHECKLIST_QUESTION_MAX_LENGTH} ký tự.`
+            : undefined
+        }
+      />
+      <p
+        className={`mt-1.5 text-right text-xs ${questionTooLong ? 'text-error' : 'text-text-muted'}`}
+      >
+        {question.length}/{ADMIN_CHECKLIST_QUESTION_MAX_LENGTH} ký tự
+      </p>
+      <TextArea
+        label="Mô tả điều kiện đạt"
+        placeholder="Đạt khi ... Từ chối nếu ..."
+        value={description}
+        onChange={(event) => setDescription(event.target.value)}
+        disabled={saving}
+        error={
+          descriptionTooLong
+            ? `Mô tả không được vượt quá ${ADMIN_CHECKLIST_DESCRIPTION_MAX_LENGTH} ký tự.`
+            : undefined
+        }
+      />
+      <p
+        className={`mt-1.5 text-right text-xs ${descriptionTooLong ? 'text-error' : 'text-text-muted'}`}
+      >
+        {description.length}/{ADMIN_CHECKLIST_DESCRIPTION_MAX_LENGTH} ký tự. Người duyệt thấy mô tả
+        này ngay dưới tiêu chí.
+      </p>
+      {error ? (
+        <div className="mt-4">
+          <Alert tone="error">{error}</Alert>
+        </div>
+      ) : null}
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="outline" disabled={saving} onClick={onClose}>
+          Hủy
+        </Button>
+        <Button
+          disabled={saving || !question.trim() || questionTooLong || descriptionTooLong}
+          onClick={() => onSave(question.trim(), description.trim())}
+        >
+          {saving ? 'Đang lưu...' : 'Lưu'}
+        </Button>
+      </div>
+    </Modal>
+  );
 }
 
 const SHOW_CATEGORY_ATTRIBUTES = false;
 
 // Hộp xác nhận trước khi tắt danh mục hoặc khu vực: nói rõ số bài đang hiển thị sẽ bị ẩn khỏi Tìm đồ (B3).
-function DeactivateConfirm({ name, count, onCancel, onConfirm }: { name: string; count: number; onCancel: () => void; onConfirm: () => void }) {
-  return <DialogFrame labelledBy="deactivate-confirm-title" onClose={onCancel}>
-    <h2 id="deactivate-confirm-title" className="text-xl font-bold">Tạm ẩn “{name}”</h2>
-    <p className="mt-2 text-sm">{count} bài đang hiển thị sẽ bị ẩn khỏi Tìm đồ. Bật lại thì các bài này hiện lại.</p>
-    <div className="mt-5 flex justify-end gap-2">
-      <Button variant="outline" onClick={onCancel}>Xem lại</Button>
-      <Button onClick={onConfirm}>Tạm ẩn</Button>
-    </div>
-  </DialogFrame>;
+function DeactivateConfirm({
+  name,
+  count,
+  onCancel,
+  onConfirm,
+}: {
+  name: string;
+  count: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <DialogFrame labelledBy="deactivate-confirm-title" onClose={onCancel}>
+      <h2 id="deactivate-confirm-title" className="text-xl font-bold">
+        Tạm ẩn “{name}”
+      </h2>
+      <p className="mt-2 text-sm">
+        {count} bài đang hiển thị sẽ bị ẩn khỏi Tìm đồ. Bật lại thì các bài này hiện lại.
+      </p>
+      <div className="mt-5 flex justify-end gap-2">
+        <Button variant="outline" onClick={onCancel}>
+          Xem lại
+        </Button>
+        <Button onClick={onConfirm}>Tạm ẩn</Button>
+      </div>
+    </DialogFrame>
+  );
 }
 
 function sortCategories(categories: AdminCategoryResponse[]) {
@@ -991,7 +1686,10 @@ function sortCategories(categories: AdminCategoryResponse[]) {
 export function ApiAdminCategories() {
   const [categories, setCategories] = useState<AdminCategoryResponse[]>([]);
   const [editing, setEditing] = useState<AdminCategoryResponse | null | 'new'>(null);
-  const [pendingDeactivate, setPendingDeactivate] = useState<{ category: AdminCategoryResponse; count: number } | null>(null);
+  const [pendingDeactivate, setPendingDeactivate] = useState<{
+    category: AdminCategoryResponse;
+    count: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState('');
@@ -1003,27 +1701,41 @@ export function ApiAdminCategories() {
     let active = true;
     setLoading(true);
     setError('');
-    adminCategoryApi.list()
-      .then((response) => { if (active) setCategories(sortCategories(response)); })
-      .catch((apiError: ApiError) => { if (active) setError(apiError.message || 'Không tải được danh mục quản trị.'); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    adminCategoryApi
+      .list()
+      .then((response) => {
+        if (active) setCategories(sortCategories(response));
+      })
+      .catch((apiError: ApiError) => {
+        if (active) setError(apiError.message || 'Không tải được danh mục quản trị.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [reloadKey]);
 
   const save = async (input: AdminCategoryRequest) => {
     if (mutationLock.current) return;
     mutationLock.current = true;
-    setSavingId(editing === 'new' ? 0 : editing?.id ?? null);
+    setSavingId(editing === 'new' ? 0 : (editing?.id ?? null));
     setError('');
     setNotice('');
     try {
       // Danh mục mới tự xuống cuối danh sách, Backend lo việc gán thứ tự.
-      const saved = editing === 'new'
-        ? await adminCategoryApi.create(input)
-        : await adminCategoryApi.update(editing!.id, input);
-      setCategories((current) => sortCategories(editing === 'new'
-        ? [...current, saved]
-        : current.map((entry) => entry.id === saved.id ? saved : entry)));
+      const saved =
+        editing === 'new'
+          ? await adminCategoryApi.create(input)
+          : await adminCategoryApi.update(editing!.id, input);
+      setCategories((current) =>
+        sortCategories(
+          editing === 'new'
+            ? [...current, saved]
+            : current.map((entry) => (entry.id === saved.id ? saved : entry)),
+        ),
+      );
       setEditing(null);
       setNotice(editing === 'new' ? 'Đã thêm danh mục.' : 'Đã cập nhật danh mục.');
     } catch (apiError) {
@@ -1061,7 +1773,9 @@ export function ApiAdminCategories() {
     setError('');
     try {
       const updated = await adminCategoryApi.setActive(category.id, !category.active);
-      setCategories((current) => current.map((entry) => entry.id === updated.id ? updated : entry));
+      setCategories((current) =>
+        current.map((entry) => (entry.id === updated.id ? updated : entry)),
+      );
     } catch (apiError) {
       const response = apiError as ApiError;
       setError(response.message || 'Không cập nhật được trạng thái danh mục.');
@@ -1087,7 +1801,9 @@ export function ApiAdminCategories() {
       setNotice('Đã cập nhật thứ tự danh mục.');
     } catch (apiError) {
       const response = apiError as ApiError;
-      setError(response.message || 'Không cập nhật được thứ tự danh mục. Thứ tự cũ được giữ nguyên.');
+      setError(
+        response.message || 'Không cập nhật được thứ tự danh mục. Thứ tự cũ được giữ nguyên.',
+      );
     } finally {
       mutationLock.current = false;
       setSavingId(null);
@@ -1097,15 +1813,132 @@ export function ApiAdminCategories() {
   const hasParentCategory = categories.some((category) => category.parentId != null);
   const busy = savingId !== null;
 
-  return <Panel title="Danh mục" description="Thứ tự trong bảng cũng là thứ tự danh mục hiển thị cho người dùng." action={<Button disabled={loading || busy} onClick={() => setEditing('new')}>Thêm danh mục</Button>}>
-    {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
-    {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
-    {!loading && !error ? <ActiveCountStats entries={categories} ariaLabel="Thống kê danh mục" labels={['Tổng danh mục', 'Đang sử dụng', 'Đã tạm ẩn']} totalIcon="category" /> : null}
-    {loading ? <EmptyState title="Đang tải danh mục" text="Vui lòng chờ trong giây lát." /> : categories.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Tên</th>{hasParentCategory ? <th>Danh mục cha</th> : null}<th>Phân loại</th><th>Trạng thái</th><th className="whitespace-nowrap">Thao tác</th></tr></thead><tbody>{categories.map((category, index) => <tr key={category.id}><td>{index + 1}</td><td className="font-semibold">{category.name}</td>{hasParentCategory ? <td>{categories.find((entry) => entry.id === category.parentId)?.name ?? '—'}</td> : null}<td>{category.restricted ? 'Hạn chế' : 'Thông thường'}</td><td>{category.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" variant="outline" title="Đưa danh mục này lên trên một vị trí" disabled={busy || index === 0} onClick={() => void move(index, -1)}>Lên</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title="Đưa danh mục này xuống dưới một vị trí" disabled={busy || index === categories.length - 1} onClick={() => void move(index, 1)}>Xuống</Button><Button className="!px-2 whitespace-nowrap" variant="outline" disabled={busy} onClick={() => setEditing(category)}>Sửa</Button><Button className="!px-2 whitespace-nowrap" variant="outline" disabled={busy} onClick={() => void requestToggle(category)}>{category.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có danh mục" text="Hiện chưa có danh mục nào." />}
-    {pendingDeactivate ? <DeactivateConfirm name={pendingDeactivate.category.name} count={pendingDeactivate.count} onCancel={() => setPendingDeactivate(null)} onConfirm={() => void toggleActive(pendingDeactivate.category)} /> : null}
-    {SHOW_CATEGORY_ATTRIBUTES && !loading && categories.length ? <ApiCategoryAttributes categories={categories} /> : null}
-    {editing ? <ApiCategoryModal category={editing === 'new' ? null : editing} categories={categories} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
-  </Panel>;
+  return (
+    <Panel
+      title="Danh mục"
+      description="Thứ tự trong bảng cũng là thứ tự danh mục hiển thị cho người dùng."
+      action={
+        <Button disabled={loading || busy} onClick={() => setEditing('new')}>
+          Thêm danh mục
+        </Button>
+      }
+    >
+      {notice ? (
+        <div className="mb-4">
+          <Alert tone="success">{notice}</Alert>
+        </div>
+      ) : null}
+      {error ? (
+        <div className="mb-4 space-y-3">
+          <Alert tone="error">{error}</Alert>
+          <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
+            Tải lại
+          </Button>
+        </div>
+      ) : null}
+      {!loading && !error ? (
+        <ActiveCountStats
+          entries={categories}
+          ariaLabel="Thống kê danh mục"
+          labels={['Tổng danh mục', 'Đang sử dụng', 'Đã tạm ẩn']}
+          totalIcon="category"
+        />
+      ) : null}
+      {loading ? (
+        <EmptyState title="Đang tải danh mục" text="Vui lòng chờ trong giây lát." />
+      ) : categories.length ? (
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Thứ tự</th>
+                <th>Tên</th>
+                {hasParentCategory ? <th>Danh mục cha</th> : null}
+                <th>Phân loại</th>
+                <th>Trạng thái</th>
+                <th className="whitespace-nowrap">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map((category, index) => (
+                <tr key={category.id}>
+                  <td>{index + 1}</td>
+                  <td className="font-semibold">{category.name}</td>
+                  {hasParentCategory ? (
+                    <td>
+                      {categories.find((entry) => entry.id === category.parentId)?.name ?? '—'}
+                    </td>
+                  ) : null}
+                  <td>{category.restricted ? 'Hạn chế' : 'Thông thường'}</td>
+                  <td>{category.active ? 'Đang dùng' : 'Tạm ẩn'}</td>
+                  <td>
+                    <div className="flex flex-nowrap gap-1">
+                      <Button
+                        className="!px-2 whitespace-nowrap"
+                        variant="outline"
+                        title="Đưa danh mục này lên trên một vị trí"
+                        disabled={busy || index === 0}
+                        onClick={() => void move(index, -1)}
+                      >
+                        Lên
+                      </Button>
+                      <Button
+                        className="!px-2 whitespace-nowrap"
+                        variant="outline"
+                        title="Đưa danh mục này xuống dưới một vị trí"
+                        disabled={busy || index === categories.length - 1}
+                        onClick={() => void move(index, 1)}
+                      >
+                        Xuống
+                      </Button>
+                      <Button
+                        className="!px-2 whitespace-nowrap"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => setEditing(category)}
+                      >
+                        Sửa
+                      </Button>
+                      <Button
+                        className="!px-2 whitespace-nowrap"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => void requestToggle(category)}
+                      >
+                        {category.active ? 'Tạm ẩn' : 'Kích hoạt'}
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyState title="Chưa có danh mục" text="Hiện chưa có danh mục nào." />
+      )}
+      {pendingDeactivate ? (
+        <DeactivateConfirm
+          name={pendingDeactivate.category.name}
+          count={pendingDeactivate.count}
+          onCancel={() => setPendingDeactivate(null)}
+          onConfirm={() => void toggleActive(pendingDeactivate.category)}
+        />
+      ) : null}
+      {SHOW_CATEGORY_ATTRIBUTES && !loading && categories.length ? (
+        <ApiCategoryAttributes categories={categories} />
+      ) : null}
+      {editing ? (
+        <ApiCategoryModal
+          category={editing === 'new' ? null : editing}
+          categories={categories}
+          saving={savingId !== null}
+          onClose={() => setEditing(null)}
+          onSave={(input) => void save(input)}
+        />
+      ) : null}
+    </Panel>
+  );
 }
 
 /**
@@ -1125,31 +1958,115 @@ function ActiveCountStats({
   totalIcon: IconName;
 }) {
   const activeCount = entries.filter((entry) => entry.active).length;
-  const stats: { key: string; label: string; value: number; icon: IconName }[] = [
-    { key: 'total', label: labels[0], value: entries.length, icon: totalIcon },
-    { key: 'active', label: labels[1], value: activeCount, icon: 'completed' },
-    { key: 'hidden', label: labels[2], value: entries.length - activeCount, icon: 'eyeSlash' },
+  const stats: {
+    key: string;
+    label: string;
+    value: number;
+    icon: IconName;
+    accent: 'green' | 'red';
+  }[] = [
+    { key: 'total', label: labels[0], value: entries.length, icon: totalIcon, accent: 'green' },
+    { key: 'active', label: labels[1], value: activeCount, icon: 'completed', accent: 'green' },
+    {
+      key: 'hidden',
+      label: labels[2],
+      value: entries.length - activeCount,
+      icon: 'eyeSlash',
+      accent: 'red',
+    },
   ];
-  return <div className="admin-category-stats" aria-label={ariaLabel}>
-    {stats.map((stat) => <div key={stat.key} className={`admin-category-stat admin-category-stat--${stat.key}`}>
-      <span className="admin-category-stat-icon"><Icon name={stat.icon} weight="bold" /></span>
-      <div className="min-w-0">
-        <p className="admin-category-stat-label">{stat.label}</p>
-        <strong className="admin-category-stat-value">{stat.value.toLocaleString('vi-VN')}</strong>
-      </div>
-    </div>)}
-  </div>;
+  return (
+    <div className="admin-dash-vars mb-4" aria-label={ariaLabel}>
+      <DashboardGrid columns={3}>
+        {stats.map((stat) => (
+          <DashboardStatCard
+            key={stat.key}
+            variant="system"
+            icon={stat.icon}
+            accent={stat.accent}
+            label={stat.label}
+            value={stat.value.toLocaleString('vi-VN')}
+            note="Toàn hệ thống"
+          />
+        ))}
+      </DashboardGrid>
+    </div>
+  );
 }
 
-export function ApiCategoryModal({ category, categories, saving, onClose, onSave }: { category: AdminCategoryResponse | null; categories: AdminCategoryResponse[]; saving: boolean; onClose: () => void; onSave: (input: AdminCategoryRequest) => void }) {
+export function ApiCategoryModal({
+  category,
+  categories,
+  saving,
+  onClose,
+  onSave,
+}: {
+  category: AdminCategoryResponse | null;
+  categories: AdminCategoryResponse[];
+  saving: boolean;
+  onClose: () => void;
+  onSave: (input: AdminCategoryRequest) => void;
+}) {
   const [name, setName] = useState(category?.name ?? '');
   const [parentId, setParentId] = useState(category?.parentId ? String(category.parentId) : '');
   const [restricted] = useState(category?.restricted ?? false);
   const [boostable, setBoostable] = useState(category?.boostable ?? false);
-  return <Modal title={category ? 'Sửa danh mục' : 'Thêm danh mục'} onClose={onClose}>
-    <div className="space-y-4"><Field label="Tên danh mục" value={name} onChange={(event) => setName(event.target.value)} /><Select label="Danh mục cha" value={parentId} onChange={(event) => setParentId(event.target.value)}><option value="">Không có</option>{categories.filter((entry) => entry.id !== category?.id).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</Select><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={boostable} onChange={(event) => setBoostable(event.target.checked)} />Cho phép đẩy tin</label>{category ? null : <p className="text-xs leading-5 text-text-muted">Danh mục mới tự xếp cuối danh sách. Dùng nút Chuyển lên hoặc Chuyển xuống để đổi vị trí.</p>}</div>
-    <div className="mt-6 flex justify-end gap-2"><Button variant="outline" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !name.trim()} onClick={() => onSave({ name: name.trim(), parentId: parentId ? Number(parentId) : null, restricted, boostable })}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
-  </Modal>;
+  return (
+    <Modal title={category ? 'Sửa danh mục' : 'Thêm danh mục'} onClose={onClose}>
+      <div className="space-y-4">
+        <Field
+          label="Tên danh mục"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
+        <Select
+          label="Danh mục cha"
+          value={parentId}
+          onChange={(event) => setParentId(event.target.value)}
+        >
+          <option value="">Không có</option>
+          {categories
+            .filter((entry) => entry.id !== category?.id)
+            .map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.name}
+              </option>
+            ))}
+        </Select>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={boostable}
+            onChange={(event) => setBoostable(event.target.checked)}
+          />
+          Cho phép đẩy tin
+        </label>
+        {category ? null : (
+          <p className="text-xs leading-5 text-text-muted">
+            Danh mục mới tự xếp cuối danh sách. Dùng nút Chuyển lên hoặc Chuyển xuống để đổi vị trí.
+          </p>
+        )}
+      </div>
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="outline" disabled={saving} onClick={onClose}>
+          Hủy
+        </Button>
+        <Button
+          disabled={saving || !name.trim()}
+          onClick={() =>
+            onSave({
+              name: name.trim(),
+              parentId: parentId ? Number(parentId) : null,
+              restricted,
+              boostable,
+            })
+          }
+        >
+          {saving ? 'Đang lưu...' : 'Lưu'}
+        </Button>
+      </div>
+    </Modal>
+  );
 }
 
 function ApiCategoryAttributes({ categories }: { categories: AdminCategoryResponse[] }) {
@@ -1176,24 +2093,38 @@ function ApiCategoryAttributes({ categories }: { categories: AdminCategoryRespon
     let active = true;
     setLoading(true);
     setError('');
-    adminCategoryApi.listAttributes(categoryId)
-      .then((response) => { if (active) setAttributes(response); })
-      .catch((apiError: ApiError) => { if (active) setError(apiError.message || 'Không tải được thuộc tính danh mục.'); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    adminCategoryApi
+      .listAttributes(categoryId)
+      .then((response) => {
+        if (active) setAttributes(response);
+      })
+      .catch((apiError: ApiError) => {
+        if (active) setError(apiError.message || 'Không tải được thuộc tính danh mục.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [categoryId, reloadKey]);
 
   const save = async (input: AdminCategoryAttributeRequest) => {
-    setSavingId(editing === 'new' ? 0 : editing?.id ?? null);
+    setSavingId(editing === 'new' ? 0 : (editing?.id ?? null));
     setError('');
     setNotice('');
     try {
-      const saved = editing === 'new'
-        ? await adminCategoryApi.createAttribute(categoryId, input)
-        : await adminCategoryApi.updateAttribute(categoryId, editing!.id, input);
-      setAttributes((current) => editing === 'new'
-        ? [...current, saved].sort((left, right) => left.sortOrder - right.sortOrder)
-        : current.map((entry) => entry.id === saved.id ? saved : entry).sort((left, right) => left.sortOrder - right.sortOrder));
+      const saved =
+        editing === 'new'
+          ? await adminCategoryApi.createAttribute(categoryId, input)
+          : await adminCategoryApi.updateAttribute(categoryId, editing!.id, input);
+      setAttributes((current) =>
+        editing === 'new'
+          ? [...current, saved].sort((left, right) => left.sortOrder - right.sortOrder)
+          : current
+              .map((entry) => (entry.id === saved.id ? saved : entry))
+              .sort((left, right) => left.sortOrder - right.sortOrder),
+      );
       setNotice(editing === 'new' ? 'Đã thêm thuộc tính.' : 'Đã cập nhật thuộc tính.');
       setEditing(null);
     } catch (apiError) {
@@ -1209,8 +2140,14 @@ function ApiCategoryAttributes({ categories }: { categories: AdminCategoryRespon
     setError('');
     setNotice('');
     try {
-      const updated = await adminCategoryApi.setAttributeActive(categoryId, attribute.id, !attribute.active);
-      setAttributes((current) => current.map((entry) => entry.id === updated.id ? updated : entry));
+      const updated = await adminCategoryApi.setAttributeActive(
+        categoryId,
+        attribute.id,
+        !attribute.active,
+      );
+      setAttributes((current) =>
+        current.map((entry) => (entry.id === updated.id ? updated : entry)),
+      );
     } catch (apiError) {
       const response = apiError as ApiError;
       setError(response.message || 'Không cập nhật được trạng thái thuộc tính.');
@@ -1219,41 +2156,205 @@ function ApiCategoryAttributes({ categories }: { categories: AdminCategoryRespon
     }
   };
 
-  return <section className="mt-8 border-t border-border pt-6">
-    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <Select label="Thuộc tính của danh mục" value={categoryId} onChange={(event) => { setCategoryId(Number(event.target.value)); setEditing(null); setNotice(''); }}>
-        {categories.map((category) => <option key={category.id} value={category.id}>{category.name}{category.active ? '' : ' (đang ẩn)'}</option>)}
-      </Select>
-      <Button onClick={() => setEditing('new')}>Thêm thuộc tính</Button>
-    </div>
-    {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
-    {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
-    {loading ? <EmptyState title="Đang tải thuộc tính" text="Vui lòng chờ trong giây lát." /> : attributes.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Tên</th><th>Kiểu</th><th>Lựa chọn</th><th>Bắt buộc</th><th>Thứ tự</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>{attributes.map((attribute) => <tr key={attribute.id}><td className="font-semibold">{attribute.name}</td><td>{attribute.dataType}</td><td>{attribute.options.length ? attribute.options.join(', ') : '—'}</td><td>{attribute.required ? 'Có' : 'Không'}</td><td>{attribute.sortOrder}</td><td>{attribute.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td className="space-x-2"><Button variant="outline" disabled={savingId === attribute.id} onClick={() => setEditing(attribute)}>Sửa</Button><Button variant="outline" disabled={savingId === attribute.id} onClick={() => void toggleActive(attribute)}>{attribute.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có thuộc tính" text="Danh mục này chưa được cấu hình thuộc tính động." />}
-    {editing ? <ApiCategoryAttributeModal attribute={editing === 'new' ? null : editing} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
-  </section>;
+  return (
+    <section className="mt-8 border-t border-border pt-6">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <Select
+          label="Thuộc tính của danh mục"
+          value={categoryId}
+          onChange={(event) => {
+            setCategoryId(Number(event.target.value));
+            setEditing(null);
+            setNotice('');
+          }}
+        >
+          {categories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+              {category.active ? '' : ' (đang ẩn)'}
+            </option>
+          ))}
+        </Select>
+        <Button onClick={() => setEditing('new')}>Thêm thuộc tính</Button>
+      </div>
+      {notice ? (
+        <div className="mb-4">
+          <Alert tone="success">{notice}</Alert>
+        </div>
+      ) : null}
+      {error ? (
+        <div className="mb-4 space-y-3">
+          <Alert tone="error">{error}</Alert>
+          <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
+            Tải lại
+          </Button>
+        </div>
+      ) : null}
+      {loading ? (
+        <EmptyState title="Đang tải thuộc tính" text="Vui lòng chờ trong giây lát." />
+      ) : attributes.length ? (
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Tên</th>
+                <th>Kiểu</th>
+                <th>Lựa chọn</th>
+                <th>Bắt buộc</th>
+                <th>Thứ tự</th>
+                <th>Trạng thái</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {attributes.map((attribute) => (
+                <tr key={attribute.id}>
+                  <td className="font-semibold">{attribute.name}</td>
+                  <td>{attribute.dataType}</td>
+                  <td>{attribute.options.length ? attribute.options.join(', ') : '—'}</td>
+                  <td>{attribute.required ? 'Có' : 'Không'}</td>
+                  <td>{attribute.sortOrder}</td>
+                  <td>{attribute.active ? 'Đang dùng' : 'Tạm ẩn'}</td>
+                  <td className="space-x-2">
+                    <Button
+                      variant="outline"
+                      disabled={savingId === attribute.id}
+                      onClick={() => setEditing(attribute)}
+                    >
+                      Sửa
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={savingId === attribute.id}
+                      onClick={() => void toggleActive(attribute)}
+                    >
+                      {attribute.active ? 'Tạm ẩn' : 'Kích hoạt'}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyState
+          title="Chưa có thuộc tính"
+          text="Danh mục này chưa được cấu hình thuộc tính động."
+        />
+      )}
+      {editing ? (
+        <ApiCategoryAttributeModal
+          attribute={editing === 'new' ? null : editing}
+          saving={savingId !== null}
+          onClose={() => setEditing(null)}
+          onSave={(input) => void save(input)}
+        />
+      ) : null}
+    </section>
+  );
 }
 
-function ApiCategoryAttributeModal({ attribute, saving, onClose, onSave }: { attribute: AdminCategoryAttributeResponse | null; saving: boolean; onClose: () => void; onSave: (input: AdminCategoryAttributeRequest) => void }) {
+function ApiCategoryAttributeModal({
+  attribute,
+  saving,
+  onClose,
+  onSave,
+}: {
+  attribute: AdminCategoryAttributeResponse | null;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (input: AdminCategoryAttributeRequest) => void;
+}) {
   const [name, setName] = useState(attribute?.name ?? '');
   const [dataType, setDataType] = useState<AttributeDataType>(attribute?.dataType ?? 'TEXT');
   const [options, setOptions] = useState(attribute?.options.join('\n') ?? '');
   const [required, setRequired] = useState(attribute?.required ?? false);
   const [sortOrder, setSortOrder] = useState(attribute?.sortOrder ?? 0);
-  const parsedOptions = options.split(/[,\n]/).map((value) => value.trim()).filter(Boolean);
+  const parsedOptions = options
+    .split(/[,\n]/)
+    .map((value) => value.trim())
+    .filter(Boolean);
   const invalidSelect = dataType === 'SELECT' && parsedOptions.length === 0;
-  return <Modal title={attribute ? 'Sửa thuộc tính' : 'Thêm thuộc tính'} onClose={onClose}>
-    <div className="space-y-4">
-      <Field label="Tên thuộc tính" value={name} onChange={(event) => setName(event.target.value)} disabled={saving} />
-      <Select label="Kiểu dữ liệu" value={dataType} onChange={(event) => setDataType(event.target.value as AttributeDataType)} disabled={saving}><option value="TEXT">Văn bản</option><option value="NUMBER">Số</option><option value="SELECT">Danh sách lựa chọn</option><option value="BOOLEAN">Có / Không</option></Select>
-      {dataType === 'SELECT' ? <TextArea label="Các lựa chọn (mỗi dòng hoặc phân cách bằng dấu phẩy)" value={options} onChange={(event) => setOptions(event.target.value)} disabled={saving} /> : null}
-      <Field label="Thứ tự" type="number" min={0} value={sortOrder} onChange={(event) => setSortOrder(Number(event.target.value))} disabled={saving} />
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={required} onChange={(event) => setRequired(event.target.checked)} disabled={saving} />Bắt buộc nhập</label>
-    </div>
-    <div className="mt-6 flex justify-end gap-2"><Button variant="outline" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !name.trim() || invalidSelect || !Number.isInteger(sortOrder) || sortOrder < 0} onClick={() => onSave({ name: name.trim(), dataType, options: dataType === 'SELECT' ? parsedOptions : [], required, sortOrder })}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
-  </Modal>;
+  return (
+    <Modal title={attribute ? 'Sửa thuộc tính' : 'Thêm thuộc tính'} onClose={onClose}>
+      <div className="space-y-4">
+        <Field
+          label="Tên thuộc tính"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          disabled={saving}
+        />
+        <Select
+          label="Kiểu dữ liệu"
+          value={dataType}
+          onChange={(event) => setDataType(event.target.value as AttributeDataType)}
+          disabled={saving}
+        >
+          <option value="TEXT">Văn bản</option>
+          <option value="NUMBER">Số</option>
+          <option value="SELECT">Danh sách lựa chọn</option>
+          <option value="BOOLEAN">Có / Không</option>
+        </Select>
+        {dataType === 'SELECT' ? (
+          <TextArea
+            label="Các lựa chọn (mỗi dòng hoặc phân cách bằng dấu phẩy)"
+            value={options}
+            onChange={(event) => setOptions(event.target.value)}
+            disabled={saving}
+          />
+        ) : null}
+        <Field
+          label="Thứ tự"
+          type="number"
+          min={0}
+          value={sortOrder}
+          onChange={(event) => setSortOrder(Number(event.target.value))}
+          disabled={saving}
+        />
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={required}
+            onChange={(event) => setRequired(event.target.checked)}
+            disabled={saving}
+          />
+          Bắt buộc nhập
+        </label>
+      </div>
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="outline" disabled={saving} onClick={onClose}>
+          Hủy
+        </Button>
+        <Button
+          disabled={
+            saving || !name.trim() || invalidSelect || !Number.isInteger(sortOrder) || sortOrder < 0
+          }
+          onClick={() =>
+            onSave({
+              name: name.trim(),
+              dataType,
+              options: dataType === 'SELECT' ? parsedOptions : [],
+              required,
+              sortOrder,
+            })
+          }
+        >
+          {saving ? 'Đang lưu...' : 'Lưu'}
+        </Button>
+      </div>
+    </Modal>
+  );
 }
 
-function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+function Modal({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
   const titleId = useId();
 
   useEffect(() => {
@@ -1267,8 +2368,15 @@ function Modal({ title, children, onClose }: { title: string; children: ReactNod
   return (
     <DialogFrame labelledBy={titleId} size="lg">
       <div className="flex items-center justify-between gap-4">
-        <h2 id={titleId} className="text-xl font-bold">{title}</h2>
-        <button type="button" aria-label="Đóng" onClick={onClose} className="grid size-9 place-items-center rounded-md text-text-muted hover:bg-surface-low">
+        <h2 id={titleId} className="text-xl font-bold">
+          {title}
+        </h2>
+        <button
+          type="button"
+          aria-label="Đóng"
+          onClick={onClose}
+          className="grid size-9 place-items-center rounded-md text-text-muted hover:bg-surface-low"
+        >
           <Icon name="close" className="size-5" />
         </button>
       </div>
@@ -1276,4 +2384,3 @@ function Modal({ title, children, onClose }: { title: string; children: ReactNod
     </DialogFrame>
   );
 }
-

@@ -11,7 +11,11 @@ import {
   Select,
   SkeletonRows,
 } from '../../components/ui';
-import { adminItemApi, type AdminItemFilters, type AdminItemRow } from '../../services/adminItemApi';
+import {
+  adminItemApi,
+  type AdminItemFilters,
+  type AdminItemRow,
+} from '../../services/adminItemApi';
 import { catalogApi, type CategoryResponse } from '../../services/catalogApi';
 import type { ItemStatus, OfferType, PageResponse } from '../../services/itemApi';
 import { adminErrorMessage } from './adminErrors';
@@ -19,6 +23,7 @@ import { formatDateTime, hiddenSourceLabels, itemStatusLabels } from './adminIte
 import { AdminItemVisibilityDialog } from './AdminItemVisibilityDialog';
 import { offerTypeLabels } from './moderationDisplay';
 import { useDebouncedValue } from '../../utils/useDebouncedValue';
+import { DashboardGrid, DashboardStatCard, type DashboardAccent } from './AdminDashboardCards';
 import './admin-items.css';
 
 const PAGE_SIZE = 20;
@@ -40,7 +45,14 @@ const ITEM_STATS: Array<{ key: ItemStatKey; label: string; filters: AdminItemFil
   { key: 'hidden', label: 'Đã ẩn', filters: { active: false } },
 ];
 
-const EMPTY_STATS: ItemStats = { total: null, pending: null, visible: null, reserved: null, traded: null, hidden: null };
+const EMPTY_STATS: ItemStats = {
+  total: null,
+  pending: null,
+  visible: null,
+  reserved: null,
+  traded: null,
+  hidden: null,
+};
 
 function statusClass(status: ItemStatus) {
   if (status === 'PENDING_REVIEW') return 'bg-warning-soft text-warning';
@@ -55,9 +67,15 @@ function statusClass(status: ItemStatus) {
  * Tình trạng hiển thị của bài với người dùng. Bài chỉ hiện công khai khi đã duyệt và chưa bị ẩn,
  * nên bài chưa bị ẩn mà chưa duyệt, bị từ chối hoặc đã hết hạn không ghi "Đang hiện" để tránh hiểu nhầm.
  */
-function visibilityInfo(row: AdminItemRow): { label: string; tone: 'visible' | 'hidden' | 'muted' } {
+function visibilityInfo(row: AdminItemRow): {
+  label: string;
+  tone: 'visible' | 'hidden' | 'muted';
+} {
   if (!row.active) {
-    return { label: `Đang ẩn${row.hiddenSource ? `: ${hiddenSourceLabels[row.hiddenSource]}` : ''}`, tone: 'hidden' };
+    return {
+      label: `Đang ẩn${row.hiddenSource ? `: ${hiddenSourceLabels[row.hiddenSource]}` : ''}`,
+      tone: 'hidden',
+    };
   }
   if (row.status === 'APPROVED') return { label: 'Đang hiện', tone: 'visible' };
   if (row.status === 'PENDING_REVIEW') return { label: 'Chưa hiện, đang chờ duyệt', tone: 'muted' };
@@ -67,7 +85,8 @@ function visibilityInfo(row: AdminItemRow): { label: string; tone: 'visible' | '
 
 /** Lý do nút Ẩn bị khoá. Backend vẫn kiểm lại mọi trường hợp. */
 function hideBlockedReason(row: AdminItemRow) {
-  if (row.status === 'RESERVED') return 'Bài đang giữ chỗ cho một giao dịch. Hãy hủy giao dịch ở trang Giao dịch trước khi ẩn bài.';
+  if (row.status === 'RESERVED')
+    return 'Bài đang giữ chỗ cho một giao dịch. Hãy hủy giao dịch ở trang Giao dịch trước khi ẩn bài.';
   if (row.status === 'TRADED') return 'Bài đã giao dịch xong nên không thể ẩn.';
   return null;
 }
@@ -93,7 +112,14 @@ export function AdminItems() {
   const [dialog, setDialog] = useState<{ row: AdminItemRow; mode: 'hide' | 'unhide' } | null>(null);
 
   const hasFilters = Boolean(
-    keywordInput || status || visibility || offerType || categoryId || fromDate || toDate || boostedOnly,
+    keywordInput ||
+    status ||
+    visibility ||
+    offerType ||
+    categoryId ||
+    fromDate ||
+    toDate ||
+    boostedOnly,
   );
   const dateRangeError =
     fromDate && toDate && fromDate > toDate ? '"Từ ngày" không được sau "Đến ngày".' : '';
@@ -193,10 +219,17 @@ export function AdminItems() {
         />
       </div>
 
-      <div className="admin-items-stats" aria-label="Thống kê bài đăng">
-        {ITEM_STATS.map((stat) => (
-          <ItemStat key={stat.key} modifier={stat.key} label={stat.label} value={stats[stat.key]} />
-        ))}
+      <div className="admin-dash-vars" aria-label="Thống kê bài đăng">
+        <DashboardGrid columns={6}>
+          {ITEM_STATS.map((stat) => (
+            <ItemStat
+              key={stat.key}
+              modifier={stat.key}
+              label={stat.label}
+              value={stats[stat.key]}
+            />
+          ))}
+        </DashboardGrid>
       </div>
 
       <div className="admin-items-filters">
@@ -288,7 +321,12 @@ export function AdminItems() {
           Chỉ bài đang đẩy
         </label>
         <div className="admin-items-filter-clear">
-          <Button variant="outline" className="admin-items-clear-button" disabled={!hasFilters} onClick={clearFilters}>
+          <Button
+            variant="outline"
+            className="admin-items-clear-button"
+            disabled={!hasFilters}
+            onClick={clearFilters}
+          >
             Xóa bộ lọc
           </Button>
         </div>
@@ -365,13 +403,39 @@ export function AdminItems() {
   );
 }
 
-function ItemStat({ label, value, modifier }: { label: string; value: number | null | 'error'; modifier: ItemStatKey }) {
+function ItemStat({
+  label,
+  value,
+  modifier,
+}: {
+  label: string;
+  value: number | null | 'error';
+  modifier: ItemStatKey;
+}) {
+  const appearances: Record<
+    ItemStatKey,
+    {
+      icon: 'manageItems' | 'moderation' | 'eye' | 'expiring' | 'completed' | 'eyeSlash';
+      accent: DashboardAccent;
+    }
+  > = {
+    total: { icon: 'manageItems', accent: 'green' },
+    pending: { icon: 'moderation', accent: 'gold' },
+    visible: { icon: 'eye', accent: 'green' },
+    reserved: { icon: 'expiring', accent: 'blue' },
+    traded: { icon: 'completed', accent: 'green' },
+    hidden: { icon: 'eyeSlash', accent: 'red' },
+  };
   return (
-    <div className={`admin-items-stat admin-items-stat--${modifier}`} aria-busy={value === null || undefined}>
-      <p>{label}</p>
-      <strong>{value === null ? '...' : value === 'error' ? '—' : value.toLocaleString('vi-VN')}</strong>
-      <span>{value === 'error' ? 'Chưa tải được số liệu' : 'Toàn hệ thống'}</span>
-    </div>
+    <DashboardStatCard
+      variant="system"
+      icon={appearances[modifier].icon}
+      accent={appearances[modifier].accent}
+      label={label}
+      value={value === null ? '...' : value === 'error' ? '—' : value.toLocaleString('vi-VN')}
+      note={value === 'error' ? 'Chưa tải được số liệu' : 'Toàn hệ thống'}
+      loading={value === null}
+    />
   );
 }
 
@@ -409,8 +473,12 @@ function ItemRow({
         </div>
       </td>
       <td className="min-w-0">
-        <p className="admin-items-owner-name font-semibold text-text-primary">{row.ownerName || 'Người dùng đã xóa'}</p>
-        {row.ownerEmail ? <p className="admin-items-owner-email text-xs text-text-muted">{row.ownerEmail}</p> : null}
+        <p className="admin-items-owner-name font-semibold text-text-primary">
+          {row.ownerName || 'Người dùng đã xóa'}
+        </p>
+        {row.ownerEmail ? (
+          <p className="admin-items-owner-email text-xs text-text-muted">{row.ownerEmail}</p>
+        ) : null}
       </td>
       <td className="whitespace-nowrap text-center">{offerTypeLabels[row.offerType]}</td>
       <td>
@@ -425,19 +493,27 @@ function ItemRow({
               {visibility.label}
             </span>
           ) : (
-            <span className={`admin-items-visibility admin-items-visibility--${visibility.tone}`}>{visibility.label}</span>
+            <span className={`admin-items-visibility admin-items-visibility--${visibility.tone}`}>
+              {visibility.label}
+            </span>
           )}
           {row.boosting ? (
             <span
               className="admin-items-boost"
-              title={row.boostedUntil ? `Đang được đẩy đến ${formatDateTime(row.boostedUntil)}` : 'Bài đang được đẩy lên đầu danh sách'}
+              title={
+                row.boostedUntil
+                  ? `Đang được đẩy đến ${formatDateTime(row.boostedUntil)}`
+                  : 'Bài đang được đẩy lên đầu danh sách'
+              }
             >
               Đang đẩy
             </span>
           ) : null}
         </div>
       </td>
-      <td className="whitespace-nowrap text-right tabular-nums">{row.postFeePaid > 0 ? `${row.postFeePaid} Credit` : '—'}</td>
+      <td className="whitespace-nowrap text-right tabular-nums">
+        {row.postFeePaid > 0 ? `${row.postFeePaid} Credit` : '—'}
+      </td>
       <td className="text-center tabular-nums">{row.pendingRequestCount}</td>
       <td className="admin-items-time">
         <p>Tạo lúc: {formatDateTime(row.createdAt)}</p>
@@ -446,7 +522,10 @@ function ItemRow({
       </td>
       <td>
         <div className="admin-items-actions">
-          <Link to={`/admin/items/${row.id}`} className="admin-items-action admin-items-action--view">
+          <Link
+            to={`/admin/items/${row.id}`}
+            className="admin-items-action admin-items-action--view"
+          >
             Xem chi tiết
           </Link>
           {row.active ? (

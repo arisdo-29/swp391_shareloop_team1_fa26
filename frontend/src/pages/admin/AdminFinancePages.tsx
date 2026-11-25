@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Alert, Button, EmptyState, Field, PageHeader, Stat } from '../../components/ui';
+import { Alert, Button, EmptyState, Field, PageHeader } from '../../components/ui';
 import { adminFinanceApi, type FinanceSummary } from '../../services/adminFinanceApi';
 import { adminAuditApi, type ActivityLogResponse } from '../../services/adminAuditApi';
 import type { ApiError } from '../../services/http';
@@ -8,17 +8,42 @@ import { formatVnd } from '../../utils/formatting';
 import { walletTransactionLabels } from '../../utils/creditHistory';
 import { AdminTodoCards } from './AdminTodoCards';
 import { AdminSystemStats } from './AdminSystemStats';
-import { DashboardGrid, DashboardSection, DashboardStatCard, type DashboardAccent } from './AdminDashboardCards';
+import {
+  DashboardGrid,
+  DashboardSection,
+  DashboardStatCard,
+  type DashboardAccent,
+} from './AdminDashboardCards';
 import type { IconName } from '../../components/ui';
 import { activityLogDetail, activityLogLabel } from './activityLogDisplay';
 
 const RECENT_ACTIVITY_SIZE = 5;
 
 // Khung thẻ tài chính lúc đang tải, giữ đúng vị trí để trang không nhảy khi có số liệu.
-const FINANCE_PLACEHOLDERS: Array<{ to: string; icon: IconName; label: string; accent: DashboardAccent }> = [
-  { to: '/admin/finance/topup-orders?status=SUCCESS', icon: 'money', label: 'Tổng tiền nạp thành công', accent: 'cash' },
-  { to: '/admin/finance/ledger', icon: 'creditIn', label: 'Tổng Credit đã cộng', accent: 'credit-in' },
-  { to: '/admin/finance/ledger', icon: 'creditOut', label: 'Tổng Credit đã trừ', accent: 'credit-out' },
+const FINANCE_PLACEHOLDERS: Array<{
+  to: string;
+  icon: IconName;
+  label: string;
+  accent: DashboardAccent;
+}> = [
+  {
+    to: '/admin/finance/topup-orders?status=SUCCESS',
+    icon: 'money',
+    label: 'Tổng tiền nạp thành công',
+    accent: 'cash',
+  },
+  {
+    to: '/admin/finance/ledger',
+    icon: 'creditIn',
+    label: 'Tổng Credit đã cộng',
+    accent: 'credit-in',
+  },
+  {
+    to: '/admin/finance/ledger',
+    icon: 'creditOut',
+    label: 'Tổng Credit đã trừ',
+    accent: 'credit-out',
+  },
 ];
 
 const CashByDayChart = lazy(() =>
@@ -91,8 +116,10 @@ function activityTone(type: string) {
   if (known) return activityToneClasses[known];
   // Loại mới chưa có trong bảng: đoán theo từ khoá. UNLOCK phải xét trước LOCK.
   const has = (keywords: string[]) => keywords.some((keyword) => normalizedType.includes(keyword));
-  if (has(['UNLOCK', 'UNHIDDEN', 'APPROVE', 'RESTORE', 'GRANT', 'EXTEND', 'COMPENSATED'])) return activityToneClasses.success;
-  if (has(['REJECT', 'DISMISS', 'LOCK', 'BAN', 'REVOKE', 'CANCEL', 'HIDDEN', 'DELETE', 'FAIL'])) return activityToneClasses.error;
+  if (has(['UNLOCK', 'UNHIDDEN', 'APPROVE', 'RESTORE', 'GRANT', 'EXTEND', 'COMPENSATED']))
+    return activityToneClasses.success;
+  if (has(['REJECT', 'DISMISS', 'LOCK', 'BAN', 'REVOKE', 'CANCEL', 'HIDDEN', 'DELETE', 'FAIL']))
+    return activityToneClasses.error;
   if (has(['WARN', 'ALERT', 'ANOMAL', 'REPORT'])) return activityToneClasses.warning;
   return activityToneClasses.info;
 }
@@ -144,7 +171,9 @@ function formatActivityTime(value: string) {
       month: '2-digit',
       year: 'numeric',
       hourCycle: 'h23',
-    }).formatToParts(date).map((part) => [part.type, part.value]),
+    })
+      .formatToParts(date)
+      .map((part) => [part.type, part.value]),
   );
   return `${parts.hour}:${parts.minute} ${parts.day}/${parts.month}/${parts.year}`;
 }
@@ -153,7 +182,9 @@ function RetryAlert({ message, onRetry }: { message: string; onRetry: () => void
   return (
     <Alert tone="error">
       {message}{' '}
-      <button type="button" className="font-semibold underline" onClick={onRetry}>Thử lại</button>
+      <button type="button" className="font-semibold underline" onClick={onRetry}>
+        Thử lại
+      </button>
     </Alert>
   );
 }
@@ -173,11 +204,20 @@ export function AdminOperationsDashboard() {
     setReport(null);
     setReportLoading(true);
     setReportError('');
-    void adminFinanceApi.report({})
-      .then((summary) => { if (active) setReport(summary); })
-      .catch((caught) => { if (active) setReportError(errorMessage(caught)); })
-      .finally(() => { if (active) setReportLoading(false); });
-    return () => { active = false; };
+    void adminFinanceApi
+      .report({})
+      .then((summary) => {
+        if (active) setReport(summary);
+      })
+      .catch((caught) => {
+        if (active) setReportError(errorMessage(caught));
+      })
+      .finally(() => {
+        if (active) setReportLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [reportReload]);
 
   useEffect(() => {
@@ -185,32 +225,51 @@ export function AdminOperationsDashboard() {
     setLogs([]);
     setLogsLoading(true);
     setLogsError('');
-    void adminAuditApi.list({ page: 0, size: RECENT_ACTIVITY_SIZE })
-      .then((recent) => { if (active) setLogs(recent.content.slice(0, RECENT_ACTIVITY_SIZE)); })
-      .catch((caught) => { if (active) setLogsError(errorMessage(caught)); })
-      .finally(() => { if (active) setLogsLoading(false); });
-    return () => { active = false; };
+    void adminAuditApi
+      .list({ page: 0, size: RECENT_ACTIVITY_SIZE })
+      .then((recent) => {
+        if (active) setLogs(recent.content.slice(0, RECENT_ACTIVITY_SIZE));
+      })
+      .catch((caught) => {
+        if (active) setLogsError(errorMessage(caught));
+      })
+      .finally(() => {
+        if (active) setLogsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [logsReload]);
 
-  const financeCards: Array<{ to: string; icon: IconName; label: string; accent: DashboardAccent; value: string; unit?: string; note: string }> = report ? [
-    {
-      ...FINANCE_PLACEHOLDERS[0],
-      value: formatVnd(report.cashAmountVnd),
-      note: `Từ ${report.cashOrderCount.toLocaleString('vi-VN')} đơn nạp thành công.`,
-    },
-    {
-      ...FINANCE_PLACEHOLDERS[1],
-      value: report.creditInTotal.toLocaleString('vi-VN'),
-      unit: 'Credit',
-      note: 'Gồm nạp Credit và điều chỉnh cộng.',
-    },
-    {
-      ...FINANCE_PLACEHOLDERS[2],
-      value: report.creditOutTotal.toLocaleString('vi-VN'),
-      unit: 'Credit',
-      note: 'Gồm các loại phí và điều chỉnh trừ.',
-    },
-  ] : [];
+  const financeCards: Array<{
+    to: string;
+    icon: IconName;
+    label: string;
+    accent: DashboardAccent;
+    value: string;
+    unit?: string;
+    note: string;
+  }> = report
+    ? [
+        {
+          ...FINANCE_PLACEHOLDERS[0],
+          value: formatVnd(report.cashAmountVnd),
+          note: `Từ ${report.cashOrderCount.toLocaleString('vi-VN')} đơn nạp thành công.`,
+        },
+        {
+          ...FINANCE_PLACEHOLDERS[1],
+          value: report.creditInTotal.toLocaleString('vi-VN'),
+          unit: 'Credit',
+          note: 'Gồm nạp Credit và điều chỉnh cộng.',
+        },
+        {
+          ...FINANCE_PLACEHOLDERS[2],
+          value: report.creditOutTotal.toLocaleString('vi-VN'),
+          unit: 'Credit',
+          note: 'Gồm các loại phí và điều chỉnh trừ.',
+        },
+      ]
+    : [];
 
   return (
     <div className="admin-dashboard">
@@ -227,7 +286,11 @@ export function AdminOperationsDashboard() {
         title="Thống kê tài chính"
         description="Tổng cộng từ trước đến nay theo sổ hệ thống."
         panel
-        action={<Link className="admin-dash-link" to="/admin/finance">Xem báo cáo tài chính</Link>}
+        action={
+          <Link className="admin-dash-link" to="/admin/finance">
+            Xem báo cáo tài chính
+          </Link>
+        }
       >
         {reportError ? (
           <RetryAlert message={reportError} onRetry={() => setReportReload((value) => value + 1)} />
@@ -235,9 +298,18 @@ export function AdminOperationsDashboard() {
           <DashboardGrid columns={3}>
             {reportLoading || !report
               ? FINANCE_PLACEHOLDERS.map((card) => (
-                <DashboardStatCard key={card.label} {...card} variant="finance" value="..." note="Đang tải số liệu." loading />
-              ))
-              : financeCards.map((card) => <DashboardStatCard key={card.label} {...card} variant="finance" />)}
+                  <DashboardStatCard
+                    key={card.label}
+                    {...card}
+                    variant="finance"
+                    value="..."
+                    note="Đang tải số liệu."
+                    loading
+                  />
+                ))
+              : financeCards.map((card) => (
+                  <DashboardStatCard key={card.label} {...card} variant="finance" />
+                ))}
           </DashboardGrid>
         )}
       </DashboardSection>
@@ -246,7 +318,11 @@ export function AdminOperationsDashboard() {
         id="admin-recent-activity"
         title="Hoạt động gần đây"
         description={`${RECENT_ACTIVITY_SIZE} thay đổi mới nhất được ghi nhận trong hệ thống.`}
-        action={<Link className="admin-dash-link" to="/admin/audit-logs">Xem tất cả</Link>}
+        action={
+          <Link className="admin-dash-link" to="/admin/audit-logs">
+            Xem tất cả
+          </Link>
+        }
       >
         <div className="admin-dash-table-wrap">
           {logsError ? (
@@ -260,12 +336,22 @@ export function AdminOperationsDashboard() {
               <table className="admin-dash-table">
                 <thead>
                   <tr>
-                    <th scope="col" className="admin-dash-col-time">Thời gian</th>
-                    <th scope="col" className="admin-dash-col-actor">Người thực hiện</th>
-                    <th scope="col" className="admin-dash-col-action">Hành động</th>
-                    <th scope="col" className="admin-dash-col-target">Đối tượng</th>
+                    <th scope="col" className="admin-dash-col-time">
+                      Thời gian
+                    </th>
+                    <th scope="col" className="admin-dash-col-actor">
+                      Người thực hiện
+                    </th>
+                    <th scope="col" className="admin-dash-col-action">
+                      Hành động
+                    </th>
+                    <th scope="col" className="admin-dash-col-target">
+                      Đối tượng
+                    </th>
                     <th scope="col">Chi tiết</th>
-                    <th scope="col" className="admin-dash-col-button">Thao tác</th>
+                    <th scope="col" className="admin-dash-col-button">
+                      Thao tác
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -274,28 +360,55 @@ export function AdminOperationsDashboard() {
                     const link = activityTargetLink(log);
                     return (
                       <tr key={log.id}>
-                        <td className="admin-dash-col-time text-xs tabular-nums text-text-muted">{formatActivityTime(log.createdAt)}</td>
+                        <td className="admin-dash-col-time text-xs tabular-nums text-text-muted">
+                          {formatActivityTime(log.createdAt)}
+                        </td>
                         <td className="admin-dash-col-actor">
-                          <p className="truncate font-semibold text-text-primary">{log.actorName || log.actorEmail || (log.actorId ? 'Tài khoản đã xóa' : 'Hệ thống')}</p>
-                          {log.actorName && log.actorEmail ? <p className="mt-0.5 truncate text-xs text-text-muted">{log.actorEmail}</p> : null}
+                          <p className="truncate font-semibold text-text-primary">
+                            {log.actorName ||
+                              log.actorEmail ||
+                              (log.actorId ? 'Tài khoản đã xóa' : 'Hệ thống')}
+                          </p>
+                          {log.actorName && log.actorEmail ? (
+                            <p className="mt-0.5 truncate text-xs text-text-muted">
+                              {log.actorEmail}
+                            </p>
+                          ) : null}
                         </td>
                         <td className="admin-dash-col-action">
-                          <span className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-xs font-semibold ${activityTone(log.type)}`}>
+                          <span
+                            className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-xs font-semibold ${activityTone(log.type)}`}
+                          >
                             {activityLogLabel(log) || 'Hoạt động khác'}
                           </span>
                         </td>
                         <td className="admin-dash-col-target">
-                          {target.title || target.type ? <>
-                            <p className="line-clamp-2 font-medium text-text-primary" title={target.title ?? target.type ?? undefined}>{target.title ?? target.type}</p>
-                            {target.title && target.type ? <p className="mt-0.5 text-xs text-text-muted">{target.type}</p> : null}
-                          </> : <span className="text-text-muted">—</span>}
+                          {target.title || target.type ? (
+                            <>
+                              <p
+                                className="line-clamp-2 font-medium text-text-primary"
+                                title={target.title ?? target.type ?? undefined}
+                              >
+                                {target.title ?? target.type}
+                              </p>
+                              {target.title && target.type ? (
+                                <p className="mt-0.5 text-xs text-text-muted">{target.type}</p>
+                              ) : null}
+                            </>
+                          ) : (
+                            <span className="text-text-muted">—</span>
+                          )}
                         </td>
                         <td className="leading-6 text-text-secondary">
-                          {activityLogDetail(log) || log.reason ? <p className="line-clamp-2">{activityLogDetail(log) || log.reason}</p> : null}
+                          {activityLogDetail(log) || log.reason ? (
+                            <p className="line-clamp-2">{activityLogDetail(log) || log.reason}</p>
+                          ) : null}
                         </td>
                         <td className="admin-dash-col-button">
                           {link ? (
-                            <Link to={link} className="admin-dash-detail-button">Xem chi tiết</Link>
+                            <Link to={link} className="admin-dash-detail-button">
+                              Xem chi tiết
+                            </Link>
                           ) : null}
                         </td>
                       </tr>
@@ -330,16 +443,31 @@ export function AdminFinanceReport() {
     let active = true;
     setLoading(true);
     setError('');
-    adminFinanceApi.report({ from: filters.from || undefined, to: filters.to || undefined })
-      .then((response) => { if (active) setReport(response); })
-      .catch((caught) => { if (active) { setReport(null); setError(errorMessage(caught)); } })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    adminFinanceApi
+      .report({ from: filters.from || undefined, to: filters.to || undefined })
+      .then((response) => {
+        if (active) setReport(response);
+      })
+      .catch((caught) => {
+        if (active) {
+          setReport(null);
+          setError(errorMessage(caught));
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [filters, reload]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (from && to && from > to) { setRangeError(INVALID_DATE_RANGE); return; }
+    if (from && to && from > to) {
+      setRangeError(INVALID_DATE_RANGE);
+      return;
+    }
     setRangeError('');
     setFilters({ from, to });
   };
@@ -363,78 +491,194 @@ export function AdminFinanceReport() {
     }
   };
 
-  return <>
-    <PageHeader title="Báo cáo tài chính" description="Tiền thu, Credit cộng và Credit trừ theo sổ hệ thống." action={<div className="flex flex-wrap gap-2"><Button variant="outline" disabled={exporting} onClick={() => void exportExcel()}>{exporting ? 'Đang xuất...' : 'Xuất báo cáo Excel'}</Button><Link to="/admin/finance/users"><Button variant="outline">Tra cứu người dùng</Button></Link></div>} />
-    <form className="mb-5" onSubmit={submit} noValidate>
-      <div className="flex flex-wrap items-end gap-3">
-        <Field label="Từ ngày" type="date" value={from} max={to || undefined}
-          aria-invalid={!!rangeError} aria-describedby={rangeError ? 'finance-range-error' : undefined}
-          onChange={(event) => { setFrom(event.target.value); setRangeError(''); }} />
-        <Field label="Đến ngày" type="date" value={to} min={from || undefined}
-          aria-invalid={!!rangeError} aria-describedby={rangeError ? 'finance-range-error' : undefined}
-          onChange={(event) => { setTo(event.target.value); setRangeError(''); }} />
-        <Button type="submit" disabled={loading}>Lọc</Button>
-      </div>
-      {rangeError && <p id="finance-range-error" role="alert" className="mt-2 text-sm text-error">{rangeError}</p>}
-    </form>
-    {exportError ? <div className="mb-4" role="alert"><Alert tone="error">Không xuất được báo cáo Excel. {exportError}</Alert></div> : null}
-    {exportNotice ? <div className="mb-4" role="status"><Alert tone="success">{exportNotice}</Alert></div> : null}
-    {error ? <Alert tone="error">{error} <button type="button" className="underline" onClick={() => setReload((value) => value + 1)}>Thử lại</button></Alert> : null}
-    {loading ? <EmptyState title="Đang tải báo cáo" text="Vui lòng chờ trong giây lát." /> : report ? <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Stat label="Tiền thu" value={formatVnd(report.cashAmountVnd)} detail={`${report.cashOrderCount} đơn nạp`} />
-        <Stat label="Credit cộng" value={report.creditInTotal} />
-        <Stat label="Credit trừ" value={report.creditOutTotal} />
-      </div>
-      <section className="rounded-lg bg-white p-5 ring-1 ring-border">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="section-title">Đối chiếu tiền thu và Credit nạp</h2>
-          <span className={`rounded-sm px-2 py-1 text-xs font-semibold ${report.reconciliation.matched ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}>
-            {report.reconciliation.matched ? 'Khớp' : 'Có chênh lệch'}
-          </span>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Stat label="Credit quy đổi từ tiền thu" value={report.reconciliation.cashCredits} />
-          <Stat label="Credit đã nạp" value={report.reconciliation.topUpCredits} />
-          <Stat label="Chênh lệch" value={report.reconciliation.difference} />
-        </div>
-        {!!report.reconciliation.unlinkedEntryCount && (
-          <div className="mt-3 text-sm text-text-secondary">
-            <p>
-              Có {report.reconciliation.unlinkedEntryCount} dòng nạp Credit không gắn với đơn thanh toán,
-              tổng {(report.reconciliation.unlinkedCredits ?? 0).toLocaleString('vi-VN')} Credit.
-            </p>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
-              {report.reconciliation.unlinkedEntries?.map((entry) => (
-                <li key={entry.id}>
-                  Dòng #{entry.id} · Người dùng #{entry.userId} · {entry.amount.toLocaleString('vi-VN')} Credit ·{' '}
-                  {new Date(entry.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
-                </li>
-              ))}
-            </ul>
+  return (
+    <>
+      <PageHeader
+        title="Báo cáo tài chính"
+        description="Tiền thu, Credit cộng và Credit trừ theo sổ hệ thống."
+        action={
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" disabled={exporting} onClick={() => void exportExcel()}>
+              {exporting ? 'Đang xuất...' : 'Xuất báo cáo Excel'}
+            </Button>
+            <Link to="/admin/finance/users">
+              <Button variant="outline">Tra cứu người dùng</Button>
+            </Link>
           </div>
-        )}
-      </section>
-      <section className="rounded-lg bg-white p-5 ring-1 ring-border">
-        <h2 className="mb-1 section-title">Tiền thu theo ngày</h2>
-        <p className="mb-4 text-sm text-text-muted">Chọn một cột để xem các đơn nạp thành công theo ngày thanh toán.</p>
-        <Suspense fallback={null}>
-          <CashByDayChart days={report.cashByDay} />
-        </Suspense>
-      </section>
-      <section className="min-w-0 rounded-lg bg-white p-5 ring-1 ring-border">
-        <h2 className="mb-4 section-title">Credit trừ theo loại</h2>
-        <Suspense fallback={null}>
-          <CreditByTypeChart
-            title="Credit trừ theo loại"
-            rows={report.creditOutByType.map((row) => ({
-              label: transactionLabels[row.type] ?? 'Khác',
-              value: row.amount,
-              detail: `${row.entryCount} lượt`,
-            }))}
+        }
+      />
+      <form className="mb-5" onSubmit={submit} noValidate>
+        <div className="flex flex-wrap items-end gap-3">
+          <Field
+            label="Từ ngày"
+            type="date"
+            value={from}
+            max={to || undefined}
+            aria-invalid={!!rangeError}
+            aria-describedby={rangeError ? 'finance-range-error' : undefined}
+            onChange={(event) => {
+              setFrom(event.target.value);
+              setRangeError('');
+            }}
           />
-        </Suspense>
-      </section>
-    </div> : null}
-  </>;
+          <Field
+            label="Đến ngày"
+            type="date"
+            value={to}
+            min={from || undefined}
+            aria-invalid={!!rangeError}
+            aria-describedby={rangeError ? 'finance-range-error' : undefined}
+            onChange={(event) => {
+              setTo(event.target.value);
+              setRangeError('');
+            }}
+          />
+          <Button type="submit" disabled={loading}>
+            Lọc
+          </Button>
+        </div>
+        {rangeError && (
+          <p id="finance-range-error" role="alert" className="mt-2 text-sm text-error">
+            {rangeError}
+          </p>
+        )}
+      </form>
+      {exportError ? (
+        <div className="mb-4" role="alert">
+          <Alert tone="error">Không xuất được báo cáo Excel. {exportError}</Alert>
+        </div>
+      ) : null}
+      {exportNotice ? (
+        <div className="mb-4" role="status">
+          <Alert tone="success">{exportNotice}</Alert>
+        </div>
+      ) : null}
+      {error ? (
+        <Alert tone="error">
+          {error}{' '}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => setReload((value) => value + 1)}
+          >
+            Thử lại
+          </button>
+        </Alert>
+      ) : null}
+      {loading ? (
+        <EmptyState title="Đang tải báo cáo" text="Vui lòng chờ trong giây lát." />
+      ) : report ? (
+        <div className="space-y-6">
+          <div className="admin-dash-vars">
+            <DashboardGrid columns={3}>
+              <DashboardStatCard
+                variant="finance"
+                icon="money"
+                accent="green"
+                label="Tiền thu"
+                value={formatVnd(report.cashAmountVnd)}
+                note={`${report.cashOrderCount} đơn nạp`}
+              />
+              <DashboardStatCard
+                variant="finance"
+                icon="creditIn"
+                accent="green"
+                label="Credit cộng"
+                value={report.creditInTotal.toLocaleString('vi-VN')}
+                note=""
+              />
+              <DashboardStatCard
+                variant="finance"
+                icon="creditOut"
+                accent="red"
+                label="Credit trừ"
+                value={report.creditOutTotal.toLocaleString('vi-VN')}
+                note=""
+              />
+            </DashboardGrid>
+          </div>
+          <section className="rounded-lg bg-white p-5 ring-1 ring-border">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="section-title">Đối chiếu tiền thu và Credit nạp</h2>
+              <span
+                className={`rounded-sm px-2 py-1 text-xs font-semibold ${report.reconciliation.matched ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}
+              >
+                {report.reconciliation.matched ? 'Khớp' : 'Có chênh lệch'}
+              </span>
+            </div>
+            <div className="admin-dash-vars">
+              <DashboardGrid columns={3}>
+                <DashboardStatCard
+                  variant="finance"
+                  icon="money"
+                  accent="green"
+                  label="Credit quy đổi từ tiền thu"
+                  value={report.reconciliation.cashCredits.toLocaleString('vi-VN')}
+                  note=""
+                />
+                <DashboardStatCard
+                  variant="finance"
+                  icon="creditIn"
+                  accent="green"
+                  label="Credit đã nạp"
+                  value={report.reconciliation.topUpCredits.toLocaleString('vi-VN')}
+                  note=""
+                />
+                <DashboardStatCard
+                  variant="finance"
+                  icon={report.reconciliation.matched ? 'completed' : 'warning'}
+                  accent={report.reconciliation.matched ? 'green' : 'red'}
+                  label="Chênh lệch"
+                  value={report.reconciliation.difference.toLocaleString('vi-VN')}
+                  note=""
+                />
+              </DashboardGrid>
+            </div>
+            {!!report.reconciliation.unlinkedEntryCount && (
+              <div className="mt-3 text-sm text-text-secondary">
+                <p>
+                  Có {report.reconciliation.unlinkedEntryCount} dòng nạp Credit không gắn với đơn
+                  thanh toán, tổng{' '}
+                  {(report.reconciliation.unlinkedCredits ?? 0).toLocaleString('vi-VN')} Credit.
+                </p>
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  {report.reconciliation.unlinkedEntries?.map((entry) => (
+                    <li key={entry.id}>
+                      Dòng #{entry.id} · Người dùng #{entry.userId} ·{' '}
+                      {entry.amount.toLocaleString('vi-VN')} Credit ·{' '}
+                      {new Date(entry.createdAt).toLocaleString('vi-VN', {
+                        timeZone: 'Asia/Ho_Chi_Minh',
+                      })}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
+          <section className="rounded-lg bg-white p-5 ring-1 ring-border">
+            <h2 className="mb-1 section-title">Tiền thu theo ngày</h2>
+            <p className="mb-4 text-sm text-text-muted">
+              Chọn một cột để xem các đơn nạp thành công theo ngày thanh toán.
+            </p>
+            <Suspense fallback={null}>
+              <CashByDayChart days={report.cashByDay} />
+            </Suspense>
+          </section>
+          <section className="min-w-0 rounded-lg bg-white p-5 ring-1 ring-border">
+            <h2 className="mb-4 section-title">Credit trừ theo loại</h2>
+            <Suspense fallback={null}>
+              <CreditByTypeChart
+                title="Credit trừ theo loại"
+                rows={report.creditOutByType.map((row) => ({
+                  label: transactionLabels[row.type] ?? 'Khác',
+                  value: row.amount,
+                  detail: `${row.entryCount} lượt`,
+                }))}
+              />
+            </Suspense>
+          </section>
+        </div>
+      ) : null}
+    </>
+  );
 }

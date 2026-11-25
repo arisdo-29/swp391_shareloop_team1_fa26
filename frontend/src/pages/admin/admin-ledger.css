@@ -59,60 +59,19 @@
   padding-block: 3px;
 }
 
-.admin-ledger-stats {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
+[aria-label='Thống kê sổ Credit'] .admin-dash-card:nth-child(1) {
+  --accent: #176b4b;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, white);
 }
 
-.admin-ledger-stat {
-  display: flex;
-  min-height: 82px;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: white;
+[aria-label='Thống kê sổ Credit'] .admin-dash-card:nth-child(2) {
+  --accent: #bc4b4b;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, white);
 }
 
-.admin-ledger-stat-icon {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
-  place-items: center;
-  border-radius: 8px;
-  background: var(--color-surface-low);
-}
-
-.admin-ledger-stat-label,
-.admin-ledger-stat-context {
-  color: var(--color-text-muted);
-  font-size: 0.6875rem;
-  line-height: 1.35;
-}
-
-.admin-ledger-stat-value {
-  font-size: 1.125rem;
-  font-weight: 700;
-  line-height: 1.35;
-  font-variant-numeric: tabular-nums;
-}
-
-.admin-ledger-stat--in .admin-ledger-stat-icon,
-.admin-ledger-stat--in .admin-ledger-stat-value {
-  color: var(--color-success);
-}
-
-.admin-ledger-stat--out .admin-ledger-stat-icon,
-.admin-ledger-stat--out .admin-ledger-stat-value {
-  color: var(--color-error);
-}
-
-.admin-ledger-stat--total .admin-ledger-stat-icon,
-.admin-ledger-stat--total .admin-ledger-stat-value {
-  color: var(--color-primary);
+[aria-label='Thống kê sổ Credit'] .admin-dash-card:nth-child(3) {
+  --accent: #527f9d;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, white);
 }
 
 .admin-ledger-table-section {
@@ -270,7 +229,9 @@
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
-  transition: background-color 160ms ease, border-color 160ms ease;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
 }
 
 .admin-ledger-view-action:hover {
@@ -339,10 +300,6 @@
 @media (min-width: 640px) {
   .admin-ledger-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .admin-ledger-stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
