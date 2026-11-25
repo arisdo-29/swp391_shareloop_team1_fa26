@@ -30,7 +30,7 @@ describe('FinanceCharts', () => {
     expect(screen.getByText('Chưa có dữ liệu trong khoảng đã chọn.')).toBeTruthy();
 
     cleanup();
-    render(<CreditByTypeChart title="Credit cộng theo loại" rows={[]} />);
+    render(<CreditByTypeChart title="Credit trừ theo loại" rows={[]} />);
     expect(screen.getByText('Chưa có dữ liệu trong khoảng đã chọn.')).toBeTruthy();
   });
 
@@ -73,7 +73,8 @@ describe('FinanceCharts', () => {
     );
   });
 
-  it('biểu đồ theo loại có tên gọi để trình đọc màn hình nhận biết', () => {
+  it('làm nổi đúng lát và hiện giá trị ở tâm khi trỏ chuột', () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ width: 288, height: 272 }));
     render(
       <CreditByTypeChart
         title="Credit trừ theo loại"
@@ -84,8 +85,26 @@ describe('FinanceCharts', () => {
       />,
     );
 
-    expect(screen.getByRole('figure', { name: 'Credit trừ theo loại' })).toBeTruthy();
+    const figure = screen.getByRole('figure', { name: 'Credit trừ theo loại' });
+    const sectors = () => figure.querySelectorAll('.recharts-sector');
+    const secondSlicePath = sectors()[1].getAttribute('d');
     expect(screen.getByText('40 Credit · 80%')).toBeTruthy();
     expect(screen.getByText('10 Credit · 20%')).toBeTruthy();
+
+    fireEvent.mouseEnter(sectors()[1]);
+
+    expect(screen.queryByText('Tổng Credit trừ')).toBeNull();
+    const [firstSlice, secondSlice] = sectors();
+    expect(firstSlice.getAttribute('opacity')).toBe('0.4');
+    expect(secondSlice.getAttribute('opacity')).toBe('1');
+    expect(secondSlice.getAttribute('d')).not.toBe(secondSlicePath);
+    expect(within(secondSlice.closest('[aria-hidden="true"]') as HTMLElement).getByText('10')).toBeTruthy();
+    expect(figure.querySelector('.recharts-tooltip-wrapper')).toBeNull();
+
+    fireEvent.mouseLeave(secondSlice);
+
+    expect(sectors()[0].getAttribute('opacity')).toBe('1');
+    expect(sectors()[1].getAttribute('d')).toBe(secondSlicePath);
+    expect(screen.getByText('Tổng Credit trừ')).toBeTruthy();
   });
 });

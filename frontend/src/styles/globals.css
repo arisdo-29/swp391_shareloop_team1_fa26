@@ -49,6 +49,13 @@
   --color-error-soft: #f8eaea;
   --color-info: #3f6475;
   --color-info-soft: #eaf0f1;
+  --color-chart-teal: theme('colors.chart.teal');
+  --color-chart-blue: theme('colors.chart.blue');
+  --color-chart-gold: theme('colors.chart.gold');
+  --color-chart-coral: theme('colors.chart.coral');
+  --color-chart-violet: theme('colors.chart.violet');
+  --color-chart-lime: theme('colors.chart.lime');
+  --color-chart-pink: theme('colors.chart.pink');
   --color-admin-sidebar: var(--color-success-900);
   --color-gold: #e0b25a;
   --color-gold-hover: #ebc274;
