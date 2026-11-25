@@ -19,7 +19,7 @@ type LoadError = 'not-found' | 'failed' | null;
  * Trang Hồ sơ công khai (route /users/:userId, cần đăng nhập). Chỉ hiện số liệu công khai, không có Credit hay
  * điểm thưởng. Không có nút Nhắn tin vì chat luôn gắn với một giao dịch (Request), không có tin nhắn tự do.
  */
-export function UserProfile() {
+export function UserProfile({ inAdmin = false }: { inAdmin?: boolean }) {
   const { userId } = useParams();
   const navigate = useNavigate();
   const currentUser = useAppSelector(selectCurrentUser);
@@ -98,15 +98,24 @@ export function UserProfile() {
       <ProfileCard
         profile={profile}
         isOwnProfile={isOwnProfile}
+        canReport={!inAdmin}
         notice={notice}
         onReport={() => {
           setNotice('');
           setReportOpen(true);
         }}
       />
-      <ProfileItemsSection userId={profile.id} tab="ACTIVE" />
-      <ProfileItemsSection userId={profile.id} tab="DONE" />
-      {reportOpen && !isOwnProfile ? (
+      <ProfileItemsSection
+        userId={profile.id}
+        tab="ACTIVE"
+        itemDetailPath={inAdmin ? (itemId) => `/admin/items/${itemId}` : undefined}
+      />
+      <ProfileItemsSection
+        userId={profile.id}
+        tab="DONE"
+        itemDetailPath={inAdmin ? (itemId) => `/admin/items/${itemId}` : undefined}
+      />
+      {!inAdmin && reportOpen && !isOwnProfile ? (
         <ReportDialog
           target={{ targetType: 'USER', targetUserId: profile.id }}
           contextLabel={`Báo cáo người dùng ${profile.fullName}`}
@@ -124,11 +133,13 @@ export function UserProfile() {
 function ProfileCard({
   profile,
   isOwnProfile,
+  canReport,
   notice,
   onReport,
 }: {
   profile: PublicProfileResponse;
   isOwnProfile: boolean;
+  canReport: boolean;
   notice: string;
   onReport: () => void;
 }) {
@@ -150,7 +161,7 @@ function ProfileCard({
           ) : null}
         </div>
         {/* Không có Nhắn tin: chat chỉ mở trong một giao dịch, không có tin nhắn tự do giữa hai người. */}
-        {!isOwnProfile ? (
+        {canReport && !isOwnProfile ? (
           <Button variant="warning" onClick={onReport}>
             Báo cáo
           </Button>

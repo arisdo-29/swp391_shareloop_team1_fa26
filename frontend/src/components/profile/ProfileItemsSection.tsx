@@ -27,7 +27,15 @@ interface ItemPage {
 }
 
 /** Một mục món đồ ở hồ sơ công khai (tab ACTIVE hoặc DONE), có phân trang riêng. */
-export function ProfileItemsSection({ userId, tab }: { userId: number; tab: UserItemTab }) {
+export function ProfileItemsSection({
+  userId,
+  tab,
+  itemDetailPath,
+}: {
+  userId: number;
+  tab: UserItemTab;
+  itemDetailPath?: (itemId: string) => string;
+}) {
   const [page, setPage] = useState(0);
   const [data, setData] = useState<ItemPage | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,8 +101,10 @@ export function ProfileItemsSection({ userId, tab }: { userId: number; tab: User
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {data.items.map((item) =>
-              tab === 'DONE' ? <DoneItemCard key={item.id} item={item} /> : (
-                <ProductCard key={item.id} item={item} />
+              tab === 'DONE' ? (
+                <DoneItemCard key={item.id} item={item} detailPath={itemDetailPath?.(item.id)} />
+              ) : (
+                <ProductCard key={item.id} item={item} detailPath={itemDetailPath?.(item.id)} />
               ),
             )}
           </div>
@@ -116,11 +126,12 @@ export function ProfileItemsSection({ userId, tab }: { userId: number; tab: User
 }
 
 // Thẻ món đã giao dịch: hơi mờ, rê chuột hoặc focus thì sáng lại. Nhãn "Đã giao dịch" và ngày hoàn tất ở chân thẻ.
-function DoneItemCard({ item }: { item: Item }) {
+function DoneItemCard({ item, detailPath }: { item: Item; detailPath?: string }) {
   return (
     <div className="opacity-70 transition hover:opacity-100 focus-within:opacity-100">
       <ProductCard
         item={item}
+        detailPath={detailPath}
         imageLabel="Tạm ẩn"
         footer={
           <span className="flex min-w-0 flex-wrap items-center gap-2">

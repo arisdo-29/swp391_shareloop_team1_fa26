@@ -347,9 +347,7 @@ export function AdminAccounts() {
                             >
                               Xem Credit
                             </Link>
-                          ) : (
-                            <span className="text-xs text-text-muted">—</span>
-                          )}
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -498,7 +496,7 @@ function AccountDetailDialog({
       ) : null}
 
       <div className="admin-account-detail-links">
-        <Link to={`/users/${account.id}`}>Xem hồ sơ người dùng</Link>
+        <Link to={`/admin/users/${account.id}/profile`}>Xem hồ sơ người dùng</Link>
         {account.role === 'USER' ? (
           <Link to={`/admin/finance/users/${account.id}`}>Xem lịch sử Credit</Link>
         ) : null}
