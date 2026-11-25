@@ -99,7 +99,7 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
   const [keyword, setKeyword] = useState(keywordInput);
   const [fromDate, setFromDate] = useState(() => query.get('from') ?? '');
   const [toDate, setToDate] = useState(() => query.get('to') ?? '');
-  const [needsReconcile, setNeedsReconcile] = useState(false);
+  const [needsReconcile, setNeedsReconcile] = useState(() => query.get('needsReconcile') === 'true');
   const [page, setPage] = useState(0);
   const [reloadKey, setReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);

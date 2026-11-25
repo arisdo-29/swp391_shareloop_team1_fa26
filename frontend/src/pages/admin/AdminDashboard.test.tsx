@@ -15,6 +15,10 @@ vi.mock('./AdminTodoCards', () => ({
   AdminTodoCards: () => null,
 }));
 
+vi.mock('./AdminSystemStats', () => ({
+  AdminSystemStats: () => null,
+}));
+
 vi.mock('../../services/adminFinanceApi', () => ({
   adminFinanceApi: { report: vi.fn() },
 }));
@@ -40,6 +44,9 @@ const activityPage: ActivityLogPage = {
     actorEmail: 'admin@shareloop.vn',
     type: 'CATEGORY_UPDATE',
     typeLabel: 'Sửa danh mục',
+    targetType: 'CATEGORY',
+    targetId: 3,
+    targetTitle: null,
     detail: 'Đã sửa danh mục Sách',
     createdAt: '2026-10-24T01:00:00Z',
   }],
@@ -112,5 +119,45 @@ describe('loading độc lập trên Admin Dashboard', () => {
 
     expect(await screen.findByText('120.000đ')).toBeTruthy();
     expect(await screen.findByText(/Không tải được nhật ký/)).toBeTruthy();
+  });
+
+  it('hiện ba thẻ tài chính dẫn tới đúng trang quản lý', async () => {
+    renderDashboard();
+
+    const cashCard = (await screen.findByText('120.000đ')).closest('a')!;
+    expect(cashCard.getAttribute('href')).toBe('/admin/finance/topup-orders?status=SUCCESS');
+    expect(cashCard.textContent).toContain('Từ 2 đơn nạp thành công.');
+    expect(screen.getByText('Tổng Credit đã cộng').closest('a')!.getAttribute('href')).toBe('/admin/finance/ledger');
+    expect(screen.getByText('Tổng Credit đã trừ').closest('a')!.textContent).toContain('10');
+  });
+});
+
+describe('Hoạt động gần đây', () => {
+  it('xin đúng 5 dòng mới nhất và hiện cột Đối tượng', async () => {
+    renderDashboard();
+
+    expect(await screen.findByText('Đã sửa danh mục Sách')).toBeTruthy();
+    expect(adminAuditApi.list).toHaveBeenCalledWith({ page: 0, size: 5 });
+    expect(screen.getByRole('columnheader', { name: 'Đối tượng' })).toBeTruthy();
+    expect(screen.getByText('Danh mục')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Xem chi tiết' }).getAttribute('href')).toBe('/admin/categories');
+  });
+
+  it('dẫn tới trang chi tiết theo id và bỏ nút khi không có trang hỗ trợ', async () => {
+    vi.mocked(adminAuditApi.list).mockResolvedValue({
+      ...activityPage,
+      content: [
+        { id: 2, actorId: 7, actorName: 'Quản trị viên', type: 'ADMIN_ITEM_HIDDEN', typeLabel: 'Ẩn bài đăng', targetType: 'ITEM', targetId: 42, targetTitle: 'Xe đạp cũ', detail: 'Đã ẩn bài', createdAt: '2026-10-24T02:00:00Z' },
+        { id: 3, actorId: null, type: 'SYSTEM_JOB', typeLabel: 'Tác vụ hệ thống', targetType: null, targetId: null, detail: 'Chạy tác vụ', createdAt: '2026-10-24T03:00:00Z' },
+      ],
+    });
+
+    renderDashboard();
+
+    expect(await screen.findByText('Xe đạp cũ')).toBeTruthy();
+    const links = screen.getAllByRole('link', { name: 'Xem chi tiết' });
+    expect(links).toHaveLength(1);
+    expect(links[0].getAttribute('href')).toBe('/admin/items/42');
+    expect(screen.getByText('Hệ thống')).toBeTruthy();
   });
 });

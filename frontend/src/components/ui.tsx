@@ -46,6 +46,11 @@ import { Trash } from '@phosphor-icons/react/dist/csr/Trash';
 import { RocketLaunch } from '@phosphor-icons/react/dist/csr/RocketLaunch';
 import { HourglassMedium } from '@phosphor-icons/react/dist/csr/HourglassMedium';
 import { Copy } from '@phosphor-icons/react/dist/csr/Copy';
+import { Money } from '@phosphor-icons/react/dist/csr/Money';
+import { ArrowCircleUp } from '@phosphor-icons/react/dist/csr/ArrowCircleUp';
+import { ArrowCircleDown } from '@phosphor-icons/react/dist/csr/ArrowCircleDown';
+import { CheckCircle } from '@phosphor-icons/react/dist/csr/CheckCircle';
+import { Scales } from '@phosphor-icons/react/dist/csr/Scales';
 import { Link } from 'react-router-dom';
 import type {
   Item,
@@ -102,6 +107,12 @@ const iconMap = {
   boost: RocketLaunch,
   expiring: HourglassMedium,
   copy: Copy,
+  // Thẻ số liệu ở trang Tổng quan Admin.
+  money: Money,
+  creditIn: ArrowCircleUp,
+  creditOut: ArrowCircleDown,
+  completed: CheckCircle,
+  reconcile: Scales,
 } as const;
 
 export type IconName = keyof typeof iconMap;

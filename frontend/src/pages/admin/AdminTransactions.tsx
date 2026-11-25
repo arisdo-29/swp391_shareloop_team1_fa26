@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { Pagination } from '../../components/Pagination';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Alert, Button, Field, ItemImage, PageHeader, Select, SkeletonRows, TextArea } from '../../components/ui';
 import {
   adminRequestApi,
@@ -54,7 +54,12 @@ function errorMessage(error: unknown) {
 export function AdminTransactions() {
   const [result, setResult] = useState<AdminRequestPage | null>(null);
   const [rowItems, setRowItems] = useState<Record<number, RequestItems>>({});
-  const [status, setStatus] = useState<ItemRequestStatus | ''>('');
+  const [searchParams] = useSearchParams();
+  // Thẻ ở trang Tổng quan mở sẵn bộ lọc trạng thái qua ?status=.
+  const [status, setStatus] = useState<ItemRequestStatus | ''>(() => {
+    const initial = searchParams.get('status');
+    return initial && initial in requestStatusLabel ? (initial as ItemRequestStatus) : '';
+  });
   const [stuckOnly, setStuckOnly] = useState(false);
   const [type, setType] = useState<'GIVE' | 'SWAP' | ''>('');
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod | ''>('');
