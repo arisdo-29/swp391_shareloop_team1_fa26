@@ -24,6 +24,36 @@ import { adminErrorMessage } from './adminErrors';
 import { DashboardGrid, DashboardStatCard, type DashboardAccent } from './AdminDashboardCards';
 
 const USER_PAGE_SIZE = 20;
+// Cỡ trang lớn nhất API danh sách người dùng cho phép, dùng khi cộng số liệu toàn hệ thống.
+const TOTALS_PAGE_SIZE = 100;
+// Số trang tải song song mỗi lượt khi cộng số liệu, để không dồn quá nhiều yêu cầu cùng lúc.
+const TOTALS_BATCH = 5;
+
+interface UserTotals {
+  userCount: number;
+  availableCredit: number;
+  heldCredit: number;
+}
+
+/** Cộng số dư của mọi người dùng trong hệ thống bằng cách duyệt hết các trang của API danh sách. */
+async function loadUserTotals(): Promise<UserTotals> {
+  const first = await adminFinanceApi.users({ page: 0, size: TOTALS_PAGE_SIZE });
+  const items = [...first.items];
+  const pageCount = Math.ceil(first.totalElements / TOTALS_PAGE_SIZE);
+  for (let start = 1; start < pageCount; start += TOTALS_BATCH) {
+    const pages = await Promise.all(
+      Array.from({ length: Math.min(TOTALS_BATCH, pageCount - start) }, (_, index) =>
+        adminFinanceApi.users({ page: start + index, size: TOTALS_PAGE_SIZE }),
+      ),
+    );
+    for (const page of pages) items.push(...page.items);
+  }
+  return {
+    userCount: first.totalElements,
+    availableCredit: items.reduce((sum, user) => sum + user.availableCredit, 0),
+    heldCredit: items.reduce((sum, user) => sum + user.heldCredit, 0),
+  };
+}
 // Admin không có danh sách bài của người dùng nên lịch sử không hiện tên món.
 const noItemTitles = new Map<string, string>();
 
@@ -36,6 +66,35 @@ export function AdminFinanceUsers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [totals, setTotals] = useState<UserTotals | null>(null);
+  const [totalsLoading, setTotalsLoading] = useState(true);
+  const [totalsError, setTotalsError] = useState(false);
+
+  // Số liệu thẻ thống kê lấy trên toàn hệ thống, không phụ thuộc ô tìm kiếm hay trang đang xem.
+  useEffect(() => {
+    let active = true;
+    setTotalsLoading(true);
+    setTotalsError(false);
+    loadUserTotals()
+      .then((response) => {
+        if (active) setTotals(response);
+      })
+      .catch(() => {
+        if (!active) return;
+        setTotals(null);
+        setTotalsError(true);
+      })
+      .finally(() => {
+        if (active) setTotalsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [reloadKey]);
+
+  const totalValue = (value: number | undefined) =>
+    totalsLoading || value === undefined ? '—' : value.toLocaleString('vi-VN');
+  const totalsNote = (note: string) => (totalsError ? 'Không tải được số liệu.' : note);
 
   useEffect(() => {
     let active = true;
@@ -65,6 +124,37 @@ export function AdminFinanceUsers() {
         title="Tra cứu người dùng"
         description="Xem số dư Credit và lịch sử giao dịch của từng người dùng."
       />
+      <div className="admin-dash-vars mb-5">
+        <DashboardGrid columns={3}>
+          <DashboardStatCard
+            variant="finance"
+            icon="users"
+            label="Tổng người dùng"
+            value={totalValue(totals?.userCount)}
+            note={totalsNote('Toàn hệ thống, không gồm tài khoản Admin')}
+            loading={totalsLoading}
+            className="admin-lookup-stat admin-lookup-stat--users"
+          />
+          <DashboardStatCard
+            variant="finance"
+            icon="money"
+            label="Tổng Credit khả dụng"
+            value={totalValue(totals?.availableCredit)}
+            note={totalsNote('Credit người dùng đang dùng được')}
+            loading={totalsLoading}
+            className="admin-lookup-stat admin-lookup-stat--available"
+          />
+          <DashboardStatCard
+            variant="finance"
+            icon="expiring"
+            label="Tổng Credit đang giữ"
+            value={totalValue(totals?.heldCredit)}
+            note={totalsNote('Phí các bài chưa được duyệt')}
+            loading={totalsLoading}
+            className="admin-lookup-stat admin-lookup-stat--held"
+          />
+        </DashboardGrid>
+      </div>
       <div className="mb-5 rounded-lg bg-white p-3 ring-1 ring-border/80">
         <SearchField
           aria-label="Tìm người dùng"

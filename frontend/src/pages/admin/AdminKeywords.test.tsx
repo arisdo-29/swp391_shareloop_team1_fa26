@@ -136,12 +136,12 @@ describe('Từ khóa kiểm duyệt', () => {
     expect(adminLexiconApi.list).toHaveBeenCalledTimes(1);
   });
 
-  it('khung kiểm tra nội dung cao khoảng 100px và nút Kiểm tra nằm bên phải', async () => {
+  it('không hiển thị khung kiểm tra nội dung và giữ bộ lọc từ khóa', async () => {
     render(<AdminContentPage kind="keywords" />);
     await screen.findByText('Từ khóa 1');
 
-    const textarea = screen.getByRole('textbox', { name: 'Kiểm tra nội dung' });
-    expect(textarea.className).toContain('h-[100px]');
-    expect(screen.getByRole('button', { name: 'Kiểm tra' }).parentElement?.className).toContain('justify-end');
+    expect(screen.queryByRole('textbox', { name: 'Kiểm tra nội dung' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Kiểm tra' })).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Tìm từ khóa' })).toBeTruthy();
   });
 });

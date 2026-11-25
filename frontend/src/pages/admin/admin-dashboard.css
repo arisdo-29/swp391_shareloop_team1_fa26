@@ -468,3 +468,26 @@ button.admin-dash-card {
     transform: none;
   }
 }
+
+/* Thẻ thống kê trang Tra cứu người dùng: viền trên, icon, nền icon và số cùng một màu,
+   giữ nguyên màu khi giá trị bằng 0, số không xuống dòng. */
+.admin-dash-card.admin-lookup-stat--users {
+  --accent: #527f9d;
+  --accent-soft: #e5eef3;
+}
+
+.admin-dash-card.admin-lookup-stat--available {
+  --accent: #176b4b;
+  --accent-soft: #dfefe8;
+}
+
+.admin-dash-card.admin-lookup-stat--held {
+  --accent: #c69a40;
+  --accent-soft: #f7eedb;
+}
+
+.admin-lookup-stat .admin-dash-value {
+  flex-wrap: nowrap;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}

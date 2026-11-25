@@ -21,7 +21,6 @@ import {
   adminLexiconApi,
   type AdminLexiconEntry,
   type AdminLexiconRequest,
-  type LexiconMatch,
 } from '../../services/adminLexiconApi';
 import {
   adminCategoryApi,
@@ -557,9 +556,6 @@ function ApiAdminKeywords() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
-  const [testText, setTestText] = useState('');
-  const [testMatches, setTestMatches] = useState<LexiconMatch[]>([]);
-  const [testing, setTesting] = useState(false);
   // Tìm kiếm và lọc trên toàn bộ từ điển đã tải về từ API (API trả về đủ danh sách).
   const [search, setSearch] = useState('');
   const [groupFilter, setGroupFilter] = useState('');
@@ -645,20 +641,6 @@ function ApiAdminKeywords() {
     }
   };
 
-  const testLexicon = async () => {
-    if (!testText.trim()) return;
-    setTesting(true);
-    setError('');
-    try {
-      setTestMatches(await adminLexiconApi.test(testText.trim()));
-    } catch (apiError) {
-      const response = apiError as ApiError;
-      setError(response.message || 'Không kiểm tra được nội dung.');
-    } finally {
-      setTesting(false);
-    }
-  };
-
   return (
     <Panel
       title="Từ khóa kiểm duyệt"
@@ -686,37 +668,8 @@ function ApiAdminKeywords() {
           totalIcon="checklist"
         />
       ) : null}
-      <section className="admin-keywords-test mb-5 rounded-lg bg-white p-4 ring-1 ring-border/80">
-        <TextArea
-          label="Kiểm tra nội dung"
-          inputClassName="!min-h-0 h-[100px]"
-          value={testText}
-          onChange={(event) => setTestText(event.target.value)}
-          placeholder="Nhập nội dung cần đối chiếu với từ điển..."
-        />
-        <div className="mt-3 flex justify-end">
-          <Button
-            variant="outline"
-            disabled={testing || !testText.trim()}
-            onClick={() => void testLexicon()}
-          >
-            {testing ? 'Đang kiểm tra...' : 'Kiểm tra'}
-          </Button>
-        </div>
-        {testMatches.length ? (
-          <div className="mt-3 space-y-1 text-xs text-text-secondary">
-            {testMatches.map((match, index) => (
-              <p key={`${match.keyword}-${index}`}>
-                <strong>{match.keyword}</strong> ·{' '}
-                {getLexiconLabel(lexiconLevelLabels, match.level)} ·{' '}
-                {getLexiconLabel(lexiconGroupLabels, match.group)} · {match.matchedAs}
-              </p>
-            ))}
-          </div>
-        ) : null}
-      </section>
       {!loading && entries.length ? (
-        <div className="admin-keywords-filters mb-4 grid gap-3 rounded-lg bg-white p-4 ring-1 ring-border/80 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+        <div className="admin-keywords-filters grid gap-4 rounded-lg bg-white p-4 ring-1 ring-border/80 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
           <div className="sm:col-span-2 lg:col-span-6">
             <span className="label">Tìm kiếm</span>
             <SearchField

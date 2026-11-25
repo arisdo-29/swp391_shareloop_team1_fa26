@@ -54,26 +54,24 @@
 
 .admin-keywords-page > :first-child,
 .admin-keywords-page > .mb-4,
-.admin-keywords-page > .admin-keywords-test,
 .admin-keywords-page > .admin-keywords-filters,
 .admin-keywords-page > [aria-label='Thống kê từ khóa'] {
   margin-bottom: 0;
 }
 
 .admin-keywords-page [aria-label='Thống kê từ khóa'] .admin-dash-card {
-  min-height: 136px;
-  height: 136px;
+  min-height: 130px;
+  height: 130px;
 }
 
-.admin-keywords-test textarea {
-  min-height: 76px !important;
-  height: 76px !important;
+.admin-keywords-filters {
+  gap: 16px;
+  padding: 16px;
 }
 
-.admin-keywords-test button {
-  min-height: 36px;
-  padding: 6px 12px;
-  white-space: nowrap;
+.admin-keywords-filters .label {
+  min-height: 18px;
+  margin-bottom: 6px;
 }
 
 .admin-keywords-filters .input {
@@ -87,12 +85,12 @@
 }
 
 .admin-keywords-table tbody tr {
-  height: 60px;
+  height: 58px;
 }
 
 .admin-keywords-table th,
 .admin-keywords-table td {
-  padding-block: 8px;
+  padding-block: 6px;
   text-align: left;
 }
 
