@@ -457,6 +457,25 @@
   .browse-layout {
     grid-template-columns: 272px minmax(0, 1fr);
   }
+
+  /* Bộ lọc cuộn riêng, không phụ thuộc danh sách sản phẩm: cao tối đa bằng viewport trừ header (68px) và khoảng
+     đệm trên dưới. Phần đệm bù bằng margin âm để khung lọc giữ đúng vị trí và bóng đổ không bị cắt khi cuộn. */
+  .browse-sidebar {
+    --browse-sidebar-gap: 16px;
+    position: sticky;
+    top: calc(68px + var(--browse-sidebar-gap));
+    max-height: calc(100vh - 68px - var(--browse-sidebar-gap) * 2);
+    max-height: calc(100dvh - 68px - var(--browse-sidebar-gap) * 2);
+    min-height: 0;
+    margin: -4px -10px -14px;
+    padding: 4px 10px 14px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: var(--browse-border) transparent;
+  }
 }
 
 @media (min-width: 1280px) {
@@ -504,8 +523,13 @@
     overflow: hidden;
   }
 
+  /* Màn rộng khoá trang theo viewport: khung chứa đã chặn cuộn (overflow: hidden) nên sidebar tự cuộn trong ô lưới,
+     cao tối đa bằng chiều cao còn lại của layout. */
   .browse-sidebar {
+    position: relative;
+    top: auto;
     align-self: start;
+    max-height: calc(100% + 18px);
   }
 
   .browse-results {
