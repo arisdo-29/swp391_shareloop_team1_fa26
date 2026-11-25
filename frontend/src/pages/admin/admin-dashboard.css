@@ -1,0 +1,483 @@
+/*
+ * Giao diện trang Tổng quan Admin (/admin), phong cách Modern Forest Dashboard.
+ * Mọi selector đều nằm dưới .admin-dashboard nên không ảnh hưởng trang khác.
+ */
+.admin-dashboard {
+  --dash-page-bg: #edf4ef;
+  --dash-hero-from: #0b392d;
+  --dash-hero-to: #185a43;
+  --dash-hero-text: #d6ebe0;
+  --dash-ink: #0b3b2e;
+  --dash-cash-bg: #103f31;
+  --dash-sage: #a9cbb8;
+  --dash-sage-soft: #e4efe8;
+  --dash-line: #d3e3d9;
+  --dash-credit-in: #1f6f54;
+  --dash-credit-out: #9c3a36;
+  --dash-radius: 12px;
+  --dash-shadow: 0 1px 2px rgb(11 59 46 / 6%), 0 2px 8px rgb(11 59 46 / 5%);
+  --dash-shadow-hover: 0 6px 18px rgb(11 59 46 / 12%);
+  --dash-shadow-active: 0 4px 14px rgb(11 59 46 / 10%);
+
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+/* Nền trang chỉ đổi khi trang Tổng quan đang hiển thị. Header và Sidebar giữ nguyên nền riêng. */
+.bg-background:has(.admin-dashboard) {
+  background-color: #edf4ef;
+}
+
+/* 1. Khung tiêu đề */
+.admin-dashboard-hero {
+  border-radius: var(--dash-radius);
+  padding: 24px;
+  background: linear-gradient(135deg, var(--dash-hero-from), var(--dash-hero-to));
+  box-shadow: var(--dash-shadow);
+}
+
+.admin-dashboard-hero h1 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.admin-dashboard-hero p {
+  margin: 8px 0 0;
+  max-width: 42rem;
+  color: var(--dash-hero-text);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+@media (min-width: 640px) {
+  .admin-dashboard-hero h1 {
+    font-size: 1.875rem;
+  }
+}
+
+/* Tiêu đề từng nhóm */
+.admin-dash-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.admin-dash-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+
+.admin-dash-section-head h2 {
+  margin: 0;
+  color: var(--dash-ink);
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.admin-dash-section-head p {
+  margin: 4px 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.admin-dash-link {
+  color: var(--color-link);
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: color 200ms ease;
+}
+
+.admin-dash-link:hover {
+  color: var(--dash-ink);
+}
+
+/* Lưới thẻ: 1 cột trên điện thoại, 2 cột trên máy tính bảng, đủ hàng trên màn rộng. */
+.admin-dash-grid {
+  display: grid;
+  grid-auto-rows: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .admin-dash-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 768px) {
+  .admin-dash-grid--3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .admin-dash-grid--4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Thẻ chung */
+.admin-dash-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-radius);
+  padding: 16px;
+  background: #ffffff;
+  box-shadow: var(--dash-shadow);
+  color: var(--dash-ink);
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+
+.admin-dash-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--dash-shadow-hover);
+}
+
+.admin-dash-card:focus-visible {
+  outline: 2px solid var(--dash-hero-to);
+  outline-offset: 2px;
+}
+
+.admin-dash-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--dash-sage-soft);
+  color: var(--dash-credit-in);
+}
+
+.admin-dash-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.admin-dash-label {
+  min-width: 0;
+  color: var(--dash-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.admin-dash-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--dash-ink);
+  font-size: 1.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.admin-dash-unit {
+  font-size: 0.875rem;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.admin-dash-note {
+  margin: auto 0 0;
+  padding-top: 6px;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+/* 2. Công việc cần xử lý: icon trái, số phải, chữ bên dưới */
+.admin-dash-card--task {
+  --accent: var(--dash-credit-in);
+  --accent-soft: var(--dash-sage-soft);
+  position: relative;
+  overflow: hidden;
+}
+
+.admin-dash-card--task .admin-dash-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.admin-dash-card--task .admin-dash-value {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.admin-dash-card--task .admin-dash-icon {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.admin-dash-card--task .admin-dash-note {
+  padding-top: 4px;
+}
+
+.admin-dash-card--gold {
+  --accent: #a8791c;
+  --accent-soft: #f6eedc;
+}
+
+.admin-dash-card--blue {
+  --accent: #3f6475;
+  --accent-soft: #e6eef2;
+}
+
+.admin-dash-card--red {
+  --accent: #b9524c;
+  --accent-soft: #fbeceb;
+}
+
+.admin-dash-card--green {
+  --accent: #1f6f54;
+  --accent-soft: #e2f0e8;
+}
+
+/* Thẻ đang có việc: dải màu nhấn, nền phớt màu, số mang màu nhấn. */
+.admin-dash-card--task[data-state='pending'] {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 70%, #ffffff), #ffffff 70%);
+  box-shadow: var(--dash-shadow-active);
+}
+
+.admin-dash-card--task[data-state='pending']::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: var(--accent);
+}
+
+.admin-dash-card--task[data-state='pending'] .admin-dash-value {
+  color: var(--accent);
+}
+
+.admin-dash-card--task[data-state='pending'] .admin-dash-note {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Thẻ không có việc: dịu hơn để thẻ có việc nổi bật. */
+.admin-dash-card--task[data-state='idle'] .admin-dash-value {
+  color: color-mix(in srgb, var(--dash-ink) 45%, #ffffff);
+}
+
+.admin-dash-card--task[data-state='idle'] .admin-dash-icon {
+  opacity: 0.8;
+}
+
+/* 3. Thống kê hệ thống */
+.admin-dash-card--system {
+  border-bottom: 3px solid var(--dash-sage);
+}
+
+.admin-dash-card--system .admin-dash-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.admin-dash-card--system .admin-dash-value {
+  color: var(--dash-ink);
+}
+
+/* 4. Thống kê tài chính */
+.admin-dash-panel {
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-radius);
+  padding: 20px;
+  background: #ffffff;
+  box-shadow: var(--dash-shadow);
+}
+
+.admin-dash-card--finance {
+  border-color: transparent;
+  background: var(--dash-sage-soft);
+  box-shadow: none;
+}
+
+.admin-dash-card--finance .admin-dash-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.admin-dash-card--finance .admin-dash-icon {
+  background: #ffffff;
+}
+
+.admin-dash-card--cash {
+  background: var(--dash-cash-bg);
+}
+
+.admin-dash-card--cash .admin-dash-label,
+.admin-dash-card--cash .admin-dash-value {
+  color: #ffffff;
+}
+
+.admin-dash-card--cash .admin-dash-note {
+  color: var(--dash-hero-text);
+}
+
+.admin-dash-card--cash .admin-dash-icon {
+  background: rgb(255 255 255 / 14%);
+  color: #ffffff;
+}
+
+.admin-dash-card--credit-in .admin-dash-value {
+  color: var(--dash-credit-in);
+}
+
+.admin-dash-card--credit-out .admin-dash-value {
+  color: var(--dash-credit-out);
+}
+
+.admin-dash-card--credit-out .admin-dash-icon {
+  color: var(--dash-credit-out);
+}
+
+/* 5. Hoạt động gần đây */
+.admin-dash-table-wrap {
+  overflow: hidden;
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-radius);
+  background: #ffffff;
+  box-shadow: var(--dash-shadow);
+}
+
+.admin-dash-table-scroll {
+  overflow-x: auto;
+}
+
+.admin-dash-table {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.admin-dash-table thead {
+  background: var(--dash-sage-soft);
+  color: var(--dash-ink);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.admin-dash-table th,
+.admin-dash-table td {
+  padding: 12px 14px;
+  vertical-align: middle;
+}
+
+.admin-dash-table th {
+  white-space: nowrap;
+}
+
+.admin-dash-table tbody tr {
+  border-top: 1px solid var(--dash-line);
+  transition: background-color 200ms ease;
+}
+
+.admin-dash-table tbody tr:hover {
+  background: color-mix(in srgb, var(--dash-sage-soft) 55%, #ffffff);
+}
+
+.admin-dash-col-time {
+  width: 128px;
+  white-space: nowrap;
+}
+
+.admin-dash-col-actor {
+  width: 18%;
+  max-width: 180px;
+}
+
+.admin-dash-col-action {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.admin-dash-col-target {
+  width: 20%;
+  max-width: 220px;
+}
+
+.admin-dash-col-button {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.admin-dash-detail-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 104px;
+  height: 32px;
+  border: 1px solid var(--dash-sage);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #ffffff;
+  color: var(--dash-ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+.admin-dash-detail-button:hover {
+  border-color: var(--dash-hero-to);
+  background: var(--dash-sage-soft);
+}
+
+.admin-dash-empty {
+  padding: 40px 24px;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+@media (max-width: 639px) {
+  .admin-dash-panel {
+    padding: 16px;
+  }
+
+  .admin-dash-value {
+    font-size: 1.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-dash-card,
+  .admin-dash-table tbody tr,
+  .admin-dash-detail-button {
+    transition: none;
+  }
+
+  .admin-dash-card:hover {
+    transform: none;
+  }
+}

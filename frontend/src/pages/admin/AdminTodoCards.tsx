@@ -1,28 +1,33 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import type { IconName } from '../../components/ui';
 import { adminModerationApi } from '../../services/adminModerationApi';
 import { reportApi } from '../../services/reportApi';
 import { adminAnomalyApi } from '../../services/adminAnomalyApi';
-import { adminItemApi } from '../../services/adminItemApi';
+import { adminFinanceApi } from '../../services/adminFinanceApi';
+import {
+  DashboardGrid,
+  DashboardSection,
+  DashboardStatCard,
+  type DashboardAccent,
+} from './AdminDashboardCards';
+import { formatDashboardCount, type DashboardCount } from './dashboardCount';
 
 // Hàng đợi duyệt bài không trả tổng số nên đọc một trang lớn; vượt ngưỡng thì hiện "100+".
 const REVIEW_QUEUE_PEEK = 100;
 
-type Count = number | null | 'error';
-
 interface TodoCounts {
-  reviews: Count;
-  reports: Count;
-  anomalies: Count;
-  visibleItems: Count;
+  reviews: DashboardCount;
+  reports: DashboardCount;
+  anomalies: DashboardCount;
+  reconcile: DashboardCount;
 }
 
 /**
- * Các ô "Việc cần làm" ở trang Tổng quan. Mỗi ô tự tải bằng API đọc sẵn có,
- * ô nào lỗi thì chỉ ô đó hiện "--", các ô khác vẫn dùng được.
+ * Nhóm "Công việc cần xử lý" ở trang Tổng quan. Mỗi thẻ tự tải bằng API đọc sẵn có,
+ * thẻ nào lỗi thì chỉ thẻ đó hiện "--", các thẻ khác vẫn dùng được.
  */
 export function AdminTodoCards() {
-  const [counts, setCounts] = useState<TodoCounts>({ reviews: null, reports: null, anomalies: null, visibleItems: null });
+  const [counts, setCounts] = useState<TodoCounts>({ reviews: null, reports: null, anomalies: null, reconcile: null });
 
   useEffect(() => {
     let active = true;
@@ -44,55 +49,40 @@ export function AdminTodoCards() {
       ]).then(([open, awaiting]) => open.totalElements + awaiting.totalElements),
     );
     load('anomalies', adminAnomalyApi.report().then((report) => report.repeatedPairs.length));
-    // Bài đang hiện cho mọi người: đã duyệt và chưa bị ẩn. Chỉ lấy tổng số nên xin một dòng.
-    load('visibleItems', adminItemApi.list({ status: 'APPROVED', active: true, page: 0, size: 1 }).then((page) => page.totalElements));
+    load('reconcile', adminFinanceApi.topUpSummary({}).then((summary) => summary.needsReconcileCount));
     return () => {
       active = false;
     };
   }, []);
 
-  const cards: Array<{ to: string; label: string; count: Count; note: string; capped?: boolean; informational?: boolean }> = [
-    { to: '/admin/moderation', label: 'Bài chờ duyệt', count: counts.reviews, note: 'Duyệt sớm để bài hiện cho mọi người.', capped: true },
-    { to: '/admin/complaints', label: 'Khiếu nại và báo cáo đang mở', count: counts.reports, note: 'Gồm cả việc đang chờ giải trình.' },
-    { to: '/admin/alerts', label: 'Cảnh báo giao dịch lặp', count: counts.anomalies, note: 'Cặp người dùng giao dịch lặp nhiều lần.' },
-    {
-      to: '/admin/items',
-      label: 'Bài đang hiển thị',
-      count: counts.visibleItems,
-      note: 'Xem, ẩn hoặc hiện lại bài ở trang Quản lý bài đăng.',
-      informational: true,
-    },
+  const cards: Array<{ to: string; icon: IconName; label: string; count: DashboardCount; note: string; accent: DashboardAccent; cap?: number }> = [
+    { to: '/admin/moderation', icon: 'moderation', label: 'Bài chờ duyệt', count: counts.reviews, note: 'Duyệt sớm để bài hiện cho mọi người.', accent: 'gold', cap: REVIEW_QUEUE_PEEK },
+    { to: '/admin/complaints', icon: 'complaints', label: 'Khiếu nại và báo cáo cần xử lý', count: counts.reports, note: 'Gồm cả hồ sơ đang chờ giải trình.', accent: 'blue' },
+    { to: '/admin/alerts', icon: 'alert', label: 'Cảnh báo giao dịch lặp', count: counts.anomalies, note: 'Cặp người dùng giao dịch lặp nhiều lần.', accent: 'red' },
+    { to: '/admin/finance/topup-orders?needsReconcile=true', icon: 'reconcile', label: 'Đơn nạp cần đối soát', count: counts.reconcile, note: 'Đơn đã đóng nhưng cổng thanh toán vẫn thu tiền.', accent: 'green' },
   ];
 
   return (
-    <section aria-labelledby="admin-todo" className="space-y-3">
-      <h2 id="admin-todo" className="section-title">Việc cần làm</h2>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <DashboardSection id="admin-todo" title="Công việc cần xử lý" description="Các việc đang chờ Admin xử lý.">
+      <DashboardGrid>
         {cards.map((card) => {
-          const urgent = !card.informational && typeof card.count === 'number' && card.count > 0;
-          const value =
-            card.count === null
-              ? '...'
-              : card.count === 'error'
-                ? '--'
-                : card.capped && card.count >= REVIEW_QUEUE_PEEK
-                  ? `${REVIEW_QUEUE_PEEK}+`
-                  : String(card.count);
+          const pending = typeof card.count === 'number' && card.count > 0;
           return (
-            <Link
+            <DashboardStatCard
               key={card.to}
               to={card.to}
-              className={`flex flex-col gap-1.5 rounded-lg border bg-white p-4 transition hover:bg-surface-low ${urgent ? 'border-error/40' : 'border-border'}`}
-            >
-              <span className="text-sm font-semibold text-text-secondary">{card.label}</span>
-              <strong className="text-3xl tabular-nums">{value}</strong>
-              <span className={`text-xs ${urgent ? 'font-semibold text-error' : 'text-text-muted'}`}>
-                {card.count === 'error' ? 'Chưa tải được số liệu.' : urgent ? card.note : 'Không có việc chờ.'}
-              </span>
-            </Link>
+              icon={card.icon}
+              label={card.label}
+              value={formatDashboardCount(card.count, card.cap)}
+              loading={card.count === null}
+              variant="task"
+              accent={card.accent}
+              pending={pending}
+              note={card.count === 'error' ? 'Chưa tải được số liệu.' : card.count === null ? 'Đang tải số liệu.' : pending ? card.note : 'Không có việc chờ.'}
+            />
           );
         })}
-      </div>
-    </section>
+      </DashboardGrid>
+    </DashboardSection>
   );
 }

@@ -7,6 +7,18 @@ import type { ApiError } from '../../services/http';
 import { formatVnd } from '../../utils/formatting';
 import { walletTransactionLabels } from '../../utils/creditHistory';
 import { AdminTodoCards } from './AdminTodoCards';
+import { AdminSystemStats } from './AdminSystemStats';
+import { DashboardGrid, DashboardSection, DashboardStatCard, type DashboardAccent } from './AdminDashboardCards';
+import type { IconName } from '../../components/ui';
+
+const RECENT_ACTIVITY_SIZE = 5;
+
+// Khung thẻ tài chính lúc đang tải, giữ đúng vị trí để trang không nhảy khi có số liệu.
+const FINANCE_PLACEHOLDERS: Array<{ to: string; icon: IconName; label: string; accent: DashboardAccent }> = [
+  { to: '/admin/finance/topup-orders?status=SUCCESS', icon: 'money', label: 'Tổng tiền nạp thành công', accent: 'cash' },
+  { to: '/admin/finance/ledger', icon: 'creditIn', label: 'Tổng Credit đã cộng', accent: 'credit-in' },
+  { to: '/admin/finance/ledger', icon: 'creditOut', label: 'Tổng Credit đã trừ', accent: 'credit-out' },
+];
 
 const CashByDayChart = lazy(() =>
   import('./FinanceCharts').then((module) => ({ default: module.CashByDayChart })),
@@ -47,6 +59,59 @@ function activityTone(type: string) {
   return 'bg-info-soft text-info';
 }
 
+const activityTargetLabels: Record<string, string> = {
+  ITEM: 'Bài đăng',
+  USER: 'Người dùng',
+  REQUEST: 'Giao dịch',
+  REPORT: 'Báo cáo',
+  CONFIG: 'Cấu hình',
+  LEXICON: 'Từ khóa',
+  CHECKLIST: 'Câu hỏi kiểm duyệt',
+  CATEGORY: 'Danh mục',
+  CATEGORY_ATTRIBUTE: 'Thuộc tính danh mục',
+  AREA: 'Khu vực',
+};
+
+// Trang chi tiết của đối tượng trong nhật ký. Loại không có trang chi tiết riêng thì mở trang quản lý của loại đó.
+function activityTargetLink(log: ActivityLogResponse) {
+  const type = log.targetType?.trim().toUpperCase() ?? '';
+  const id = log.targetId;
+  if (type === 'ITEM' && id) return `/admin/items/${id}`;
+  if (type === 'USER' && id) return `/admin/users/${id}/profile`;
+  if (type === 'REQUEST' && id) return `/admin/transactions/${id}`;
+  if (type === 'REPORT') return '/admin/complaints';
+  if (type === 'CONFIG') return '/admin/settings/fees';
+  if (type === 'LEXICON') return '/admin/keywords';
+  if (type === 'CHECKLIST') return '/admin/checklist';
+  if (type === 'CATEGORY' || type === 'CATEGORY_ATTRIBUTE') return '/admin/categories';
+  if (type === 'AREA') return '/admin/districts';
+  return null;
+}
+
+function activityTarget(log: ActivityLogResponse) {
+  const type = activityTargetLabels[log.targetType?.trim().toUpperCase() ?? ''] ?? null;
+  return { type, title: log.targetTitle?.trim() || null };
+}
+
+function formatActivityTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Không xác định';
+  return new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date);
+}
+
+function RetryAlert({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <Alert tone="error">
+      {message}{' '}
+      <button type="button" className="font-semibold underline" onClick={onRetry}>Thử lại</button>
+    </Alert>
+  );
+}
+
 export function AdminOperationsDashboard() {
   const [report, setReport] = useState<FinanceSummary | null>(null);
   const [logs, setLogs] = useState<ActivityLogResponse[]>([]);
@@ -54,118 +119,152 @@ export function AdminOperationsDashboard() {
   const [logsLoading, setLogsLoading] = useState(true);
   const [reportError, setReportError] = useState('');
   const [logsError, setLogsError] = useState('');
-  const [reload, setReload] = useState(0);
+  const [reportReload, setReportReload] = useState(0);
+  const [logsReload, setLogsReload] = useState(0);
+
   useEffect(() => {
     let active = true;
     setReport(null);
-    setLogs([]);
     setReportLoading(true);
-    setLogsLoading(true);
     setReportError('');
-    setLogsError('');
-
     void adminFinanceApi.report({})
       .then((summary) => { if (active) setReport(summary); })
       .catch((caught) => { if (active) setReportError(errorMessage(caught)); })
       .finally(() => { if (active) setReportLoading(false); });
+    return () => { active = false; };
+  }, [reportReload]);
 
-    void adminAuditApi.list({ page: 0, size: 5 })
-      .then((recent) => { if (active) setLogs(recent.content); })
+  useEffect(() => {
+    let active = true;
+    setLogs([]);
+    setLogsLoading(true);
+    setLogsError('');
+    void adminAuditApi.list({ page: 0, size: RECENT_ACTIVITY_SIZE })
+      .then((recent) => { if (active) setLogs(recent.content.slice(0, RECENT_ACTIVITY_SIZE)); })
       .catch((caught) => { if (active) setLogsError(errorMessage(caught)); })
       .finally(() => { if (active) setLogsLoading(false); });
-
     return () => { active = false; };
-  }, [reload]);
-  const metrics = report ? [
-    { label: 'Tiền thu', value: formatVnd(report.cashAmountVnd), tone: 'border-l-primary' },
-    { label: 'Credit cộng', value: report.creditInTotal.toLocaleString('vi-VN'), tone: 'border-l-success' },
-    { label: 'Credit trừ', value: report.creditOutTotal.toLocaleString('vi-VN'), tone: 'border-l-secondary' },
+  }, [logsReload]);
+
+  const financeCards: Array<{ to: string; icon: IconName; label: string; accent: DashboardAccent; value: string; unit?: string; note: string }> = report ? [
+    {
+      ...FINANCE_PLACEHOLDERS[0],
+      value: formatVnd(report.cashAmountVnd),
+      note: `Từ ${report.cashOrderCount.toLocaleString('vi-VN')} đơn nạp thành công.`,
+    },
+    {
+      ...FINANCE_PLACEHOLDERS[1],
+      value: report.creditInTotal.toLocaleString('vi-VN'),
+      unit: 'Credit',
+      note: 'Gồm nạp Credit và điều chỉnh cộng.',
+    },
+    {
+      ...FINANCE_PLACEHOLDERS[2],
+      value: report.creditOutTotal.toLocaleString('vi-VN'),
+      unit: 'Credit',
+      note: 'Gồm các loại phí và điều chỉnh trừ.',
+    },
   ] : [];
 
-  return <>
-    <PageHeader
-      title="Tổng quan"
-    />
-    <div className="mb-6">
-      <AdminTodoCards />
-    </div>
-    <div className="grid min-w-0 gap-6">
-      <div className="min-w-0 space-y-6">
-        {reportError ? (
-          <Alert tone="error">
-            {reportError}{' '}
-            <button type="button" className="font-semibold underline" onClick={() => setReload((value) => value + 1)}>Thử lại</button>
-          </Alert>
-        ) : report ? (
-          <div className="grid gap-4 sm:grid-cols-3">
-            {metrics.map((metric) => (
-              <section key={metric.label} className={`rounded-xl border border-l-4 border-border/80 bg-white p-5 shadow-sm ${metric.tone}`}>
-                <p className="text-sm font-medium text-text-muted">{metric.label}</p>
-                <p className="mt-1 break-words text-2xl font-bold tabular-nums text-text-primary">{metric.value}</p>
-              </section>
-            ))}
-          </div>
-        ) : (
-          reportLoading ? <EmptyState title="Đang tải tổng quan" text="Vui lòng chờ trong giây lát." /> : null
-        )}
+  return (
+    <div className="admin-dashboard">
+      <header className="admin-dashboard-hero">
+        <h1>Tổng quan</h1>
+        <p>Theo dõi việc cần xử lý, số liệu hệ thống, tài chính và hoạt động mới nhất.</p>
+      </header>
 
-        <section className="overflow-hidden rounded-xl border border-border/80 bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-5 py-4 sm:px-6">
-            <div>
-              <h2 className="section-title">Hoạt động gần đây</h2>
-              <p className="mt-1 text-sm text-text-muted">Các thay đổi mới nhất được ghi nhận trong hệ thống.</p>
-            </div>
-            <Link className="text-sm font-semibold text-link hover:text-secondary" to="/admin/audit-logs">
-              Xem tất cả
-            </Link>
-          </div>
+      <AdminTodoCards />
+      <AdminSystemStats />
+
+      <DashboardSection
+        id="admin-finance-stats"
+        title="Thống kê tài chính"
+        description="Tổng cộng từ trước đến nay theo sổ hệ thống."
+        panel
+        action={<Link className="admin-dash-link" to="/admin/finance">Xem báo cáo tài chính</Link>}
+      >
+        {reportError ? (
+          <RetryAlert message={reportError} onRetry={() => setReportReload((value) => value + 1)} />
+        ) : (
+          <DashboardGrid columns={3}>
+            {reportLoading || !report
+              ? FINANCE_PLACEHOLDERS.map((card) => (
+                <DashboardStatCard key={card.label} {...card} variant="finance" value="..." note="Đang tải số liệu." loading />
+              ))
+              : financeCards.map((card) => <DashboardStatCard key={card.label} {...card} variant="finance" />)}
+          </DashboardGrid>
+        )}
+      </DashboardSection>
+
+      <DashboardSection
+        id="admin-recent-activity"
+        title="Hoạt động gần đây"
+        description={`${RECENT_ACTIVITY_SIZE} thay đổi mới nhất được ghi nhận trong hệ thống.`}
+        action={<Link className="admin-dash-link" to="/admin/audit-logs">Xem tất cả</Link>}
+      >
+        <div className="admin-dash-table-wrap">
           {logsError ? (
-            <div className="px-6 py-6">
-              <Alert tone="error">
-                {logsError}{' '}
-                <button type="button" className="font-semibold underline" onClick={() => setReload((value) => value + 1)}>Thử lại</button>
-              </Alert>
+            <div className="p-5">
+              <RetryAlert message={logsError} onRetry={() => setLogsReload((value) => value + 1)} />
             </div>
           ) : logsLoading ? (
-            <div className="px-6 py-10 text-center text-sm text-text-muted">Đang tải hoạt động gần đây...</div>
+            <div className="admin-dash-empty">Đang tải hoạt động gần đây...</div>
           ) : logs.length ? (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-                <thead className="bg-surface-low text-xs font-semibold text-text-muted">
+            <div className="admin-dash-table-scroll">
+              <table className="admin-dash-table">
+                <thead>
                   <tr>
-                    <th className="whitespace-nowrap px-5 py-3">Thời gian</th>
-                    <th className="whitespace-nowrap px-5 py-3">Người thực hiện</th>
-                    <th className="whitespace-nowrap px-5 py-3">Hành động</th>
-                    <th className="px-5 py-3">Chi tiết</th>
+                    <th scope="col" className="admin-dash-col-time">Thời gian</th>
+                    <th scope="col" className="admin-dash-col-actor">Người thực hiện</th>
+                    <th scope="col" className="admin-dash-col-action">Hành động</th>
+                    <th scope="col" className="admin-dash-col-target">Đối tượng</th>
+                    <th scope="col">Chi tiết</th>
+                    <th scope="col" className="admin-dash-col-button"><span className="sr-only">Thao tác</span></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {logs.map((log) => (
-                    <tr key={log.id} className="border-t border-border/70 transition hover:bg-primary-faint">
-                      <td className="whitespace-nowrap px-5 py-4 text-xs text-text-muted">{new Date(log.createdAt).toLocaleString('vi-VN')}</td>
-                      <td className="max-w-48 px-5 py-4">
-                        <p className="truncate font-semibold text-text-primary">{log.actorName || log.actorEmail || (log.actorId ? 'Tài khoản đã xóa' : 'Hệ thống')}</p>
-                        {log.actorName && log.actorEmail ? <p className="mt-0.5 truncate text-xs text-text-muted">{log.actorEmail}</p> : null}
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${activityTone(log.type)}`}>
-                          {log.typeLabel || log.type}
-                        </span>
-                      </td>
-                      <td className="max-w-sm px-5 py-4 leading-6 text-text-secondary">{log.detail || log.reason || '—'}</td>
-                    </tr>
-                  ))}
+                  {logs.map((log) => {
+                    const target = activityTarget(log);
+                    const link = activityTargetLink(log);
+                    return (
+                      <tr key={log.id}>
+                        <td className="admin-dash-col-time text-xs tabular-nums text-text-muted">{formatActivityTime(log.createdAt)}</td>
+                        <td className="admin-dash-col-actor">
+                          <p className="truncate font-semibold text-text-primary">{log.actorName || log.actorEmail || (log.actorId ? 'Tài khoản đã xóa' : 'Hệ thống')}</p>
+                          {log.actorName && log.actorEmail ? <p className="mt-0.5 truncate text-xs text-text-muted">{log.actorEmail}</p> : null}
+                        </td>
+                        <td className="admin-dash-col-action">
+                          <span className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-xs font-semibold ${activityTone(log.type)}`}>
+                            {log.typeLabel || 'Hoạt động khác'}
+                          </span>
+                        </td>
+                        <td className="admin-dash-col-target">
+                          {target.title || target.type ? <>
+                            <p className="line-clamp-2 font-medium text-text-primary">{target.title ?? target.type}</p>
+                            {target.title && target.type ? <p className="mt-0.5 text-xs text-text-muted">{target.type}</p> : null}
+                          </> : <span className="text-text-muted">—</span>}
+                        </td>
+                        <td className="leading-6 text-text-secondary">
+                          <p className="line-clamp-2">{log.detail || log.reason || '—'}</p>
+                        </td>
+                        <td className="admin-dash-col-button">
+                          {link ? (
+                            <Link to={link} className="admin-dash-detail-button">Xem chi tiết</Link>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           ) : (
-            <div className="px-6 py-10 text-center text-sm text-text-muted">Chưa có hoạt động nào được ghi nhận.</div>
+            <div className="admin-dash-empty">Chưa có hoạt động nào được ghi nhận.</div>
           )}
-        </section>
-      </div>
-
+        </div>
+      </DashboardSection>
     </div>
-  </>;
+  );
 }
 
 export function AdminFinanceReport() {
