@@ -216,10 +216,7 @@
 
 .admin-accounts-actions {
   display: flex;
-fix/admin-user-profile
   width: 100%;
-
- develop
   align-items: center;
   justify-content: center;
   gap: 5px;

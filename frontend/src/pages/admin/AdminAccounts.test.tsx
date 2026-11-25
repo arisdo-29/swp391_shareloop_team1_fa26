@@ -113,12 +113,10 @@ describe('AdminAccounts', () => {
     expect(within(rowOf('Lan An')).getByRole('button', { name: 'Khóa' })).toBeTruthy();
     expect(within(rowOf('Bình Trần')).getByRole('button', { name: 'Mở khóa' })).toBeTruthy();
     expect(within(rowOf('Quản trị Minh')).queryByRole('button', { name: /khóa/i })).toBeNull();
- fix/admin-user-profile
     const adminActionCell = within(rowOf('Quản trị Minh'))
       .getByRole('button', { name: 'Xem chi tiết' })
       .closest('td')!;
     expect(within(adminActionCell).queryByText('—')).toBeNull();
- develop
     expect(within(rowOf('Chi Bị Cấm')).queryByRole('button', { name: /khóa/i })).toBeNull();
   });
 
@@ -260,11 +258,8 @@ describe('AdminAccounts', () => {
     expect(
       within(dialog).getByRole('link', { name: 'Xem lịch sử Credit' }).getAttribute('href'),
     ).toBe('/admin/finance/users/1');
- fix/admin-user-profile
     expect(
       within(dialog).getByRole('link', { name: 'Xem hồ sơ người dùng' }).getAttribute('href'),
     ).toBe('/admin/users/1/profile');
-
- develop
   });
 });
