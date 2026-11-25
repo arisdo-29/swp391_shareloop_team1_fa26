@@ -375,7 +375,7 @@
   width: 100%;
   min-width: 820px;
   border-collapse: collapse;
-  text-align: left;
+  text-align: center;
   font-size: 0.875rem;
 }
 
@@ -389,7 +389,15 @@
 .admin-dash-table th,
 .admin-dash-table td {
   padding: 12px 14px;
+  /* Căn giữa cả tiêu đề và nội dung theo hai chiều. */
+  text-align: center;
   vertical-align: middle;
+}
+
+/* Khối chữ bị cắt (truncate, line-clamp) vẫn căn giữa trong ô. */
+.admin-dash-table td > p {
+  margin-inline: auto;
+  text-align: center;
 }
 
 .admin-dash-table th {
@@ -428,7 +436,8 @@
 .admin-dash-col-button {
   width: 1%;
   white-space: nowrap;
-  text-align: right;
+  /* Tiêu đề "Thao tác" nằm chính giữa nút Xem chi tiết. */
+  text-align: center;
 }
 
 .admin-dash-detail-button {

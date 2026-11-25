@@ -43,6 +43,8 @@ const items = [
   row({}),
   row({ id: 2, title: 'Sách giáo khoa', active: false, hiddenSource: 'ADMIN', postFeePaid: 5 }),
   row({ id: 3, title: 'Bàn học', status: 'RESERVED' }),
+  row({ id: 5, title: 'Ghế gỗ', status: 'PENDING_REVIEW', approvedAt: null }),
+  row({ id: 6, title: 'Quạt máy', status: 'TRADED', boosting: true, boostedUntil: '2026-11-20T03:00:00Z' }),
   row({ id: 4, title: 'Đèn bàn', active: false, hiddenSource: 'OWNER_LOCKED' }),
 ];
 
@@ -135,7 +137,10 @@ describe('AdminItems', () => {
     await user.click(confirm);
 
     await waitFor(() => expect(adminItemApi.hide).toHaveBeenCalledWith(1, 'Hàng giả theo báo cáo'));
-    await waitFor(() => expect(adminItemApi.list).toHaveBeenCalledTimes(2));
+    // Danh sách (size 20) tải lại một lần sau khi ẩn, các lượt size 1 là thẻ thống kê.
+    await waitFor(() =>
+      expect(vi.mocked(adminItemApi.list).mock.calls.filter(([params]) => params.size === 20)).toHaveLength(2),
+    );
   });
 
   it('báo lỗi của backend ngay trong hộp thoại khi bài có giao dịch đang chạy', async () => {
@@ -184,5 +189,72 @@ describe('AdminItems', () => {
     await user.click(screen.getByRole('button', { name: 'Thử lại' }));
 
     expect(await screen.findByText('Xe đạp cũ')).toBeTruthy();
+  });
+
+  it('thẻ thống kê đọc tổng số toàn hệ thống, không đếm trang hiện tại', async () => {
+    const totals: Record<string, number> = { all: 120, PENDING_REVIEW: 8, visible: 70, RESERVED: 6, TRADED: 30, hidden: 4 };
+    vi.mocked(adminItemApi.list).mockImplementation(async (params) => {
+      if (params.size === 20) return { items, page: 0, size: 20, totalElements: items.length };
+      const key = params.active === false ? 'hidden' : params.active ? 'visible' : params.status ?? 'all';
+      return { items: [], page: 0, size: 1, totalElements: totals[key] };
+    });
+    renderPage();
+
+    const stats = screen.getByLabelText('Thống kê bài đăng');
+    await waitFor(() => expect(within(stats).getByText('Tổng bài đăng').parentElement?.textContent).toContain('120'));
+    expect(within(stats).getByText('Chờ duyệt').parentElement?.textContent).toContain('8');
+    await waitFor(() => expect(within(stats).getByText('Đang hiển thị').parentElement?.textContent).toContain('70'));
+    expect(within(stats).getByText('Đã giữ chỗ').parentElement?.textContent).toContain('6');
+    expect(within(stats).getByText('Đã hoàn tất').parentElement?.textContent).toContain('30');
+    expect(within(stats).getByText('Đã ẩn').parentElement?.textContent).toContain('4');
+    expect(adminItemApi.list).toHaveBeenCalledWith({ status: 'APPROVED', active: true, page: 0, size: 1 });
+    expect(adminItemApi.list).toHaveBeenCalledWith({ active: false, page: 0, size: 1 });
+  });
+
+  it('không ghi Đang hiện cho bài chưa duyệt, có nhãn Đang đẩy và nút Xem chi tiết', async () => {
+    renderPage();
+    await screen.findByText('Ghế gỗ');
+
+    const pendingRow = screen.getByText('Ghế gỗ').closest('tr') as HTMLElement;
+    expect(within(pendingRow).queryByText('Đang hiện')).toBeNull();
+    expect(within(pendingRow).getByText('Chưa hiện, đang chờ duyệt')).toBeTruthy();
+    const approvedRow = screen.getByText('Xe đạp cũ').closest('tr') as HTMLElement;
+    expect(within(approvedRow).getByText('Đang hiện')).toBeTruthy();
+    expect(within(approvedRow).getByRole('link', { name: 'Xem chi tiết' }).getAttribute('href')).toBe('/admin/items/1');
+
+    const boostedRow = screen.getByText('Quạt máy').closest('tr') as HTMLElement;
+    expect(within(boostedRow).getByText('Đang đẩy').getAttribute('title')).toContain('Đang được đẩy đến');
+  });
+
+  it('nút Ẩn bị khoá có tooltip giải thích lý do', async () => {
+    renderPage();
+    await screen.findByText('Bàn học');
+
+    const reservedRow = screen.getByText('Bàn học').closest('tr') as HTMLElement;
+    const hide = within(reservedRow).getByRole('button', { name: 'Ẩn' });
+    expect(hide.parentElement?.getAttribute('title')).toContain('hủy giao dịch');
+    expect(document.getElementById(hide.getAttribute('aria-describedby') ?? '')?.textContent).toContain('hủy giao dịch');
+    const tradedRow = screen.getByText('Quạt máy').closest('tr') as HTMLElement;
+    expect(within(tradedRow).getByRole('button', { name: 'Ẩn' }).parentElement?.getAttribute('title')).toBe(
+      'Bài đã giao dịch xong nên không thể ẩn.',
+    );
+  });
+
+  it('nút Xóa bộ lọc đưa mọi bộ lọc về mặc định', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Xe đạp cũ');
+    const clear = screen.getByRole('button', { name: 'Xóa bộ lọc' }) as HTMLButtonElement;
+    expect(clear.disabled).toBe(true);
+
+    await user.selectOptions(screen.getByLabelText('Trạng thái'), 'APPROVED');
+    await user.click(screen.getByLabelText('Chỉ bài đang đẩy'));
+    await waitFor(() => expect(clear.disabled).toBe(false));
+    await user.click(clear);
+
+    await waitFor(() => expect(adminItemApi.list).toHaveBeenLastCalledWith({ page: 0, size: 20 }));
+    expect((screen.getByLabelText('Trạng thái') as HTMLSelectElement).value).toBe('');
+    expect((screen.getByLabelText('Chỉ bài đang đẩy') as HTMLInputElement).checked).toBe(false);
+    expect(clear.disabled).toBe(true);
   });
 });

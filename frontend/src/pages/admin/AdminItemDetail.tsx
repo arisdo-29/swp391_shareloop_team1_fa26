@@ -17,6 +17,7 @@ import { AdminItemVisibilityDialog } from './AdminItemVisibilityDialog';
 import { ModerationImageGallery } from './ModerationParts';
 import { conditionLabels, offerTypeLabels } from './moderationDisplay';
 import type { AdminLedgerRouteState } from './adminLedgerNavigation';
+import { historyActionLabel } from './activityLogDisplay';
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -44,7 +45,7 @@ const historyRoleLabels: Record<AdminItemHistoryEntry['actorRole'], string> = {
 };
 
 function ItemPostHistory({ detail }: { detail: AdminItemFullDetail }) {
-  const entries = detail.postHistory ?? detail.visibilityHistory.map((log): AdminItemHistoryEntry => ({
+  const entries = detail.postHistory?.map((entry) => ({ ...entry, action: historyActionLabel(entry.action) })) ?? detail.visibilityHistory.map((log): AdminItemHistoryEntry => ({
     key: `log-${log.id}`,
     action: log.typeLabel || (log.type === 'ADMIN_ITEM_HIDDEN' ? 'Admin ẩn bài đăng' : 'Admin hiện lại bài đăng'),
     actorRole: 'ADMIN',
