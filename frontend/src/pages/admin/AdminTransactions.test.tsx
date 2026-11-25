@@ -206,7 +206,8 @@ describe('AdminTransactions', () => {
 
     await waitFor(() => expect(adminRequestApi.cancel).toHaveBeenCalledWith(5, 'Hai bên không liên lạc được'));
     expect(await screen.findByText(/Đã huỷ giao dịch/)).toBeTruthy();
-    expect(adminRequestApi.list).toHaveBeenCalledTimes(2);
+    // Danh sách (size 20) tải lại một lần sau khi huỷ, các lượt size 1 là thẻ thống kê.
+    expect(vi.mocked(adminRequestApi.list).mock.calls.filter(([params]) => params.size === 20)).toHaveLength(2);
   });
 
   it('hiện lỗi tiếng Việt khi backend trả 409', async () => {
@@ -259,5 +260,46 @@ describe('AdminTransactions nhãn và bộ lọc của luật mới', () => {
         expect.objectContaining({ pendingCancel: true, sendOverdue: true }),
       ),
     );
+  });
+
+  it('thẻ thống kê đọc tổng số theo trạng thái từ API và tải lại sau khi huỷ', async () => {
+    const totals: Record<string, number> = { all: 50, RESERVED: 3, AWAITING_LOGISTICS: 2, LOGISTICS_CONFIRMED: 1, AWAITING_HANDOVER: 4, COMPLETED: 30, CANCELLED: 6 };
+    vi.mocked(adminRequestApi.list).mockImplementation(async (params) =>
+      params.size === 1
+        ? { items: [], page: 0, size: 1, totalElements: totals[params.status ?? 'all'] ?? 0, totalPages: 1 }
+        : page([row({})]),
+    );
+    renderPage();
+
+    const stats = screen.getByRole('group', { name: 'Thống kê giao dịch' });
+    const card = (label: string) => within(stats).getByText(label).closest('.admin-dash-card') as HTMLElement;
+    await waitFor(() => expect(card('Tổng giao dịch').textContent).toContain('50'));
+    await waitFor(() => expect(card('Đang diễn ra').textContent).toContain('10'));
+    expect(card('Đã hoàn tất').textContent).toContain('30');
+    expect(card('Đã hủy').textContent).toContain('6');
+    expect(adminRequestApi.list).toHaveBeenCalledWith({ status: 'CANCELLED', page: 0, size: 1 });
+  });
+
+  it('nhóm lọc nhanh riêng có icon, nút Đặt lại bộ lọc đưa mọi bộ lọc về mặc định', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Xe đạp cũ');
+
+    const quick = screen.getByRole('group', { name: 'Giao dịch cần xử lý' });
+    const stuck = within(quick).getByRole('button', { name: 'Quá giờ xác nhận bàn giao' });
+    expect(within(quick).getAllByRole('button')).toHaveLength(3);
+    expect(stuck.querySelector('svg')).toBeTruthy();
+
+    const reset = screen.getByRole('button', { name: 'Đặt lại bộ lọc' }) as HTMLButtonElement;
+    expect(reset.disabled).toBe(true);
+    await user.selectOptions(screen.getByLabelText('Trạng thái'), 'DISPUTED');
+    await user.click(stuck);
+    expect(stuck.getAttribute('aria-pressed')).toBe('true');
+    await waitFor(() => expect(reset.disabled).toBe(false));
+
+    await user.click(reset);
+    await waitFor(() => expect(adminRequestApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ status: undefined, stuck: undefined, page: 0, size: 20 })));
+    expect(stuck.getAttribute('aria-pressed')).toBe('false');
+    expect(reset.disabled).toBe(true);
   });
 });

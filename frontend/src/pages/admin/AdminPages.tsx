@@ -647,6 +647,14 @@ function ApiLexiconModal({ entry, saving, onClose, onSave }: { entry: AdminLexic
   </Modal>;
 }
 
+function areaLevelLabel(level: number) {
+  if (level === 1) return 'Thành phố';
+  if (level === 2) return 'Quận';
+  return `Cấp ${level}`;
+}
+
+type AreaStatusFilter = '' | 'active' | 'inactive';
+
 function ApiAdminAreas() {
   const [areas, setAreas] = useState<AdminAreaResponse[]>([]);
   const [editing, setEditing] = useState<AdminAreaResponse | null | 'new'>(null);
@@ -656,6 +664,17 @@ function ApiAdminAreas() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  // Tìm kiếm và lọc trên toàn bộ danh sách khu vực đã tải từ API (API trả về đủ danh sách).
+  const [search, setSearch] = useState('');
+  const [levelFilter, setLevelFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<AreaStatusFilter>('');
+  const searchTerm = normalizeLexiconSearch(search);
+  const levels = [...new Set(areas.map((area) => area.level))].sort((a, b) => a - b);
+  const filteredAreas = areas.filter((area) =>
+    (!searchTerm || normalizeLexiconSearch(area.name).includes(searchTerm))
+    && (!levelFilter || area.level === Number(levelFilter))
+    && (!statusFilter || area.active === (statusFilter === 'active')),
+  );
 
   useEffect(() => {
     let active = true;
@@ -726,7 +745,28 @@ function ApiAdminAreas() {
   return <Panel title="Khu vực" description="Quản lý tỉnh, thành phố và khu vực con dùng cho tìm kiếm và đăng bài." action={<Button onClick={() => setEditing('new')}>Thêm khu vực</Button>}>
     {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
     {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
-    {loading ? <EmptyState title="Đang tải khu vực" text="Vui lòng chờ trong giây lát." /> : areas.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Tên</th><th>Khu vực cha</th><th>Cấp</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>{areas.map((area) => <tr key={area.id}><td className="font-semibold">{area.name}</td><td>{areas.find((entry) => entry.id === area.parentId)?.name ?? '—'}</td><td>{area.level === 1 ? 'Thành phố' : area.level === 2 ? 'Quận' : area.level}</td><td>{area.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td className="space-x-2"><Button size="sm" variant="outline" disabled={savingId === area.id} onClick={() => setEditing(area)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId === area.id} onClick={() => void requestToggle(area)}>{area.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có khu vực" text="Hiện chưa có khu vực nào." />}
+    {!loading && !error ? <ActiveCountStats entries={areas} ariaLabel="Thống kê khu vực" labels={['Tổng khu vực', 'Đang sử dụng', 'Đã tạm ẩn']} totalIcon="district" /> : null}
+    {!loading && areas.length ? (
+      <div className="mb-4 grid gap-3 rounded-lg bg-white p-4 ring-1 ring-border/80 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+        <div className="sm:col-span-2 lg:col-span-6">
+          <span className="label">Tìm kiếm</span>
+          <SearchField aria-label="Tìm khu vực" placeholder="Tìm theo tên khu vực..." value={search} onChange={(event) => setSearch(event.target.value)} />
+        </div>
+        <Select className="lg:col-span-3" label="Cấp khu vực" value={levelFilter} onChange={(event) => setLevelFilter(event.target.value)}>
+          <option value="">Tất cả cấp</option>
+          {levels.map((level) => <option key={level} value={level}>{areaLevelLabel(level)}</option>)}
+        </Select>
+        <Select className="lg:col-span-3" label="Trạng thái" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as AreaStatusFilter)}>
+          <option value="">Tất cả trạng thái</option>
+          <option value="active">Đang sử dụng</option>
+          <option value="inactive">Đã tạm ẩn</option>
+        </Select>
+      </div>
+    ) : null}
+    {loading ? <EmptyState title="Đang tải khu vực" text="Vui lòng chờ trong giây lát." /> : areas.length ? (
+      filteredAreas.length ? <div className="table-wrap"><table className="data-table admin-area-table"><thead><tr><th>Tên</th><th>Khu vực cha</th><th className="text-center">Cấp</th><th className="text-center">Trạng thái</th><th className="text-center">Thao tác</th></tr></thead><tbody>{filteredAreas.map((area) => <tr key={area.id}><td className="font-semibold">{area.name}</td><td>{areas.find((entry) => entry.id === area.parentId)?.name ?? <span className="text-text-muted">Không có</span>}</td><td className="whitespace-nowrap text-center">{areaLevelLabel(area.level)}</td><td className="text-center"><span className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-xs font-semibold ${area.active ? 'bg-success-soft text-success' : 'bg-surface-low text-text-muted'}`}>{area.active ? 'Đang sử dụng' : 'Đã tạm ẩn'}</span></td><td><div className="flex flex-nowrap items-center justify-center gap-2"><Button size="sm" variant="outline" disabled={savingId === area.id} onClick={() => setEditing(area)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId === area.id} onClick={() => void requestToggle(area)}>{area.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}</tbody></table></div>
+        : <EmptyState title="Không tìm thấy khu vực phù hợp" text="Hãy thử đổi tên tìm kiếm hoặc bộ lọc." />
+    ) : <EmptyState title="Chưa có khu vực" text="Hiện chưa có khu vực nào." />}
     {pendingDeactivate ? <DeactivateConfirm name={pendingDeactivate.area.name} count={pendingDeactivate.count} onCancel={() => setPendingDeactivate(null)} onConfirm={() => void toggleActive(pendingDeactivate.area)} /> : null}
     {editing ? <ApiAreaModal area={editing === 'new' ? null : editing} areas={areas} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
   </Panel>;

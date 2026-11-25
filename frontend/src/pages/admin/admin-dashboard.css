@@ -2,7 +2,9 @@
  * Giao diện trang Tổng quan Admin (/admin), phong cách Modern Forest Dashboard.
  * Mọi selector đều nằm dưới .admin-dashboard nên không ảnh hưởng trang khác.
  */
-.admin-dashboard {
+/* Biến màu dùng chung. .admin-dash-vars cho phép trang Admin khác dùng lại thẻ số liệu của trang Tổng quan. */
+.admin-dashboard,
+.admin-dash-vars {
   --dash-page-bg: #edf4ef;
   --dash-hero-from: #0b392d;
   --dash-hero-to: #185a43;
@@ -18,7 +20,9 @@
   --dash-shadow: 0 1px 2px rgb(11 59 46 / 6%), 0 2px 8px rgb(11 59 46 / 5%);
   --dash-shadow-hover: 0 6px 18px rgb(11 59 46 / 12%);
   --dash-shadow-active: 0 4px 14px rgb(11 59 46 / 10%);
+}
 
+.admin-dashboard {
   display: grid;
   gap: 24px;
   min-width: 0;
@@ -142,6 +146,12 @@
 .admin-dash-card:hover {
   transform: translateY(-3px);
   box-shadow: var(--dash-shadow-hover);
+}
+
+/* Thẻ chỉ hiển thị số, không bấm được: không nâng khi rê chuột. */
+.admin-dash-card--static:hover {
+  transform: none;
+  box-shadow: var(--dash-shadow);
 }
 
 .admin-dash-card:focus-visible {
