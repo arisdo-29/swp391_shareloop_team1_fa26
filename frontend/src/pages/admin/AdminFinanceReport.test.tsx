@@ -59,6 +59,8 @@ describe('AdminFinanceReport Excel', { timeout: 20_000 }, () => {
     );
     await screen.findByText('Đối chiếu tiền thu và Credit nạp');
     expect(screen.getByText('Khớp')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Credit trừ theo loại' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Credit cộng theo loại' })).toBeNull();
 
     await user.type(screen.getByLabelText('Từ ngày'), '2026-10-01');
     await user.type(screen.getByLabelText('Đến ngày'), '2026-10-31');
