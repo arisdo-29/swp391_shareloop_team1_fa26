@@ -42,7 +42,8 @@ export function AdminItems() {
   const [offerType, setOfferType] = useState<OfferType | ''>('');
   const [categoryId, setCategoryId] = useState('');
   const [keywordInput, setKeywordInput] = useState('');
-  const keyword = useDebouncedValue(keywordInput.trim());
+  const debouncedKeyword = useDebouncedValue(keywordInput.trim());
+  const keyword = keywordInput.trim() ? debouncedKeyword : '';
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [boostedOnly, setBoostedOnly] = useState(false);
@@ -52,8 +53,23 @@ export function AdminItems() {
   const [error, setError] = useState('');
   const [dialog, setDialog] = useState<{ row: AdminItemRow; mode: 'hide' | 'unhide' } | null>(null);
 
+  const hasFilters = Boolean(
+    keywordInput || status || visibility || offerType || categoryId || fromDate || toDate || boostedOnly,
+  );
   const dateRangeError =
     fromDate && toDate && fromDate > toDate ? '"Từ ngày" không được sau "Đến ngày".' : '';
+
+  function clearFilters() {
+    setKeywordInput('');
+    setStatus('');
+    setVisibility('');
+    setOfferType('');
+    setCategoryId('');
+    setFromDate('');
+    setToDate('');
+    setBoostedOnly(false);
+    setPage(0);
+  }
 
   useEffect(() => {
     let active = true;
@@ -117,11 +133,6 @@ export function AdminItems() {
         <PageHeader
           title="Quản lý bài đăng"
           description="Xem mọi bài đăng ở mọi trạng thái, ẩn bài vi phạm hoặc hiện lại bài đã ẩn."
-          action={
-            <Button variant="outline" disabled={loading} onClick={() => setReloadKey((current) => current + 1)}>
-              Tải lại
-            </Button>
-          }
         />
       </div>
 
@@ -203,15 +214,20 @@ export function AdminItems() {
             onChange={(event) => setToDate(event.target.value)}
           />
         </div>
-        <label className="admin-items-filter-boosted">
-          <input
-            type="checkbox"
-            className="size-4"
-            checked={boostedOnly}
-            onChange={(event) => setBoostedOnly(event.target.checked)}
-          />
-          Chỉ bài đang đẩy
-        </label>
+        <div className="admin-items-filter-actions">
+          <label className="admin-items-filter-boosted">
+            <input
+              type="checkbox"
+              className="size-4"
+              checked={boostedOnly}
+              onChange={(event) => setBoostedOnly(event.target.checked)}
+            />
+            Chỉ bài đang đẩy
+          </label>
+          <Button variant="outline" disabled={!hasFilters} onClick={clearFilters}>
+            Xóa bộ lọc
+          </Button>
+        </div>
       </div>
 
       {error ? (

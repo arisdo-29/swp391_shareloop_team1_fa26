@@ -16,12 +16,6 @@
   line-height: 1.45;
 }
 
-.admin-items-header button {
-  min-height: 38px;
-  padding-block: 6px;
-  border-radius: 8px;
-}
-
 .admin-items-filters {
   display: grid;
   grid-template-columns: 1fr;
@@ -53,12 +47,20 @@
   padding-right: 10px;
 }
 
+.admin-items-filter-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .admin-items-filter-boosted {
   display: flex;
   min-height: 38px;
   align-items: center;
   gap: 8px;
-  align-self: end;
   color: var(--color-text-primary);
   font-size: 0.8125rem;
   font-weight: 600;
@@ -234,9 +236,6 @@
     grid-column: span 2;
   }
   .admin-items-filter-offer {
-    grid-column: span 2;
-  }
-  .admin-items-filter-boosted {
     grid-column: span 2;
   }
   .admin-items-filter-category {
