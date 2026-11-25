@@ -161,7 +161,8 @@ describe('lọc khoảng giá trên trang Tìm đồ', () => {
     await screen.findByText(book.title);
     const minHandle = screen.getByRole<HTMLInputElement>('slider', { name: 'Kéo giá từ' });
     const maxHandle = screen.getByRole<HTMLInputElement>('slider', { name: 'Kéo giá đến' });
-    expect(screen.queryByRole('textbox', { name: /Giá từ|Giá đến/ })).toBeNull();
+    const minField = screen.getByRole<HTMLInputElement>('textbox', { name: 'Giá từ (đồng)' });
+    const maxField = screen.getByRole<HTMLInputElement>('textbox', { name: 'Giá đến (đồng)' });
     const callsBeforeDrag = vi.mocked(itemApi.list).mock.calls.length;
 
     fireEvent.change(minHandle, { target: { value: '24' } });
@@ -170,8 +171,8 @@ describe('lọc khoảng giá trên trang Tìm đồ', () => {
     expect(minHandle.value).toBe('36');
     expect(maxHandle.value).toBe('36');
     fireEvent.change(minHandle, { target: { value: '35' } });
-    expect(screen.getByText(/350.000đ/)).toBeTruthy();
-    expect(screen.getByText(/360.000đ/)).toBeTruthy();
+    expect(minField.value).toBe('350.000');
+    expect(maxField.value).toBe('360.000');
     expect(itemApi.list).toHaveBeenCalledTimes(callsBeforeDrag);
 
     await user.click(screen.getByRole('button', { name: 'Áp dụng giá' }));
@@ -182,6 +183,31 @@ describe('lọc khoảng giá trên trang Tìm đồ', () => {
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/browse'));
     expect(screen.getByRole('slider', { name: 'Kéo giá từ' }).getAttribute('aria-valuetext')).toBe('Không giới hạn từ');
     expect(screen.getByRole('slider', { name: 'Kéo giá đến' }).getAttribute('aria-valuetext')).toBe('Không giới hạn đến');
+  });
+
+  it('nhập giá chính xác, đồng bộ thanh kéo và từ chối khoảng giá ngược', async () => {
+    const user = userEvent.setup();
+    renderBrowse();
+    await screen.findByText(book.title);
+    const minField = screen.getByRole<HTMLInputElement>('textbox', { name: 'Giá từ (đồng)' });
+    const maxField = screen.getByRole<HTMLInputElement>('textbox', { name: 'Giá đến (đồng)' });
+    const apply = screen.getByRole('button', { name: 'Áp dụng giá' });
+
+    await user.type(minField, '350001');
+    await user.type(maxField, '349.999');
+    const callsBeforeApply = vi.mocked(itemApi.list).mock.calls.length;
+    await user.click(apply);
+    expect(screen.getByRole('alert').textContent).toBe('Giá từ phải nhỏ hơn hoặc bằng giá đến.');
+    expect(itemApi.list).toHaveBeenCalledTimes(callsBeforeApply);
+
+    await user.clear(maxField);
+    await user.type(maxField, '450.007');
+    expect(screen.getByRole('slider', { name: 'Kéo giá đến' }).getAttribute('aria-valuetext')).toBe('450.007đ');
+    await user.click(apply);
+    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
+      minPrice: 350001, maxPrice: 450007,
+    })));
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('giữ nguyên giá chính xác từ đường dẫn cũ và cho kéo lên giá cao', async () => {
