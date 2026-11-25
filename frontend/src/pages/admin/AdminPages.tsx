@@ -40,7 +40,10 @@ import {
 } from '../../services/adminAuditApi';
 import type { ApiError } from '../../services/http';
 import { activityLogDetail, activityLogLabel, activityTypeOptionLabel } from './activityLogDisplay';
+ feat/admin-categories-checklist-keywords-ui
 import './admin-categories.css';
+
+develop
 
 function Panel({
   title,

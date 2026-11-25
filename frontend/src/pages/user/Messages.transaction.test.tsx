@@ -165,11 +165,16 @@ describe('Trang Tin nhắn sau khi tách trang Tiến trình', () => {
     expect(screen.getByRole('button', { name: 'Xem tiến trình' })).toBeTruthy();
   });
 
-  it('mở thẻ lịch hẹn của đối phương và đi thẳng đến mục lịch giao nhận', async () => {
+  it.each([
+    { viewerId: RECEIVER_ID, senderId: DONOR_ID, side: 'left', actor: 'An Chủ Bài' },
+    { viewerId: RECEIVER_ID, senderId: RECEIVER_ID, side: 'right', actor: 'Bạn' },
+    { viewerId: DONOR_ID, senderId: RECEIVER_ID, side: 'left', actor: 'Bình Người Nhận' },
+    { viewerId: DONOR_ID, senderId: DONOR_ID, side: 'right', actor: 'Bạn' },
+  ])('canh thẻ lịch hẹn sang $side cho người xem $viewerId khi người lưu là $senderId', async ({ viewerId, senderId, side, actor }) => {
     vi.mocked(chatApi.list).mockResolvedValueOnce([{
       id: 1,
       requestId: 101,
-      senderId: DONOR_ID,
+      senderId,
       kind: 'SCHEDULE_SET',
       content: 'Lịch hẹn đã được lưu',
       mediaId: null,
@@ -180,7 +185,7 @@ describe('Trang Tin nhắn sau khi tách trang Tiến trình', () => {
       blockedReason: null,
       createdAt: '2026-10-20T10:00:00Z',
     }]);
-    await renderMessages(RECEIVER_ID, request({
+    await renderMessages(viewerId, request({
       status: 'AWAITING_LOGISTICS',
       contactRevealedAt: undefined,
       deliveryMethod: 'IN_PERSON',
@@ -188,8 +193,9 @@ describe('Trang Tin nhắn sau khi tách trang Tiến trình', () => {
       meetingPlace: 'Cổng trường',
     }));
 
-    const card = await screen.findByRole('link', { name: /Lịch hẹn đã được lưu.*Xem lịch hẹn/ });
-    expect(within(card).getByText(/An Chủ Bài đã lưu lịch hẹn/)).toBeTruthy();
+    const card = await screen.findByRole('link', { name: /Xem lịch hẹn/ });
+    expect(within(card).getByText(`${actor} đã lưu lịch hẹn`)).toBeTruthy();
+    expect(card.closest('[data-message-align]')?.getAttribute('data-message-align')).toBe(side);
     expect(card.getAttribute('href')).toBe('/messages/101/progress#lich-giao-nhan');
     await userEvent.setup().click(card);
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { StrictMode, type ReactNode } from 'react';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -155,11 +155,52 @@ afterEach(() => {
 });
 
 describe('lọc khoảng giá trên trang Tìm đồ', () => {
+  it('hiển thị giá của hai tay kéo và chỉ gửi khoảng giá khi áp dụng', async () => {
+    const user = userEvent.setup();
+    renderBrowse();
+    await screen.findByText(book.title);
+    const minHandle = screen.getByRole<HTMLInputElement>('slider', { name: 'Kéo giá từ' });
+    const maxHandle = screen.getByRole<HTMLInputElement>('slider', { name: 'Kéo giá đến' });
+    expect(screen.queryByRole('textbox', { name: /Giá từ|Giá đến/ })).toBeNull();
+    const callsBeforeDrag = vi.mocked(itemApi.list).mock.calls.length;
+
+    fireEvent.change(minHandle, { target: { value: '24' } });
+    fireEvent.change(maxHandle, { target: { value: '36' } });
+    fireEvent.change(minHandle, { target: { value: '48' } });
+    expect(minHandle.value).toBe('36');
+    expect(maxHandle.value).toBe('36');
+    fireEvent.change(minHandle, { target: { value: '35' } });
+    expect(screen.getByText(/350.000đ/)).toBeTruthy();
+    expect(screen.getByText(/360.000đ/)).toBeTruthy();
+    expect(itemApi.list).toHaveBeenCalledTimes(callsBeforeDrag);
+
+    await user.click(screen.getByRole('button', { name: 'Áp dụng giá' }));
+    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
+      minPrice: 350000, maxPrice: 360000,
+    })));
+    await user.click(screen.getByRole('button', { name: 'Bỏ lọc Khoảng giá' }));
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/browse'));
+    expect(screen.getByRole('slider', { name: 'Kéo giá từ' }).getAttribute('aria-valuetext')).toBe('Không giới hạn từ');
+    expect(screen.getByRole('slider', { name: 'Kéo giá đến' }).getAttribute('aria-valuetext')).toBe('Không giới hạn đến');
+  });
+
+  it('giữ nguyên giá chính xác từ đường dẫn cũ và cho kéo lên giá cao', async () => {
+    const user = userEvent.setup();
+    renderBrowse(['/browse?maxPrice=12345678']);
+    const maxHandle = screen.getByRole<HTMLInputElement>('slider', { name: 'Kéo giá đến' });
+    expect(maxHandle.getAttribute('aria-valuetext')).toBe('12.345.678đ');
+    fireEvent.change(maxHandle, { target: { value: '144' } });
+    expect(maxHandle.getAttribute('aria-valuetext')).toBe('250.000.000đ');
+    await user.click(screen.getByRole('button', { name: 'Áp dụng giá' }));
+    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ maxPrice: 250000000 })));
+    expect(vi.mocked(itemApi.list).mock.lastCall?.[0]).not.toHaveProperty('minPrice');
+  });
+
   it('lọc giá ngay ở Tất cả và giữ khoảng giá khi đổi hình thức', async () => {
     const user = userEvent.setup();
     renderBrowse();
-    await user.type(screen.getByRole('textbox', { name: 'Giá từ (đồng)' }), '240000');
-    await user.type(screen.getByRole('textbox', { name: 'Giá đến (đồng)' }), '360000');
+    fireEvent.change(screen.getByRole('slider', { name: 'Kéo giá từ' }), { target: { value: '24' } });
+    fireEvent.change(screen.getByRole('slider', { name: 'Kéo giá đến' }), { target: { value: '36' } });
     await user.click(screen.getByRole('button', { name: 'Áp dụng giá' }));
     await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
       offerType: undefined, minPrice: 240000, maxPrice: 360000,
@@ -172,7 +213,7 @@ describe('lọc khoảng giá trên trang Tìm đồ', () => {
     await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
       offerType: 'SWAP', minPrice: 240000, maxPrice: 360000,
     })));
-    expect((screen.getByRole('textbox', { name: 'Giá từ (đồng)' }) as HTMLInputElement).value).toBe('240000');
+    expect(screen.getByRole('slider', { name: 'Kéo giá từ' }).getAttribute('aria-valuetext')).toBe('240.000đ');
   });
 });
 

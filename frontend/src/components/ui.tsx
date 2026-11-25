@@ -42,6 +42,7 @@ import { Scroll } from '@phosphor-icons/react/dist/csr/Scroll';
 import { Warning } from '@phosphor-icons/react/dist/csr/Warning';
 import { CaretLeft } from '@phosphor-icons/react/dist/csr/CaretLeft';
 import { CaretRight } from '@phosphor-icons/react/dist/csr/CaretRight';
+import { CalendarCheck } from '@phosphor-icons/react/dist/csr/CalendarCheck';
 import { Trash } from '@phosphor-icons/react/dist/csr/Trash';
 import { RocketLaunch } from '@phosphor-icons/react/dist/csr/RocketLaunch';
 import { HourglassMedium } from '@phosphor-icons/react/dist/csr/HourglassMedium';
@@ -103,6 +104,7 @@ const iconMap = {
   alert: Warning,
   caretLeft: CaretLeft,
   caretRight: CaretRight,
+  calendarCheck: CalendarCheck,
   // Nút xoá (ẩn) thông báo.
   trash: Trash,
   // Thông báo đẩy bài (BOOST_*) và nhắc bài sắp hết hạn (ITEM_EXPIRING_*).
