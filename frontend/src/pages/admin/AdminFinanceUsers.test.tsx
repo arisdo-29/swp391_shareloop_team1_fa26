@@ -230,3 +230,33 @@ describe('AdminFinanceUserDetail', () => {
     expect(await screen.findByText('Không tìm thấy dữ liệu yêu cầu.')).toBeTruthy();
   });
 });
+
+describe('AdminFinanceUsers thẻ thống kê', () => {
+  it('cộng số liệu của mọi trang trên toàn hệ thống, không chỉ trang đang xem', async () => {
+    const people = Array.from({ length: 150 }, (_, index) => ({
+      ...lanAn,
+      userId: index + 1,
+      fullName: `Người ${index + 1}`,
+      availableCredit: 2,
+      heldCredit: 1,
+    }));
+    vi.mocked(adminFinanceApi.users).mockImplementation(async ({ page, size }) => ({
+      items: people.slice(page * size, page * size + size),
+      page,
+      size,
+      totalElements: people.length,
+    }));
+
+    render(
+      <MemoryRouter>
+        <AdminFinanceUsers />
+      </MemoryRouter>,
+    );
+
+    const card = (label: string) => screen.getByText(label).closest<HTMLElement>('.admin-dash-card')!;
+    await waitFor(() => expect(within(card('Tổng người dùng')).getByText('150')).toBeTruthy());
+    expect(within(card('Tổng Credit khả dụng')).getByText('300')).toBeTruthy();
+    expect(within(card('Tổng Credit đang giữ')).getByText('150')).toBeTruthy();
+    expect(adminFinanceApi.users).toHaveBeenCalledWith({ page: 1, size: 100 });
+  });
+});
