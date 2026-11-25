@@ -535,13 +535,10 @@ export function AdminTransactions() {
         </div>
       ) : null}
 
- fix/admin-ui-final
-
       {viewingId !== null ? (
         <TransactionDetailModal requestId={viewingId} onClose={closeDetail} />
       ) : null}
 
- develop
       {cancelling ? (
         <CancelDialog row={cancelling} onClose={closeDialog} onDone={onCancelled} />
       ) : null}
@@ -594,18 +591,12 @@ function TransactionItem({ item }: { item: AdminRequestItemInfo | null }) {
 function TransactionRow({
   row,
   items,
- fix/admin-ui-final
-
   onView,
- develop
   onCancel,
 }: {
   row: AdminRequestRow;
   items?: RequestItems;
- fix/admin-ui-final
-
   onView: () => void;
- develop
   onCancel: () => void;
 }) {
   const mainItem: AdminRequestItemInfo = items?.item ?? {
