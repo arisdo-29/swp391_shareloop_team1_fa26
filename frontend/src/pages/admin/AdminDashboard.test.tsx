@@ -160,4 +160,30 @@ describe('Hoạt động gần đây', () => {
     expect(links[0].getAttribute('href')).toBe('/admin/items/42');
     expect(screen.getByText('Hệ thống')).toBeTruthy();
   });
+
+  it('hiện cột Thao tác, màu badge theo loại, giờ dạng HH:mm dd/MM/yyyy và tooltip đối tượng', async () => {
+    vi.mocked(adminAuditApi.list).mockResolvedValue({
+      ...activityPage,
+      content: [
+        { id: 4, actorId: 7, actorName: 'Quản trị viên', type: 'USER_UNLOCK', typeLabel: 'Mở khoá tài khoản', targetType: 'USER', targetId: 9, targetTitle: 'Nguyễn Văn Một Tên Rất Dài', detail: null, reason: null, createdAt: '2026-10-24T01:05:00Z' },
+        { id: 5, actorId: 7, actorName: 'Quản trị viên', type: 'USER_LOCK', typeLabel: 'Khoá tài khoản', targetType: 'USER', targetId: 9, targetTitle: 'An', detail: 'Vi phạm', createdAt: '2026-10-24T02:00:00Z' },
+        { id: 6, actorId: 7, actorName: 'Quản trị viên', type: 'REPORT_RESPONSE_REQUESTED', typeLabel: 'Yêu cầu giải trình', targetType: 'REPORT', targetId: 1, targetTitle: 'Báo cáo', detail: 'Chờ giải trình', createdAt: '2026-10-24T03:00:00Z' },
+        { id: 7, actorId: 7, actorName: 'Quản trị viên', type: 'CONFIG_UPDATE', typeLabel: 'Sửa cấu hình', targetType: 'CONFIG', targetId: null, targetTitle: 'Phí đăng bài', detail: 'Đổi phí', createdAt: '2026-10-24T04:00:00Z' },
+        { id: 8, actorId: null, type: 'ITEM_DISPLAY_COMPENSATED', typeLabel: 'Cộng bù thời gian hiển thị', targetType: 'ITEM', targetId: 3, targetTitle: 'Xe đạp', data: { hours: 168, reason: 'RESERVATION_CANCELLED' }, detail: null, createdAt: '2026-10-24T05:00:00Z' },
+      ],
+    });
+
+    renderDashboard();
+
+    expect(await screen.findByText('Mở khoá tài khoản')).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Thao tác' })).toBeTruthy();
+    expect(screen.getByText('08:05 24/10/2026')).toBeTruthy();
+    expect(screen.getByText('Mở khoá tài khoản').className).toContain('text-success');
+    expect(screen.getByText('Gia hạn thời gian hiển thị').className).toContain('text-success');
+    expect(screen.getByText('Khoá tài khoản').className).toContain('text-error');
+    expect(screen.getByText('Yêu cầu giải trình').className).toContain('text-warning');
+    expect(screen.getByText('Sửa cấu hình').className).toContain('text-info');
+    expect(screen.getByText('Nguyễn Văn Một Tên Rất Dài').getAttribute('title')).toBe('Nguyễn Văn Một Tên Rất Dài');
+    expect(screen.queryByText('—')).toBeNull();
+  });
 });

@@ -10,6 +10,7 @@ import { AdminTodoCards } from './AdminTodoCards';
 import { AdminSystemStats } from './AdminSystemStats';
 import { DashboardGrid, DashboardSection, DashboardStatCard, type DashboardAccent } from './AdminDashboardCards';
 import type { IconName } from '../../components/ui';
+import { activityLogDetail, activityLogLabel } from './activityLogDisplay';
 
 const RECENT_ACTIVITY_SIZE = 5;
 
@@ -48,15 +49,52 @@ function downloadBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
+type ActivityTone = 'success' | 'error' | 'warning' | 'info';
+
+const activityToneClasses: Record<ActivityTone, string> = {
+  success: 'bg-success-soft text-success',
+  error: 'bg-error-soft text-error',
+  warning: 'bg-warning-soft text-warning',
+  info: 'bg-info-soft text-info',
+};
+
+// Màu badge theo loại hành động (backend audit.ActivityType): xanh lá cho duyệt, gia hạn, mở khoá,
+// đỏ cho bác bỏ, từ chối, khoá, vàng cho cảnh báo, xanh dương cho cập nhật.
+const activityTypeTones: Record<string, ActivityTone> = {
+  REVIEW_APPROVE: 'success',
+  USER_UNLOCK: 'success',
+  ITEM_DISPLAY_COMPENSATED: 'success',
+  ADMIN_ITEM_UNHIDDEN: 'success',
+  AUTH_GRANT: 'success',
+  GRACE_STAR: 'success',
+  STAR_RESTORED: 'success',
+  POINTS: 'success',
+  ADMIN_TOPUP_RECONCILED: 'success',
+  REVIEW_REJECT: 'error',
+  REPORT_DISMISSED: 'error',
+  USER_LOCK: 'error',
+  USER_BAN: 'error',
+  AUTH_REJECT: 'error',
+  AUTH_REVOKE: 'error',
+  REQUEST_CANCEL: 'error',
+  ADMIN_ITEM_HIDDEN: 'error',
+  POINTS_REVOKED: 'error',
+  STARS: 'error',
+  REPORT_UPHELD: 'warning',
+  REPORT_RESPONSE_REQUESTED: 'warning',
+  ADMIN_VIEWED_CHAT: 'warning',
+};
+
 function activityTone(type: string) {
-  const normalizedType = type.toUpperCase();
-  if (['REJECT', 'LOCK', 'DELETE', 'REMOVE', 'FAIL'].some((keyword) => normalizedType.includes(keyword))) {
-    return 'bg-error-soft text-error';
-  }
-  if (['APPROVE', 'CREATE', 'ADD', 'UNLOCK', 'ACTIVATE'].some((keyword) => normalizedType.includes(keyword))) {
-    return 'bg-success-soft text-success';
-  }
-  return 'bg-info-soft text-info';
+  const normalizedType = type.trim().toUpperCase();
+  const known = activityTypeTones[normalizedType];
+  if (known) return activityToneClasses[known];
+  // Loại mới chưa có trong bảng: đoán theo từ khoá. UNLOCK phải xét trước LOCK.
+  const has = (keywords: string[]) => keywords.some((keyword) => normalizedType.includes(keyword));
+  if (has(['UNLOCK', 'UNHIDDEN', 'APPROVE', 'RESTORE', 'GRANT', 'EXTEND', 'COMPENSATED'])) return activityToneClasses.success;
+  if (has(['REJECT', 'DISMISS', 'LOCK', 'BAN', 'REVOKE', 'CANCEL', 'HIDDEN', 'DELETE', 'FAIL'])) return activityToneClasses.error;
+  if (has(['WARN', 'ALERT', 'ANOMAL', 'REPORT'])) return activityToneClasses.warning;
+  return activityToneClasses.info;
 }
 
 const activityTargetLabels: Record<string, string> = {
@@ -96,11 +134,19 @@ function activityTarget(log: ActivityLogResponse) {
 function formatActivityTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Không xác định';
-  return new Intl.DateTimeFormat('vi-VN', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(date);
+  // Dạng HH:mm dd/MM/yyyy theo giờ Việt Nam.
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      hour: '2-digit',
+      minute: '2-digit',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hourCycle: 'h23',
+    }).formatToParts(date).map((part) => [part.type, part.value]),
+  );
+  return `${parts.hour}:${parts.minute} ${parts.day}/${parts.month}/${parts.year}`;
 }
 
 function RetryAlert({ message, onRetry }: { message: string; onRetry: () => void }) {
@@ -219,7 +265,7 @@ export function AdminOperationsDashboard() {
                     <th scope="col" className="admin-dash-col-action">Hành động</th>
                     <th scope="col" className="admin-dash-col-target">Đối tượng</th>
                     <th scope="col">Chi tiết</th>
-                    <th scope="col" className="admin-dash-col-button"><span className="sr-only">Thao tác</span></th>
+                    <th scope="col" className="admin-dash-col-button">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -235,17 +281,17 @@ export function AdminOperationsDashboard() {
                         </td>
                         <td className="admin-dash-col-action">
                           <span className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-xs font-semibold ${activityTone(log.type)}`}>
-                            {log.typeLabel || 'Hoạt động khác'}
+                            {activityLogLabel(log) || 'Hoạt động khác'}
                           </span>
                         </td>
                         <td className="admin-dash-col-target">
                           {target.title || target.type ? <>
-                            <p className="line-clamp-2 font-medium text-text-primary">{target.title ?? target.type}</p>
+                            <p className="line-clamp-2 font-medium text-text-primary" title={target.title ?? target.type ?? undefined}>{target.title ?? target.type}</p>
                             {target.title && target.type ? <p className="mt-0.5 text-xs text-text-muted">{target.type}</p> : null}
                           </> : <span className="text-text-muted">—</span>}
                         </td>
                         <td className="leading-6 text-text-secondary">
-                          <p className="line-clamp-2">{log.detail || log.reason || '—'}</p>
+                          {activityLogDetail(log) || log.reason ? <p className="line-clamp-2">{activityLogDetail(log) || log.reason}</p> : null}
                         </td>
                         <td className="admin-dash-col-button">
                           {link ? (

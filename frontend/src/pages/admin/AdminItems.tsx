@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Pagination } from '../../components/Pagination';
 import {
@@ -25,6 +25,23 @@ const PAGE_SIZE = 20;
 
 type VisibilityFilter = '' | 'visible' | 'hidden';
 
+type ItemStatKey = 'total' | 'pending' | 'visible' | 'reserved' | 'traded' | 'hidden';
+
+type ItemStats = Record<ItemStatKey, number | null | 'error'>;
+
+// Thẻ thống kê đọc tổng số toàn hệ thống từ chính API danh sách (xin một dòng, đọc totalElements),
+// không đếm trên trang đang xem. "Đang hiển thị" khớp điều kiện bài hiện công khai: đã duyệt và chưa bị ẩn.
+const ITEM_STATS: Array<{ key: ItemStatKey; label: string; filters: AdminItemFilters }> = [
+  { key: 'total', label: 'Tổng bài đăng', filters: {} },
+  { key: 'pending', label: 'Chờ duyệt', filters: { status: 'PENDING_REVIEW' } },
+  { key: 'visible', label: 'Đang hiển thị', filters: { status: 'APPROVED', active: true } },
+  { key: 'reserved', label: 'Đã giữ chỗ', filters: { status: 'RESERVED' } },
+  { key: 'traded', label: 'Đã hoàn tất', filters: { status: 'TRADED' } },
+  { key: 'hidden', label: 'Đã ẩn', filters: { active: false } },
+];
+
+const EMPTY_STATS: ItemStats = { total: null, pending: null, visible: null, reserved: null, traded: null, hidden: null };
+
 function statusClass(status: ItemStatus) {
   if (status === 'PENDING_REVIEW') return 'bg-warning-soft text-warning';
   if (status === 'APPROVED') return 'bg-success-soft text-success';
@@ -34,8 +51,30 @@ function statusClass(status: ItemStatus) {
   return 'border border-border bg-surface-low text-text-muted';
 }
 
+/**
+ * Tình trạng hiển thị của bài với người dùng. Bài chỉ hiện công khai khi đã duyệt và chưa bị ẩn,
+ * nên bài chưa bị ẩn mà chưa duyệt, bị từ chối hoặc đã hết hạn không ghi "Đang hiện" để tránh hiểu nhầm.
+ */
+function visibilityInfo(row: AdminItemRow): { label: string; tone: 'visible' | 'hidden' | 'muted' } {
+  if (!row.active) {
+    return { label: `Đang ẩn${row.hiddenSource ? `: ${hiddenSourceLabels[row.hiddenSource]}` : ''}`, tone: 'hidden' };
+  }
+  if (row.status === 'APPROVED') return { label: 'Đang hiện', tone: 'visible' };
+  if (row.status === 'PENDING_REVIEW') return { label: 'Chưa hiện, đang chờ duyệt', tone: 'muted' };
+  if (row.status === 'RESERVED') return { label: 'Không hiện khi đang giữ chỗ', tone: 'muted' };
+  return { label: 'Không hiện công khai', tone: 'muted' };
+}
+
+/** Lý do nút Ẩn bị khoá. Backend vẫn kiểm lại mọi trường hợp. */
+function hideBlockedReason(row: AdminItemRow) {
+  if (row.status === 'RESERVED') return 'Bài đang giữ chỗ cho một giao dịch. Hãy hủy giao dịch ở trang Giao dịch trước khi ẩn bài.';
+  if (row.status === 'TRADED') return 'Bài đã giao dịch xong nên không thể ẩn.';
+  return null;
+}
+
 export function AdminItems() {
   const [result, setResult] = useState<PageResponse<AdminItemRow> | null>(null);
+  const [stats, setStats] = useState<ItemStats>(EMPTY_STATS);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [status, setStatus] = useState<ItemStatus | ''>('');
   const [visibility, setVisibility] = useState<VisibilityFilter>('');
@@ -58,7 +97,6 @@ export function AdminItems() {
   );
   const dateRangeError =
     fromDate && toDate && fromDate > toDate ? '"Từ ngày" không được sau "Đến ngày".' : '';
-
   function clearFilters() {
     setKeywordInput('');
     setStatus('');
@@ -127,6 +165,25 @@ export function AdminItems() {
     };
   }, [buildFilters, dateRangeError, page, reloadKey]);
 
+  // Số liệu toàn hệ thống, không phụ thuộc bộ lọc. Tải lại sau khi ẩn hoặc hiện lại bài.
+  useEffect(() => {
+    let active = true;
+    setStats(EMPTY_STATS);
+    for (const stat of ITEM_STATS) {
+      adminItemApi
+        .list({ ...stat.filters, page: 0, size: 1 })
+        .then((response) => {
+          if (active) setStats((current) => ({ ...current, [stat.key]: response.totalElements }));
+        })
+        .catch(() => {
+          if (active) setStats((current) => ({ ...current, [stat.key]: 'error' }));
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [reloadKey]);
+
   return (
     <section className="admin-items-page">
       <div className="admin-items-header">
@@ -134,6 +191,12 @@ export function AdminItems() {
           title="Quản lý bài đăng"
           description="Xem mọi bài đăng ở mọi trạng thái, ẩn bài vi phạm hoặc hiện lại bài đã ẩn."
         />
+      </div>
+
+      <div className="admin-items-stats" aria-label="Thống kê bài đăng">
+        {ITEM_STATS.map((stat) => (
+          <ItemStat key={stat.key} modifier={stat.key} label={stat.label} value={stats[stat.key]} />
+        ))}
       </div>
 
       <div className="admin-items-filters">
@@ -166,7 +229,8 @@ export function AdminItems() {
           onChange={(event) => setVisibility(event.target.value as VisibilityFilter)}
         >
           <option value="">Tất cả</option>
-          <option value="visible">Đang hiện</option>
+          {/* "Chưa bị ẩn" gồm cả bài chưa duyệt, nên không gọi là "Đang hiện". */}
+          <option value="visible">Chưa bị ẩn</option>
           <option value="hidden">Đang ẩn</option>
         </Select>
         <Select
@@ -214,17 +278,17 @@ export function AdminItems() {
             onChange={(event) => setToDate(event.target.value)}
           />
         </div>
-        <div className="admin-items-filter-actions">
-          <label className="admin-items-filter-boosted">
-            <input
-              type="checkbox"
-              className="size-4"
-              checked={boostedOnly}
-              onChange={(event) => setBoostedOnly(event.target.checked)}
-            />
-            Chỉ bài đang đẩy
-          </label>
-          <Button variant="outline" disabled={!hasFilters} onClick={clearFilters}>
+        <label className="admin-items-filter-boosted">
+          <input
+            type="checkbox"
+            className="size-4"
+            checked={boostedOnly}
+            onChange={(event) => setBoostedOnly(event.target.checked)}
+          />
+          Chỉ bài đang đẩy
+        </label>
+        <div className="admin-items-filter-clear">
+          <Button variant="outline" className="admin-items-clear-button" disabled={!hasFilters} onClick={clearFilters}>
             Xóa bộ lọc
           </Button>
         </div>
@@ -248,12 +312,12 @@ export function AdminItems() {
                 <tr>
                   <th>Bài đăng</th>
                   <th>Chủ bài</th>
-                  <th>Hình thức</th>
+                  <th className="text-center">Hình thức</th>
                   <th>Trạng thái</th>
-                  <th>Phí đăng</th>
-                  <th>Yêu cầu chờ</th>
+                  <th className="text-right">Phí đăng</th>
+                  <th className="text-center">Yêu cầu chờ</th>
                   <th>Thời gian</th>
-                  <th>Thao tác</th>
+                  <th className="text-center">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -301,6 +365,16 @@ export function AdminItems() {
   );
 }
 
+function ItemStat({ label, value, modifier }: { label: string; value: number | null | 'error'; modifier: ItemStatKey }) {
+  return (
+    <div className={`admin-items-stat admin-items-stat--${modifier}`} aria-busy={value === null || undefined}>
+      <p>{label}</p>
+      <strong>{value === null ? '...' : value === 'error' ? '—' : value.toLocaleString('vi-VN')}</strong>
+      <span>{value === 'error' ? 'Chưa tải được số liệu' : 'Toàn hệ thống'}</span>
+    </div>
+  );
+}
+
 function ItemRow({
   row,
   onHide,
@@ -310,8 +384,9 @@ function ItemRow({
   onHide: () => void;
   onUnhide: () => void;
 }) {
-  // Bài đã có người nhận thì không ẩn được, Admin phải huỷ giao dịch trước. Backend vẫn kiểm lại mọi trường hợp.
-  const hideBlocked = row.status === 'RESERVED' || row.status === 'TRADED';
+  const blockedReason = hideBlockedReason(row);
+  const blockedId = useId();
+  const visibility = visibilityInfo(row);
   return (
     <tr className="admin-items-row">
       <td>
@@ -325,6 +400,7 @@ function ItemRow({
             <Link
               to={`/admin/items/${row.id}`}
               className="admin-items-title font-semibold text-primary hover:underline"
+              title={row.title}
             >
               {row.title}
             </Link>
@@ -336,7 +412,7 @@ function ItemRow({
         <p className="admin-items-owner-name font-semibold text-text-primary">{row.ownerName || 'Người dùng đã xóa'}</p>
         {row.ownerEmail ? <p className="admin-items-owner-email text-xs text-text-muted">{row.ownerEmail}</p> : null}
       </td>
-      <td className="whitespace-nowrap">{offerTypeLabels[row.offerType]}</td>
+      <td className="whitespace-nowrap text-center">{offerTypeLabels[row.offerType]}</td>
       <td>
         <div className="admin-items-statuses">
           <span
@@ -344,18 +420,24 @@ function ItemRow({
           >
             {itemStatusLabels[row.status]}
           </span>
-          {row.active ? (
-            <span className="text-xs text-text-muted">Đang hiện</span>
-          ) : (
+          {visibility.tone === 'hidden' ? (
             <span className="inline-flex whitespace-nowrap rounded-sm bg-error-soft px-2 py-1 text-2xs font-semibold text-error">
-              Đang ẩn
-              {row.hiddenSource ? `: ${hiddenSourceLabels[row.hiddenSource]}` : ''}
+              {visibility.label}
             </span>
+          ) : (
+            <span className={`admin-items-visibility admin-items-visibility--${visibility.tone}`}>{visibility.label}</span>
           )}
-          {row.boosting ? <span className="text-xs font-semibold text-secondary">Đang đẩy</span> : null}
+          {row.boosting ? (
+            <span
+              className="admin-items-boost"
+              title={row.boostedUntil ? `Đang được đẩy đến ${formatDateTime(row.boostedUntil)}` : 'Bài đang được đẩy lên đầu danh sách'}
+            >
+              Đang đẩy
+            </span>
+          ) : null}
         </div>
       </td>
-      <td className="whitespace-nowrap tabular-nums">{row.postFeePaid > 0 ? `${row.postFeePaid} Credit` : '—'}</td>
+      <td className="whitespace-nowrap text-right tabular-nums">{row.postFeePaid > 0 ? `${row.postFeePaid} Credit` : '—'}</td>
       <td className="text-center tabular-nums">{row.pendingRequestCount}</td>
       <td className="admin-items-time">
         <p>Tạo lúc: {formatDateTime(row.createdAt)}</p>
@@ -364,22 +446,27 @@ function ItemRow({
       </td>
       <td>
         <div className="admin-items-actions">
-          <Link
-            to={`/admin/items/${row.id}`}
-            className="admin-items-action inline-flex items-center justify-center border border-border font-semibold text-text-primary hover:bg-surface-low"
-          >
-            Xem
+          <Link to={`/admin/items/${row.id}`} className="admin-items-action admin-items-action--view">
+            Xem chi tiết
           </Link>
           {row.active ? (
-            <Button
-              variant="danger"
-              className="admin-items-action"
-              disabled={hideBlocked}
-              title={hideBlocked ? 'Bài đã có giao dịch, hãy huỷ giao dịch trước khi ẩn.' : undefined}
-              onClick={onHide}
-            >
-              Ẩn
-            </Button>
+            // Nút bị khoá không nhận sự kiện chuột nên tooltip đặt ở lớp bọc bên ngoài.
+            <span className="admin-items-action-wrap" title={blockedReason ?? undefined}>
+              <Button
+                variant="danger"
+                className="admin-items-action"
+                disabled={Boolean(blockedReason)}
+                aria-describedby={blockedReason ? blockedId : undefined}
+                onClick={onHide}
+              >
+                Ẩn
+              </Button>
+              {blockedReason ? (
+                <span id={blockedId} className="sr-only">
+                  {blockedReason}
+                </span>
+              ) : null}
+            </span>
           ) : (
             <Button variant="outline" className="admin-items-action" onClick={onUnhide}>
               Hiện lại

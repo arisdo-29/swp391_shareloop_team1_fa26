@@ -37,6 +37,7 @@ import {
   type ActivityLogResponse,
 } from '../../services/adminAuditApi';
 import type { ApiError } from '../../services/http';
+import { activityLogDetail, activityLogLabel, activityTypeOptionLabel } from './activityLogDisplay';
 
 function Panel({
   title,
@@ -178,7 +179,7 @@ export function AdminAuditLogs() {
           </div>
           <Select label="Hành động" value={actionType} onChange={(event) => setActionType(event.target.value)}>
             <option value="">Tất cả hành động</option>
-            {(actionTypes.length ? actionTypes.map((entry) => [entry.type, entry.label]) : Object.entries(activityLogTypeLabels)).map(([value, label]) => (
+            {(actionTypes.length ? actionTypes.map((entry) => [entry.type, activityTypeOptionLabel(entry.type, entry.label)]) : Object.entries(activityLogTypeLabels)).map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
           </Select>
@@ -220,7 +221,7 @@ export function AdminAuditLogs() {
                     <tr key={log.id}>
                       <td className="whitespace-nowrap">{formatActivityLogTime(log.createdAt)}</td>
                       <td>{log.actorName ?? (log.actorId ? 'Quản trị viên' : 'Hệ thống')}</td>
-                      <td>{log.typeLabel ?? activityLogTypeLabel(log.type)}</td>
+                      <td>{activityLogLabel(log) ?? activityLogTypeLabel(log.type)}</td>
                       <td>{activityLogTarget(log)}</td>
                       <td><ActivityLogDetail log={log} /></td>
                     </tr>
@@ -305,7 +306,7 @@ interface ActivityLogCheck {
 
 function ActivityLogDetail({ log }: { log: ActivityLogResponse }) {
   const [expanded, setExpanded] = useState(false);
-  const content = log.detail?.trim() || log.reason?.trim() || 'Không có thông tin chi tiết';
+  const content = activityLogDetail(log)?.trim() || log.reason?.trim() || 'Không có thông tin chi tiết';
   const checks = activityLogChecks(log, content);
   const isStructured = checks.length > 0 || /^[{[]/.test(content);
 
