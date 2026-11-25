@@ -63,6 +63,7 @@ class RequestLifecycleIT extends IntegrationTest {
     @AfterEach
     void cleanUp() {
         for (Long requestId : createdRequestIds) {
+            jdbc.update("DELETE FROM messages WHERE request_id = ?", requestId);
             jdbc.update("DELETE FROM requests WHERE id = ?", requestId);
         }
         createdRequestIds.clear();
