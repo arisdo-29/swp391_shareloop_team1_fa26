@@ -11,6 +11,7 @@ import {
 } from '../../services/adminModerationApi';
 import { adminChecklistApi } from '../../services/adminChecklistApi';
 import { catalogApi } from '../../services/catalogApi';
+import { adminItemApi, type AdminItemRow } from '../../services/adminItemApi';
 import { AdminModerationDetail } from './AdminModerationDetail';
 import { AdminModerationList } from './AdminModerationList';
 
@@ -29,6 +30,8 @@ vi.mock('../../services/adminChecklistApi', () => ({
 }));
 
 vi.mock('../../services/catalogApi', () => ({ catalogApi: { categories: vi.fn() } }));
+
+vi.mock('../../services/adminItemApi', () => ({ adminItemApi: { list: vi.fn() } }));
 
 const checklist = [
   { id: 11, key: 'real_photos', statement: 'Ảnh là ảnh thật của đúng món đồ' },
@@ -126,13 +129,38 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+function pendingRow(overrides: Partial<AdminItemRow>): AdminItemRow {
+  return {
+    id: 42,
+    title: 'Áo khoác gió nam',
+    imageUrl: null,
+    ownerId: 9,
+    ownerName: 'Nguyễn Văn A',
+    ownerEmail: 'a@example.com',
+    categoryName: 'Thời trang',
+    offerType: 'GIVE',
+    status: 'PENDING_REVIEW',
+    active: true,
+    hiddenSource: null,
+    postFeePaid: 0,
+    pendingRequestCount: 0,
+    createdAt: '2026-10-14T10:00:00Z',
+    approvedAt: null,
+    expireAt: null,
+    boostedUntil: null,
+    boosting: false,
+    ...overrides,
+  };
+}
+
 describe('AdminModerationList', () => {
   beforeEach(() => {
+    vi.mocked(adminItemApi.list).mockResolvedValue({ items: [], page: 0, size: 1, totalElements: 0 });
     vi.mocked(adminModerationApi.pendingReviews).mockResolvedValue({
       items: queueItems,
       checklist,
       page: 0,
-      size: 100,
+      size: 20,
     });
   });
 
@@ -181,7 +209,7 @@ describe('AdminModerationList', () => {
       ],
       checklist,
       page: 0,
-      size: 100,
+      size: 20,
     });
     render(
       <MemoryRouter>
@@ -201,7 +229,7 @@ describe('AdminModerationList', () => {
       items: [{ ...queueItems[0], thumbnailUrl: null }],
       checklist,
       page: 0,
-      size: 100,
+      size: 20,
     });
     vi.mocked(adminModerationApi.detail).mockResolvedValue(
       detail({ images: ['/api/v1/media/202', '/api/v1/media/203'] }),
@@ -221,7 +249,7 @@ describe('AdminModerationList', () => {
     expect(adminModerationApi.detail).toHaveBeenCalledWith(42);
   });
 
-  it('nút Xem chi tiết và duyệt dẫn sang trang riêng của bài, không mở popup', async () => {
+  it('nút Xem và duyệt dẫn sang trang riêng của bài, không mở popup', async () => {
     render(
       <MemoryRouter>
         <AdminModerationList />
@@ -229,7 +257,7 @@ describe('AdminModerationList', () => {
     );
 
     await screen.findByText('Áo khoác gió nam');
-    const links = screen.getAllByRole('link', { name: 'Xem chi tiết và duyệt' });
+    const links = screen.getAllByRole('link', { name: 'Xem và duyệt' });
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/admin/moderation/42',
       '/admin/moderation/43',
@@ -243,7 +271,7 @@ describe('AdminModerationList', () => {
       items: params?.q === 'trần thị' ? [] : queueItems,
       checklist,
       page: 0,
-      size: 100,
+      size: 20,
     }));
     render(
       <MemoryRouter>
@@ -259,8 +287,86 @@ describe('AdminModerationList', () => {
     await user.selectOptions(screen.getByLabelText('Dấu hiệu rủi ro'), 'REPEATED_PAIR');
 
     await waitFor(() => expect(adminModerationApi.pendingReviews).toHaveBeenLastCalledWith({
-      q: 'trần thị', categoryId: 7, risk: 'REPEATED_PAIR', page: 0, size: 100,
+      q: 'trần thị', categoryId: 7, risk: 'REPEATED_PAIR', page: 0, size: 20,
     }));
+  });
+
+  it('thẻ thống kê đọc tổng bài chờ duyệt, bài cho tặng và bài trao đổi toàn hệ thống', async () => {
+    vi.mocked(adminItemApi.list).mockImplementation(async (params) => ({
+      items: [],
+      page: 0,
+      size: params.size,
+      totalElements: params.offerType === 'GIVE' ? 7 : params.offerType === 'SWAP' ? 5 : 12,
+    }));
+    render(
+      <MemoryRouter>
+        <AdminModerationList />
+      </MemoryRouter>,
+    );
+
+    const stats = screen.getByLabelText('Thống kê bài chờ duyệt');
+    await waitFor(() => expect(within(stats).getByText('Tổng bài chờ duyệt').parentElement?.textContent).toContain('12'));
+    expect(within(stats).getByText('Bài cho tặng').parentElement?.textContent).toContain('7');
+    expect(within(stats).getByText('Bài trao đổi').parentElement?.textContent).toContain('5');
+    expect(adminItemApi.list).toHaveBeenCalledWith({ status: 'PENDING_REVIEW', offerType: 'SWAP', page: 0, size: 1 });
+  });
+
+  it('hiện danh mục, email, hình thức, dấu hiệu rủi ro và tiêu đề Thao tác', async () => {
+    vi.mocked(adminItemApi.list).mockImplementation(async (params) =>
+      params.size === 1
+        ? { items: [], page: 0, size: 1, totalElements: 2 }
+        : {
+            items: [pendingRow({}), pendingRow({ id: 43, title: 'Bàn học gỗ', ownerEmail: 'b@example.com', categoryName: 'Nội thất', offerType: 'SWAP' })],
+            page: 0,
+            size: params.size,
+            totalElements: 2,
+          },
+    );
+    vi.mocked(adminModerationApi.pendingReviews).mockImplementation(async (params) => ({
+      items: params?.risk === 'NEWCOMER' ? [queueItems[1]] : params?.risk ? [] : queueItems,
+      checklist,
+      page: 0,
+      size: params?.size ?? 20,
+      totalElements: params?.risk === 'NEWCOMER' ? 1 : params?.risk ? 0 : 2,
+    }));
+    render(
+      <MemoryRouter>
+        <AdminModerationList />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Áo khoác gió nam');
+    expect(screen.getByRole('columnheader', { name: 'Thao tác' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Hình thức' })).toBeTruthy();
+    const second = screen.getByText('Bàn học gỗ').closest('tr') as HTMLElement;
+    expect(await within(second).findByText('Nội thất')).toBeTruthy();
+    expect(within(second).getByText('b@example.com')).toBeTruthy();
+    expect(within(second).getByText('Trao đổi')).toBeTruthy();
+    expect(await within(second).findByText('Người đăng mới')).toBeTruthy();
+    const first = screen.getByText('Áo khoác gió nam').closest('tr') as HTMLElement;
+    expect(within(first).getByText('Cho tặng')).toBeTruthy();
+    expect(within(first).queryByText('Người đăng mới')).toBeNull();
+    expect(adminModerationApi.pendingReviews).toHaveBeenCalledWith({ risk: 'LOW_TRUST', page: 0, size: 100 });
+  });
+
+  it('phân trang 20 bài một trang khi hàng chờ dài', async () => {
+    const user = userEvent.setup();
+    vi.mocked(adminModerationApi.pendingReviews).mockImplementation(async (params) => ({
+      items: queueItems,
+      checklist,
+      page: params?.page ?? 0,
+      size: 20,
+      totalElements: 45,
+    }));
+    render(
+      <MemoryRouter>
+        <AdminModerationList />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Áo khoác gió nam');
+    await user.click(screen.getByRole('button', { name: 'Trang 3' }));
+    await waitFor(() => expect(adminModerationApi.pendingReviews).toHaveBeenCalledWith({ page: 2, size: 20 }));
   });
 
   it('hiện thông báo kết quả duyệt gửi từ trang chi tiết', async () => {
@@ -509,7 +615,7 @@ describe('AdminModerationDetail', () => {
       ].filter((item) => params?.edited === undefined || item.isEdited === params.edited),
       checklist,
       page: 0,
-      size: 100,
+      size: 20,
     }));
     render(
       <MemoryRouter>
