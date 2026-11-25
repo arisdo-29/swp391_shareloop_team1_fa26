@@ -28,6 +28,7 @@ import type { ApiError } from '../../services/http';
 import type { ItemRequestStatus } from '../../types/domain';
 import { requestStatusLabel } from '../../utils/request';
 import { deliveryMethodLabels } from './adminItemDisplay';
+import { TransactionDetailModal } from './AdminTransactionDetailModal';
 import './admin-transactions.css';
 
 const PAGE_SIZE = 20;
@@ -123,6 +124,7 @@ export function AdminTransactions() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [cancelling, setCancelling] = useState<AdminRequestRow | null>(null);
+  const [viewingId, setViewingId] = useState<number | null>(null);
   // Hai bộ lọc của luật mới: có đề nghị huỷ đang chờ, Giao hàng quá hạn gửi
   const [pendingCancelOnly, setPendingCancelOnly] = useState(false);
   const [sendOverdueOnly, setSendOverdueOnly] = useState(false);
@@ -270,6 +272,7 @@ export function AdminTransactions() {
   ]);
 
   const closeDialog = useCallback(() => setCancelling(null), []);
+  const closeDetail = useCallback(() => setViewingId(null), []);
 
   const onCancelled = () => {
     setCancelling(null);
@@ -505,6 +508,7 @@ export function AdminTransactions() {
                     key={row.id}
                     row={row}
                     items={rowItems[row.id]}
+                    onView={() => setViewingId(row.id)}
                     onCancel={() => {
                       setNotice('');
                       setCancelling(row);
@@ -531,6 +535,13 @@ export function AdminTransactions() {
         </div>
       ) : null}
 
+ fix/admin-ui-final
+
+      {viewingId !== null ? (
+        <TransactionDetailModal requestId={viewingId} onClose={closeDetail} />
+      ) : null}
+
+ develop
       {cancelling ? (
         <CancelDialog row={cancelling} onClose={closeDialog} onDone={onCancelled} />
       ) : null}
@@ -583,10 +594,18 @@ function TransactionItem({ item }: { item: AdminRequestItemInfo | null }) {
 function TransactionRow({
   row,
   items,
+ fix/admin-ui-final
+
+  onView,
+ develop
   onCancel,
 }: {
   row: AdminRequestRow;
   items?: RequestItems;
+ fix/admin-ui-final
+
+  onView: () => void;
+ develop
   onCancel: () => void;
 }) {
   const mainItem: AdminRequestItemInfo = items?.item ?? {
@@ -638,13 +657,21 @@ function TransactionRow({
       </td>
       <td className="admin-transaction-time text-xs">{formatDateTime(row.meetingTime)}</td>
       <td className="admin-transaction-actions">
-        {cancellableStatuses.includes(row.status) ? (
-          <Button variant="danger" size="sm" onClick={onCancel}>
-            Huỷ giao dịch
+        <div className="admin-transaction-actions-stack">
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={`Xem chi tiết giao dịch #${row.id}`}
+            onClick={onView}
+          >
+            Xem chi tiết
           </Button>
-        ) : (
-          <span className="text-text-muted">—</span>
-        )}
+          {cancellableStatuses.includes(row.status) ? (
+            <Button variant="danger" size="sm" onClick={onCancel}>
+              Huỷ giao dịch
+            </Button>
+          ) : null}
+        </div>
       </td>
     </tr>
   );
