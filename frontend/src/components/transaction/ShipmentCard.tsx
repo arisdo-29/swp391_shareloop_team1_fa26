@@ -164,6 +164,7 @@ function LegBlock({
   const otherLeg = legs.find((item) => item.leg !== leg.leg);
   const otherReceived = otherLeg?.step === 'RECEIVED';
   const open = canConfirmHandover(request.status);
+  const receiveDeadline = leg.leg === 1 ? request.leg1AutoReceiveAt : request.leg2AutoReceiveAt;
   // Chỉ chọn nút để hiện, backend vẫn kiểm hạn gửi: chiều chưa gửi chỉ báo được khi quá hạn gửi hoặc chiều kia đã nhận.
   const pastSendDeadline = request.sendDeadlineAt ? new Date(request.sendDeadlineAt).getTime() <= Date.now() : false;
   const canReportNotShipped = otherReceived || pastSendDeadline;
@@ -201,6 +202,12 @@ function LegBlock({
           <div>
             <dt className="label">Hạn gửi</dt>
             <dd>{formatDeadline(request.sendDeadlineAt)}</dd>
+          </div>
+        ) : null}
+        {leg.step === 'SHIPPED' && receiveDeadline ? (
+          <div>
+            <dt className="label">Hạn xác nhận đã nhận</dt>
+            <dd>{formatDeadline(receiveDeadline)}</dd>
           </div>
         ) : null}
         {leg.receivedAt ? (
