@@ -69,11 +69,8 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
- feat/admin-complaints-ui
 
 /* Bảng Khu vực: dòng thấp hơn bảng mặc định, chỉ áp dụng cho bảng này. */
 .data-table.admin-area-table td {
   padding-block: 8px;
 }
-
- develop
