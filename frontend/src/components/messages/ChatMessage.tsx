@@ -14,7 +14,7 @@ export function ChatMessage({
   side,
   progressPath,
   requestId,
-  scheduleActorName,
+  scheduleActor,
   onOpenItem,
   offerActions,
 }: {
@@ -23,7 +23,7 @@ export function ChatMessage({
   progressPath: string;
   // Id số của giao dịch: ảnh chat riêng tư chỉ đọc được qua /requests/{id}/media/{mediaId} (D2).
   requestId: number | string;
-  scheduleActorName?: string;
+  scheduleActor?: { name: string; isViewer: boolean };
   onOpenItem: (itemId: number) => void;
   // Chỉ trang Tin nhắn truyền vào, cho chủ bài ở đề nghị đổi món đang chờ khi giao dịch còn thương lượng.
   offerActions?: { submitting: boolean; onAccept: () => void; onDecline: () => void };
@@ -50,7 +50,44 @@ export function ChatMessage({
       </div>
     );
   }
-  const isScheduleNotice = entry.kind === 'SCHEDULE_SET';
+  const timestamp = new Date(entry.createdAt).toLocaleString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+  });
+  if (entry.kind === 'SCHEDULE_SET') {
+    const isOwnNotice = scheduleActor?.isViewer ?? false;
+    return (
+      <div
+        data-message-align={isOwnNotice ? 'right' : 'left'}
+        className={`flex ${isOwnNotice ? 'justify-end' : 'justify-start'}`}
+      >
+        <div className="max-w-[90%] sm:max-w-[70%]">
+          <Link
+            to={`${progressPath}#${SCHEDULE_SECTION_ID}`}
+            className={`group flex items-center gap-3 rounded-xl border border-border px-3 py-3 text-text-primary shadow-sm transition hover:border-primary hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${isOwnNotice ? 'bg-primary-soft' : 'bg-surface'}`}
+          >
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary-fixed text-primary">
+              <Icon name="calendarCheck" className="size-5" weight="duotone" />
+            </span>
+            <span className="min-w-0 flex-1 break-words">
+              <strong className="block text-sm leading-5">
+                {isOwnNotice ? 'Bạn' : (scheduleActor?.name || 'Đối phương')} đã lưu lịch hẹn
+              </strong>
+              <span className="mt-0.5 block text-xs font-semibold text-link group-hover:underline">
+                Xem lịch hẹn
+              </span>
+            </span>
+            <Icon name="caretRight" className="ml-1 size-4 shrink-0 text-link" />
+          </Link>
+          <time dateTime={entry.createdAt} className={`mt-1 block px-1 text-2xs text-text-muted ${isOwnNotice ? 'text-right' : 'text-left'}`}>
+            {timestamp}
+          </time>
+        </div>
+      </div>
+    );
+  }
   const offerLabel = messageOfferStatusLabel(entry.offerStatus);
   const darkBubble = side === 'right';
   const alignment = darkBubble ? 'left' : 'right';
@@ -63,25 +100,6 @@ export function ChatMessage({
       <div
         className={`max-w-[82%] rounded-lg px-3.5 py-2.5 text-sm leading-6 sm:max-w-[70%] ${darkBubble ? 'rounded-bl-sm bg-primary text-white' : 'rounded-br-sm bg-surface-low text-text-primary'}`}
       >
-        {isScheduleNotice ? (
-          <Link
-            to={`${progressPath}#${SCHEDULE_SECTION_ID}`}
-            className="mb-2 flex items-start gap-3 rounded-md bg-white p-2.5 text-left text-text-primary ring-1 ring-border transition hover:bg-surface-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary">
-              <Icon name="check" className="size-5" />
-            </span>
-            <span className="min-w-0 break-words">
-              <strong className="block text-sm">Lịch hẹn đã được lưu</strong>
-              <span className="block text-xs leading-5 text-text-secondary">
-                {scheduleActorName ?? 'Đối phương'} đã lưu lịch hẹn. Bạn có thể xem chi tiết giao nhận.
-              </span>
-              <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-link">
-                Xem lịch hẹn <Icon name="caretRight" className="size-3" />
-              </span>
-            </span>
-          </Link>
-        ) : null}
         {entry.itemCard ? (
           <button
             type="button"
@@ -111,7 +129,7 @@ export function ChatMessage({
             />
           </div>
         ) : null}
-        {!isScheduleNotice && entry.content ? <p className="whitespace-pre-wrap break-words">{entry.content}</p> : null}
+        {entry.content ? <p className="whitespace-pre-wrap break-words">{entry.content}</p> : null}
         {offerLabel ? (
           <span
             className={`mt-1.5 inline-flex rounded-sm px-2 py-0.5 text-2xs font-semibold ${darkBubble ? 'bg-white/15 text-white' : 'bg-white text-primary'}`}
@@ -135,12 +153,7 @@ export function ChatMessage({
           </div>
         ) : null}
         <span className={`mt-1 block text-2xs ${darkBubble ? 'text-white/70' : 'text-text-muted'}`}>
-          {new Date(entry.createdAt).toLocaleString('vi-VN', {
-            hour: '2-digit',
-            minute: '2-digit',
-            day: '2-digit',
-            month: '2-digit',
-          })}
+          {timestamp}
         </span>
       </div>
     </div>
