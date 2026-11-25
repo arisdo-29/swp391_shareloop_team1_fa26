@@ -1,0 +1,71 @@
+/* Thẻ thống kê trang Danh mục (/admin/categories). Chỉ dùng các lớp admin-category-stat* nên không ảnh hưởng trang khác. */
+.admin-category-stats {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.admin-category-stat {
+  --stat-color: var(--color-primary);
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: white;
+}
+
+.admin-category-stat--total {
+  --stat-color: var(--color-primary);
+}
+
+.admin-category-stat--active {
+  --stat-color: var(--color-success);
+}
+
+.admin-category-stat--hidden {
+  --stat-color: var(--color-error);
+}
+
+.admin-category-stat-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--stat-color) 12%, white);
+  color: var(--stat-color);
+}
+
+.admin-category-stat-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.admin-category-stat-label {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.admin-category-stat-value {
+  display: block;
+  margin-top: 2px;
+  color: var(--stat-color);
+  font-size: 1.375rem;
+  font-weight: 800;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 640px) {
+  .admin-category-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

@@ -9,9 +9,11 @@ import {
   Field,
   Icon,
   PageHeader,
+  SearchField,
   Select,
   TextArea,
   SkeletonRows,
+  type IconName,
 } from '../../components/ui';
 import { DialogFrame } from '../../components/Dialog';
 import { Pagination } from '../../components/Pagination';
@@ -38,6 +40,7 @@ import {
 } from '../../services/adminAuditApi';
 import type { ApiError } from '../../services/http';
 import { activityLogDetail, activityLogLabel, activityTypeOptionLabel } from './activityLogDisplay';
+import './admin-categories.css';
 
 function Panel({
   title,
@@ -458,6 +461,21 @@ function getLexiconLabel(labels: Record<string, string>, value: string) {
   return labels[value.trim().toUpperCase()] ?? 'Khác';
 }
 
+// Badge mức độ: đỏ cho Chặn đăng, vàng cho Cần duyệt thủ công.
+function lexiconLevelBadgeClass(level: string) {
+  const normalized = level.trim().toUpperCase();
+  if (normalized === 'BLOCK') return 'bg-error-soft text-error';
+  if (normalized === 'REVIEW') return 'bg-warning-soft text-warning';
+  return 'bg-surface-low text-text-muted';
+}
+
+// Bỏ dấu và chữ hoa để "zalo" khớp "Zalo", "ma tuy" khớp "ma túy".
+function normalizeLexiconSearch(value: string) {
+  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().trim();
+}
+
+type LexiconStatusFilter = '' | 'active' | 'inactive';
+
 function ApiAdminKeywords() {
   const [entries, setEntries] = useState<AdminLexiconEntry[]>([]);
   const [page, setPage] = useState(0);
@@ -470,10 +488,29 @@ function ApiAdminKeywords() {
   const [testText, setTestText] = useState('');
   const [testMatches, setTestMatches] = useState<LexiconMatch[]>([]);
   const [testing, setTesting] = useState(false);
-  const pageEntries = entries.slice(
-    page * LEXICON_PAGE_SIZE,
-    (page + 1) * LEXICON_PAGE_SIZE,
+  // Tìm kiếm và lọc trên toàn bộ từ điển đã tải về từ API (API trả về đủ danh sách).
+  const [search, setSearch] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
+  const [levelFilter, setLevelFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<LexiconStatusFilter>('');
+  const searchTerm = normalizeLexiconSearch(search);
+  const filteredEntries = entries.filter((entry) =>
+    (!searchTerm || normalizeLexiconSearch(entry.keyword).includes(searchTerm))
+    && (!groupFilter || entry.group.trim().toUpperCase() === groupFilter)
+    && (!levelFilter || entry.level.trim().toUpperCase() === levelFilter)
+    && (!statusFilter || entry.active === (statusFilter === 'active')),
   );
+  // Lọc theo trạng thái rồi tạm ngưng một dòng có thể làm danh sách ngắn lại: không để trang hiện tại trống.
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(filteredEntries.length / LEXICON_PAGE_SIZE) - 1));
+  const pageEntries = filteredEntries.slice(
+    currentPage * LEXICON_PAGE_SIZE,
+    (currentPage + 1) * LEXICON_PAGE_SIZE,
+  );
+  // Đổi bộ lọc thì quay về trang đầu.
+  const changeFilter = (apply: () => void) => {
+    apply();
+    setPage(0);
+  };
 
   useEffect(() => {
     let active = true;
@@ -547,24 +584,48 @@ function ApiAdminKeywords() {
     >
       {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
       {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
+      {!loading && !error ? <ActiveCountStats entries={entries} ariaLabel="Thống kê từ khóa" labels={['Tổng từ khóa', 'Đang hoạt động', 'Đã tạm ngưng']} totalIcon="checklist" /> : null}
       <section className="mb-5 rounded-lg bg-white p-4 ring-1 ring-border/80">
-        <TextArea label="Kiểm tra nội dung" value={testText} onChange={(event) => setTestText(event.target.value)} placeholder="Nhập nội dung cần đối chiếu với từ điển..." />
-        <Button className="mt-3" variant="outline" disabled={testing || !testText.trim()} onClick={() => void testLexicon()}>{testing ? 'Đang kiểm tra...' : 'Kiểm tra'}</Button>
+        <TextArea label="Kiểm tra nội dung" inputClassName="!min-h-0 h-[100px]" value={testText} onChange={(event) => setTestText(event.target.value)} placeholder="Nhập nội dung cần đối chiếu với từ điển..." />
+        <div className="mt-3 flex justify-end">
+          <Button variant="outline" disabled={testing || !testText.trim()} onClick={() => void testLexicon()}>{testing ? 'Đang kiểm tra...' : 'Kiểm tra'}</Button>
+        </div>
         {testMatches.length ? <div className="mt-3 space-y-1 text-xs text-text-secondary">{testMatches.map((match, index) => <p key={`${match.keyword}-${index}`}><strong>{match.keyword}</strong> · {getLexiconLabel(lexiconLevelLabels, match.level)} · {getLexiconLabel(lexiconGroupLabels, match.group)} · {match.matchedAs}</p>)}</div> : null}
       </section>
+      {!loading && entries.length ? (
+        <div className="mb-4 grid gap-3 rounded-lg bg-white p-4 ring-1 ring-border/80 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+          <div className="sm:col-span-2 lg:col-span-6">
+            <span className="label">Tìm kiếm</span>
+            <SearchField aria-label="Tìm từ khóa" placeholder="Tìm theo từ khóa..." value={search} onChange={(event) => changeFilter(() => setSearch(event.target.value))} />
+          </div>
+          <Select className="lg:col-span-2" label="Nhóm" value={groupFilter} onChange={(event) => changeFilter(() => setGroupFilter(event.target.value))}>
+            <option value="">Tất cả nhóm</option>
+            {Object.entries(lexiconGroupLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </Select>
+          <Select className="lg:col-span-2" label="Mức độ" value={levelFilter} onChange={(event) => changeFilter(() => setLevelFilter(event.target.value))}>
+            <option value="">Tất cả mức độ</option>
+            {Object.entries(lexiconLevelLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </Select>
+          <Select className="lg:col-span-2" label="Trạng thái" value={statusFilter} onChange={(event) => changeFilter(() => setStatusFilter(event.target.value as LexiconStatusFilter))}>
+            <option value="">Tất cả trạng thái</option>
+            <option value="active">Đang hoạt động</option>
+            <option value="inactive">Đã tạm ngưng</option>
+          </Select>
+        </div>
+      ) : null}
       {loading ? <SkeletonRows label="Đang tải từ điển" /> : entries.length ? (
-        <>
-          <div className="table-wrap"><table className="data-table"><thead><tr><th>Từ khóa</th><th>Nhóm</th><th>Mức độ</th><th>Phạm vi</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
-            {pageEntries.map((entry) => <tr key={entry.id}><td className="font-semibold">{entry.keyword}</td><td>{getLexiconLabel(lexiconGroupLabels, entry.group)}</td><td>{getLexiconLabel(lexiconLevelLabels, entry.level)}</td><td>{getLexiconLabel(lexiconScopeLabels, entry.scope)}</td><td>{entry.active ? 'Đang hiển thị' : 'Đang ẩn'}</td><td className="space-x-2"><Button variant="outline" disabled={savingId === entry.id} onClick={() => setEditing(entry)}>Sửa</Button><Button variant="outline" disabled={savingId === entry.id} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ngưng' : 'Kích hoạt'}</Button></td></tr>)}
+        filteredEntries.length ? <>
+          <div className="table-wrap"><table className="data-table"><thead><tr><th>Từ khóa</th><th>Nhóm</th><th className="text-center">Mức độ</th><th>Phạm vi</th><th className="text-center">Trạng thái</th><th className="text-center">Thao tác</th></tr></thead><tbody>
+            {pageEntries.map((entry) => <tr key={entry.id}><td className="font-semibold">{entry.keyword}</td><td>{getLexiconLabel(lexiconGroupLabels, entry.group)}</td><td className="text-center"><span className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-xs font-semibold ${lexiconLevelBadgeClass(entry.level)}`}>{getLexiconLabel(lexiconLevelLabels, entry.level)}</span></td><td>{getLexiconLabel(lexiconScopeLabels, entry.scope)}</td><td className="text-center"><span className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-xs font-semibold ${entry.active ? 'bg-success-soft text-success' : 'bg-surface-low text-text-muted'}`}>{entry.active ? 'Đang hoạt động' : 'Đã tạm ngưng'}</span></td><td><div className="flex flex-nowrap items-center justify-center gap-2"><Button variant="outline" disabled={savingId === entry.id} onClick={() => setEditing(entry)}>Sửa</Button><Button variant="outline" disabled={savingId === entry.id} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ngưng' : 'Kích hoạt'}</Button></div></td></tr>)}
           </tbody></table></div>
           <Pagination
-            page={page}
+            page={currentPage}
             size={LEXICON_PAGE_SIZE}
-            totalElements={entries.length}
+            totalElements={filteredEntries.length}
             disabled={savingId !== null}
             onPageChange={setPage}
           />
-        </>
+        </> : <EmptyState title="Không tìm thấy từ khóa phù hợp" text="Hãy thử đổi từ khóa tìm kiếm hoặc bộ lọc." />
       ) : <EmptyState title="Chưa có từ khóa" text="Hiện chưa có mục từ điển kiểm duyệt nào." />}
       {editing ? <ApiLexiconModal entry={editing === 'new' ? null : editing} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
     </Panel>
@@ -826,9 +887,10 @@ function ApiAdminChecklist() {
     <Panel title="Checklist duyệt bài" description="Quản lý và sắp xếp các tiêu chí mà quản trị viên phải xác nhận khi duyệt bài." action={<Button disabled={loading || savingId !== null} onClick={() => { setEditingError(''); setEditing('new'); }}>Thêm tiêu chí</Button>}>
       {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
       {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
+      {!loading && !error ? <ActiveCountStats entries={entries} ariaLabel="Thống kê tiêu chí" labels={['Tổng tiêu chí', 'Đang hoạt động', 'Đã tạm ẩn']} totalIcon="checklist" /> : null}
       {loading ? <SkeletonRows label="Đang tải checklist" /> : entries.length ? (
-        <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Tiêu chí</th><th className="whitespace-nowrap">Trạng thái</th><th className="whitespace-nowrap">Thao tác</th></tr></thead><tbody>
-          {entries.map((entry, index) => <tr key={entry.id}><td>{index + 1}</td><td><p className="font-semibold">{entry.question}</p>{entry.description ? <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-text-secondary">{entry.description}</p> : <p className="mt-1 text-xs text-warning">Chưa có mô tả điều kiện đạt</p>}</td><td className="whitespace-nowrap"><span className={`rounded-sm px-2 py-1 text-xs font-semibold ${entry.active ? 'bg-success-soft text-success' : 'bg-surface-low text-text-muted'}`}>{entry.active ? 'Đang hoạt động' : 'Không hoạt động'}</span></td><td><div className="flex min-w-[220px] flex-wrap gap-1"><Button className="!px-2 whitespace-nowrap" variant="outline" title="Đưa mục này lên trên một vị trí" aria-label={`Đưa ${entry.question} lên trên`} disabled={savingId !== null || index === 0} onClick={() => void move(index, -1)}>↑ Lên</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title="Đưa mục này xuống dưới một vị trí" aria-label={`Đưa ${entry.question} xuống dưới`} disabled={savingId !== null || index === entries.length - 1} onClick={() => void move(index, 1)}>↓ Xuống</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title="Chỉnh sửa câu tiêu chí" disabled={savingId !== null} onClick={() => { setEditingError(''); setEditing(entry); }}>Sửa nội dung</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title={entry.active ? 'Không hiển thị mục này khi duyệt bài (không xoá)' : 'Hiển thị lại mục này khi duyệt bài'} disabled={savingId !== null} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}
+        <div className="table-wrap"><table className="data-table"><thead><tr><th className="text-center">Thứ tự</th><th>Tiêu chí</th><th className="whitespace-nowrap text-center">Trạng thái</th><th className="whitespace-nowrap text-center">Thao tác</th></tr></thead><tbody>
+          {entries.map((entry, index) => <tr key={entry.id}><td className="text-center">{index + 1}</td><td><p className="font-semibold">{entry.question}</p>{entry.description ? <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-text-secondary">{entry.description}</p> : <p className="mt-1 text-xs text-warning">Chưa có mô tả điều kiện đạt</p>}</td><td className="whitespace-nowrap text-center"><span className={`rounded-sm px-2 py-1 text-xs font-semibold ${entry.active ? 'bg-success-soft text-success' : 'bg-surface-low text-text-muted'}`}>{entry.active ? 'Đang hoạt động' : 'Không hoạt động'}</span></td><td><div className="flex flex-nowrap items-center justify-center gap-1"><Button className="!px-2.5 whitespace-nowrap" variant="outline" title="Đưa mục này lên trên một vị trí" aria-label={`Đưa ${entry.question} lên trên`} disabled={savingId !== null || index === 0} onClick={() => void move(index, -1)}><Icon name="arrowUp" weight="bold" className="size-4" /></Button><Button className="!px-2.5 whitespace-nowrap" variant="outline" title="Đưa mục này xuống dưới một vị trí" aria-label={`Đưa ${entry.question} xuống dưới`} disabled={savingId !== null || index === entries.length - 1} onClick={() => void move(index, 1)}><Icon name="arrowDown" weight="bold" className="size-4" /></Button><Button className="!px-2 whitespace-nowrap" variant="outline" title="Chỉnh sửa câu tiêu chí" disabled={savingId !== null} onClick={() => { setEditingError(''); setEditing(entry); }}>Sửa nội dung</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title={entry.active ? 'Không hiển thị mục này khi duyệt bài (không xoá)' : 'Hiển thị lại mục này khi duyệt bài'} disabled={savingId !== null} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}
         </tbody></table></div>
       ) : error ? null : <EmptyState title="Chưa có tiêu chí" text="Hiện chưa có tiêu chí duyệt bài nào." />}
       {editing ? <ChecklistEditModal entry={editing === 'new' ? null : editing} saving={savingId !== null} error={editingError} onClose={() => { if (savingId === null) { setEditing(null); setEditingError(''); } }} onSave={(question, description) => void save(question, description)} /> : null}
@@ -998,11 +1060,45 @@ export function ApiAdminCategories() {
   return <Panel title="Danh mục" description="Thứ tự trong bảng cũng là thứ tự danh mục hiển thị cho người dùng." action={<Button disabled={loading || busy} onClick={() => setEditing('new')}>Thêm danh mục</Button>}>
     {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
     {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
+    {!loading && !error ? <ActiveCountStats entries={categories} ariaLabel="Thống kê danh mục" labels={['Tổng danh mục', 'Đang sử dụng', 'Đã tạm ẩn']} totalIcon="category" /> : null}
     {loading ? <EmptyState title="Đang tải danh mục" text="Vui lòng chờ trong giây lát." /> : categories.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Tên</th>{hasParentCategory ? <th>Danh mục cha</th> : null}<th>Phân loại</th><th>Trạng thái</th><th className="whitespace-nowrap">Thao tác</th></tr></thead><tbody>{categories.map((category, index) => <tr key={category.id}><td>{index + 1}</td><td className="font-semibold">{category.name}</td>{hasParentCategory ? <td>{categories.find((entry) => entry.id === category.parentId)?.name ?? '—'}</td> : null}<td>{category.restricted ? 'Hạn chế' : 'Thông thường'}</td><td>{category.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" variant="outline" title="Đưa danh mục này lên trên một vị trí" disabled={busy || index === 0} onClick={() => void move(index, -1)}>Lên</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title="Đưa danh mục này xuống dưới một vị trí" disabled={busy || index === categories.length - 1} onClick={() => void move(index, 1)}>Xuống</Button><Button className="!px-2 whitespace-nowrap" variant="outline" disabled={busy} onClick={() => setEditing(category)}>Sửa</Button><Button className="!px-2 whitespace-nowrap" variant="outline" disabled={busy} onClick={() => void requestToggle(category)}>{category.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có danh mục" text="Hiện chưa có danh mục nào." />}
     {pendingDeactivate ? <DeactivateConfirm name={pendingDeactivate.category.name} count={pendingDeactivate.count} onCancel={() => setPendingDeactivate(null)} onConfirm={() => void toggleActive(pendingDeactivate.category)} /> : null}
     {SHOW_CATEGORY_ATTRIBUTES && !loading && categories.length ? <ApiCategoryAttributes categories={categories} /> : null}
     {editing ? <ApiCategoryModal category={editing === 'new' ? null : editing} categories={categories} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
   </Panel>;
+}
+
+/**
+ * Ba thẻ thống kê (tổng, đang dùng, đã tạm ẩn) phía trên bảng Danh mục và Checklist. Đếm từ danh sách Admin tải
+ * từ API, danh sách này được thay bằng dữ liệu Backend trả về sau mỗi lần thêm, tạm ẩn hoặc kích hoạt lại nên số
+ * liệu tự cập nhật theo.
+ */
+function ActiveCountStats({
+  entries,
+  ariaLabel,
+  labels,
+  totalIcon,
+}: {
+  entries: { active: boolean }[];
+  ariaLabel: string;
+  labels: [total: string, active: string, hidden: string];
+  totalIcon: IconName;
+}) {
+  const activeCount = entries.filter((entry) => entry.active).length;
+  const stats: { key: string; label: string; value: number; icon: IconName }[] = [
+    { key: 'total', label: labels[0], value: entries.length, icon: totalIcon },
+    { key: 'active', label: labels[1], value: activeCount, icon: 'completed' },
+    { key: 'hidden', label: labels[2], value: entries.length - activeCount, icon: 'eyeSlash' },
+  ];
+  return <div className="admin-category-stats" aria-label={ariaLabel}>
+    {stats.map((stat) => <div key={stat.key} className={`admin-category-stat admin-category-stat--${stat.key}`}>
+      <span className="admin-category-stat-icon"><Icon name={stat.icon} weight="bold" /></span>
+      <div className="min-w-0">
+        <p className="admin-category-stat-label">{stat.label}</p>
+        <strong className="admin-category-stat-value">{stat.value.toLocaleString('vi-VN')}</strong>
+      </div>
+    </div>)}
+  </div>;
 }
 
 export function ApiCategoryModal({ category, categories, saving, onClose, onSave }: { category: AdminCategoryResponse | null; categories: AdminCategoryResponse[]; saving: boolean; onClose: () => void; onSave: (input: AdminCategoryRequest) => void }) {

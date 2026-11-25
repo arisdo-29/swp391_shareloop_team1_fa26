@@ -65,8 +65,10 @@ describe('Admin checklist management', () => {
     await screen.findByText(first.question);
     expect(screen.getByText(first.description!)).toBeTruthy();
     expect(screen.getByText(second.description!)).toBeTruthy();
-    expect(screen.getByText('Đang hoạt động')).toBeTruthy();
-    expect(screen.getByText('Không hoạt động')).toBeTruthy();
+    // Thẻ thống kê cũng có chữ "Đang hoạt động" nên kiểm nhãn trạng thái trong bảng.
+    const table = screen.getByRole('table');
+    expect(within(table).getByText('Đang hoạt động')).toBeTruthy();
+    expect(within(table).getByText('Không hoạt động')).toBeTruthy();
 
     const rows = screen.getAllByRole('row').slice(1);
     expect(rows[0].textContent).toContain(first.question);
@@ -157,5 +159,44 @@ describe('Admin checklist management', () => {
     const rows = screen.getAllByRole('row').slice(1);
     expect(rows[0].textContent).toContain(first.question);
     expect(rows[1].textContent).toContain(second.question);
+  });
+
+  it('ba thẻ thống kê đếm từ API và tự cập nhật sau khi kích hoạt hoặc tạm ẩn tiêu chí', async () => {
+    const user = userEvent.setup();
+    vi.mocked(adminChecklistApi.setActive)
+      .mockResolvedValueOnce({ ...second, active: true })
+      .mockResolvedValueOnce({ ...first, active: false });
+    renderPage();
+    await screen.findByText(first.question);
+
+    const stats = screen.getByLabelText('Thống kê tiêu chí');
+    const value = (label: string) => within(stats).getByText(label).parentElement?.querySelector('strong')?.textContent;
+    expect(value('Tổng tiêu chí')).toBe('2');
+    expect(value('Đang hoạt động')).toBe('1');
+    expect(value('Đã tạm ẩn')).toBe('1');
+
+    const secondRow = screen.getByText(second.question).closest('tr')!;
+    await user.click(within(secondRow).getByRole('button', { name: 'Kích hoạt' }));
+    await waitFor(() => expect(value('Đang hoạt động')).toBe('2'));
+    expect(value('Đã tạm ẩn')).toBe('0');
+
+    const firstRow = screen.getByText(first.question).closest('tr')!;
+    await user.click(within(firstRow).getByRole('button', { name: 'Tạm ẩn' }));
+    await waitFor(() => expect(value('Đã tạm ẩn')).toBe('1'));
+  });
+
+  it('nút đổi thứ tự chỉ còn icon mũi tên, có tooltip và các nút nằm trên một hàng', async () => {
+    renderPage();
+    await screen.findByText(first.question);
+
+    const up = screen.getByRole('button', { name: `Đưa ${second.question} lên trên` });
+    const down = screen.getByRole('button', { name: `Đưa ${first.question} xuống dưới` });
+    expect(up.textContent).toBe('');
+    expect(up.querySelector('svg')).toBeTruthy();
+    expect(up.getAttribute('title')).toBe('Đưa mục này lên trên một vị trí');
+    expect(down.getAttribute('title')).toBe('Đưa mục này xuống dưới một vị trí');
+    expect(screen.queryByText(/Lên|Xuống/)).toBeNull();
+    expect(up.parentElement?.className).toContain('flex-nowrap');
+    expect(screen.getByRole('columnheader', { name: 'Thao tác' }).className).toContain('text-center');
   });
 });
