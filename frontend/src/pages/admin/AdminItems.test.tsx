@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -109,6 +109,54 @@ describe('AdminItems', () => {
         size: 20,
       }),
     );
+  });
+
+  it('xóa tất cả bộ lọc và tải danh sách từ trang đầu', async () => {
+    const user = userEvent.setup();
+    vi.mocked(adminItemApi.list).mockImplementation(async ({ page }) => ({
+      items,
+      page,
+      size: 20,
+      totalElements: 25,
+    }));
+    renderPage();
+    await screen.findByRole('option', { name: 'Đồ thể thao' });
+
+    const clearButton = screen.getByRole<HTMLButtonElement>('button', { name: 'Xóa bộ lọc' });
+    expect(clearButton.disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Tải lại' })).toBeNull();
+
+    const search = screen.getByLabelText<HTMLInputElement>('Tìm bài đăng');
+    const status = screen.getByLabelText<HTMLSelectElement>('Trạng thái');
+    const visibility = screen.getByLabelText<HTMLSelectElement>('Hiển thị');
+    const offer = screen.getByLabelText<HTMLSelectElement>('Hình thức');
+    const category = screen.getByLabelText<HTMLSelectElement>('Danh mục');
+    const fromDate = screen.getByLabelText<HTMLInputElement>('Từ ngày');
+    const toDate = screen.getByLabelText<HTMLInputElement>('Đến ngày');
+    const boosted = screen.getByLabelText<HTMLInputElement>('Chỉ bài đang đẩy');
+
+    await user.selectOptions(status, 'APPROVED');
+    await user.selectOptions(visibility, 'hidden');
+    await user.selectOptions(offer, 'GIVE');
+    await user.selectOptions(category, '5');
+    fireEvent.change(fromDate, { target: { value: '2026-11-01' } });
+    fireEvent.change(toDate, { target: { value: '2026-11-25' } });
+    await user.click(boosted);
+    await user.type(search, 'xe đạp');
+    await waitFor(() => expect(adminItemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'xe đạp' })));
+    const nextPage = screen.getByRole('button', { name: 'Trang 2' });
+    await user.click(nextPage);
+    expect(nextPage.getAttribute('aria-current')).toBe('page');
+
+    vi.mocked(adminItemApi.list).mockClear();
+    await user.click(clearButton);
+
+    for (const field of [search, status, visibility, offer, category, fromDate, toDate]) {
+      expect(field.value).toBe('');
+    }
+    expect(boosted.checked).toBe(false);
+    expect(clearButton.disabled).toBe(true);
+    expect(adminItemApi.list).toHaveBeenCalledExactlyOnceWith({ page: 0, size: 20 });
   });
 
   it('nút Ẩn bị khoá ở bài đã có giao dịch', async () => {
