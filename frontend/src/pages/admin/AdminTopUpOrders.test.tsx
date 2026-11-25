@@ -221,13 +221,26 @@ describe('AdminTopUpOrders', () => {
 
   it('mở từ cột tiền thu thì lọc đơn thành công theo ngày thanh toán', async () => {
     const day = '2026-10-06';
-    render(<AdminTopUpOrders path={`/admin/finance/topup-orders?from=${day}&to=${day}&paidDate=true&status=SUCCESS`} />);
+    render(
+      <AdminTopUpOrders
+        path={`/admin/finance/topup-orders?from=${day}&to=${day}&paidDate=true&status=SUCCESS`}
+      />,
+    );
     await screen.findByText('Lan An');
 
     expect(adminFinanceApi.topUpOrders).toHaveBeenCalledWith({
-      from: day, to: day, paidDate: true, status: 'SUCCESS', page: 0, size: 10,
+      from: day,
+      to: day,
+      paidDate: true,
+      status: 'SUCCESS',
+      page: 0,
+      size: 10,
     });
-    expect(adminFinanceApi.topUpSummary).toHaveBeenCalledWith({ from: day, to: day, paidDate: true });
+    expect(adminFinanceApi.topUpSummary).toHaveBeenCalledWith({
+      from: day,
+      to: day,
+      paidDate: true,
+    });
     expect((screen.getByLabelText('Từ ngày thanh toán') as HTMLInputElement).value).toBe(day);
     expect((screen.getByLabelText('Đến ngày thanh toán') as HTMLInputElement).value).toBe(day);
     expect((screen.getByLabelText('Trạng thái') as HTMLSelectElement).value).toBe('SUCCESS');
@@ -264,7 +277,7 @@ describe('AdminTopUpOrders', () => {
     );
   });
 
-  it('bấm một dòng mở hộp chi tiết với phản hồi VNPay bằng tiếng Việt và hai nút xử lý', async () => {
+  it('bấm một dòng mở hộp chi tiết, giữ thông tin thanh toán và không hiện callback kỹ thuật', async () => {
     const user = userEvent.setup();
     render(<AdminTopUpOrders />);
     await screen.findByText('Chi Lê');
@@ -273,10 +286,17 @@ describe('AdminTopUpOrders', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(adminFinanceApi.topUpOrderDetail).toHaveBeenCalledWith(FLAGGED_CODE);
-    expect(await within(dialog).findByText('Mã phản hồi')).toBeTruthy();
-    expect(within(dialog).getByText('Ngân hàng')).toBeTruthy();
-    expect(within(dialog).getByRole('button', { name: 'Xác nhận đã thu tiền và cộng Credit' })).toBeTruthy();
-    expect(within(dialog).getByRole('button', { name: 'Đánh dấu đã hoàn tiền ngoài hệ thống' })).toBeTruthy();
+    expect(await within(dialog).findByText('Mã giao dịch VNPay')).toBeTruthy();
+    expect(within(dialog).getByText('14999888')).toBeTruthy();
+    expect(within(dialog).queryByText('Phản hồi từ VNPay')).toBeNull();
+    expect(within(dialog).queryByText('Mã phản hồi')).toBeNull();
+    expect(within(dialog).queryByText('Ngân hàng')).toBeNull();
+    expect(
+      within(dialog).getByRole('button', { name: 'Xác nhận đã thu tiền và cộng Credit' }),
+    ).toBeTruthy();
+    expect(
+      within(dialog).getByRole('button', { name: 'Đánh dấu đã hoàn tiền ngoài hệ thống' }),
+    ).toBeTruthy();
   });
 
   it('đơn không cần đối soát thì hộp chi tiết không có nút xử lý', async () => {
@@ -289,7 +309,7 @@ describe('AdminTopUpOrders', () => {
     await user.click(screen.getByRole('button', { name: '#SLDONE' }));
 
     const dialog = await screen.findByRole('dialog');
-    await within(dialog).findByText('Mã phản hồi');
+    await within(dialog).findByText('Mã giao dịch VNPay');
     expect(within(dialog).queryByRole('button', { name: /cộng Credit/ })).toBeNull();
     expect(within(dialog).queryByRole('button', { name: /hoàn tiền/ })).toBeNull();
   });
@@ -319,7 +339,10 @@ describe('AdminTopUpOrders', () => {
     // when: chưa nhập lý do thì nút xác nhận bị khoá
     const confirm = within(dialog).getByRole('button', { name: 'Xác nhận' }) as HTMLButtonElement;
     expect(confirm.disabled).toBe(true);
-    await user.type(within(dialog).getByLabelText('Lý do hoặc ghi chú (bắt buộc)'), 'Đã đối chiếu sao kê');
+    await user.type(
+      within(dialog).getByLabelText('Lý do hoặc ghi chú (bắt buộc)'),
+      'Đã đối chiếu sao kê',
+    );
     await user.click(confirm);
 
     // then
@@ -329,7 +352,7 @@ describe('AdminTopUpOrders', () => {
         note: 'Đã đối chiếu sao kê',
       }),
     );
-    expect(await within(dialog).findByText(/Credit đã cộng/)).toBeTruthy();
+    expect(await within(dialog).findByText('Số Credit thực tế đã cộng')).toBeTruthy();
     expect(within(dialog).queryByRole('button', { name: /cộng Credit/ })).toBeNull();
   });
 
@@ -346,7 +369,10 @@ describe('AdminTopUpOrders', () => {
       await within(dialog).findByRole('button', { name: 'Đánh dấu đã hoàn tiền ngoài hệ thống' }),
     );
 
-    await user.type(within(dialog).getByLabelText('Lý do hoặc ghi chú (bắt buộc)'), 'Đã hoàn qua ngân hàng');
+    await user.type(
+      within(dialog).getByLabelText('Lý do hoặc ghi chú (bắt buộc)'),
+      'Đã hoàn qua ngân hàng',
+    );
     await user.click(within(dialog).getByRole('button', { name: 'Xác nhận' }));
 
     await waitFor(() =>
@@ -389,7 +415,9 @@ describe('AdminTopUpOrders', () => {
       blob: new Blob(['a']),
       fileName: 'giao-dich-nap-tien.xlsx',
     });
-    render(<AdminTopUpOrders path="/admin/finance/topup-orders?from=2026-10-06&to=2026-10-06&paidDate=true" />);
+    render(
+      <AdminTopUpOrders path="/admin/finance/topup-orders?from=2026-10-06&to=2026-10-06&paidDate=true" />,
+    );
     await screen.findByText('Lan An');
     await user.click(screen.getByLabelText('Chỉ đơn cần đối soát'));
 
@@ -397,7 +425,10 @@ describe('AdminTopUpOrders', () => {
 
     await waitFor(() =>
       expect(adminFinanceApi.topUpOrdersExcel).toHaveBeenCalledWith({
-        from: '2026-10-06', to: '2026-10-06', paidDate: true, needsReconcile: true,
+        from: '2026-10-06',
+        to: '2026-10-06',
+        paidDate: true,
+        needsReconcile: true,
       }),
     );
     expect(createObjectURL).toHaveBeenCalled();
@@ -408,7 +439,10 @@ describe('AdminTopUpOrders', () => {
     // given
     const user = userEvent.setup();
     vi.mocked(adminFinanceApi.topUpOrders)
-      .mockRejectedValueOnce({ status: 0, message: 'Không kết nối được máy chủ, vui lòng thử lại.' })
+      .mockRejectedValueOnce({
+        status: 0,
+        message: 'Không kết nối được máy chủ, vui lòng thử lại.',
+      })
       .mockResolvedValueOnce({ items: orders, page: 0, size: 10, totalElements: orders.length });
     render(<AdminTopUpOrders />);
     expect(await screen.findByText('Không kết nối được máy chủ, vui lòng thử lại.')).toBeTruthy();
@@ -419,5 +453,46 @@ describe('AdminTopUpOrders', () => {
     // then
     expect(await screen.findByText('Lan An')).toBeTruthy();
     expect(screen.queryByText('Không kết nối được máy chủ, vui lòng thử lại.')).toBeNull();
+  });
+
+  it('hiển thị tiêu đề bảng mới, nút xem chi tiết và thay mã VNPay bằng 0 thành dấu gạch', async () => {
+    const zeroTransaction = order({ providerTxnId: '0' });
+    vi.mocked(adminFinanceApi.topUpOrders).mockResolvedValue({
+      items: [zeroTransaction],
+      page: 0,
+      size: 10,
+      totalElements: 1,
+    });
+    render(<AdminTopUpOrders />);
+
+    const row = (await screen.findByText('Lan An')).closest('tr') as HTMLElement;
+    expect(screen.getByRole('columnheader', { name: 'Mã đơn nạp' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Số tiền / Credit' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Trạng thái thanh toán' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Thời gian giao dịch' })).toBeTruthy();
+    expect(within(row).getByText('—', { selector: '.admin-topup-provider-code' })).toBeTruthy();
+    expect(within(row).getByRole('button', { name: 'Xem chi tiết' })).toBeTruthy();
+    expect(within(row).queryByText('Chép')).toBeNull();
+    expect(within(row).getByRole('button', { name: 'Sao chép mã đơn' })).toBeTruthy();
+  });
+
+  it('giữ badge Đã hủy màu đỏ trong bảng và modal chi tiết', async () => {
+    const user = userEvent.setup();
+    const cancelledOrder = order({ status: 'CANCELLED' });
+    vi.mocked(adminFinanceApi.topUpOrders).mockResolvedValue({
+      items: [cancelledOrder],
+      page: 0,
+      size: 10,
+      totalElements: 1,
+    });
+    vi.mocked(adminFinanceApi.topUpOrderDetail).mockResolvedValue(detailOf(cancelledOrder));
+    render(<AdminTopUpOrders />);
+
+    const row = (await screen.findByText('Lan An')).closest('tr') as HTMLElement;
+    expect(within(row).getByText('Đã hủy').className).toContain('admin-topup-status--cancelled');
+    await user.click(within(row).getByRole('button', { name: 'Xem chi tiết' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Chi tiết đơn nạp' });
+    expect(within(dialog).getByText('Đã hủy').className).toContain('admin-topup-status--cancelled');
   });
 });

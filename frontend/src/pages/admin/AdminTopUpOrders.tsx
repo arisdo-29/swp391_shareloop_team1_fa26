@@ -6,6 +6,7 @@ import {
   Alert,
   Button,
   Field,
+  Icon,
   PageHeader,
   SearchField,
   Select,
@@ -25,6 +26,7 @@ import type { PaymentOrderStatus } from '../../services/paymentApi';
 import { formatVnd } from '../../utils/formatting';
 import { adminErrorMessage } from './adminErrors';
 import type { AdminLedgerRouteState, AdminLedgerViewState } from './adminLedgerNavigation';
+import './admin-topup-orders.css';
 
 const PAGE_SIZE = 10;
 const REASON_MIN = 5;
@@ -44,25 +46,21 @@ const providerLabels: Record<AdminTopUpOrder['provider'], string> = {
   MANUAL: 'Thủ công',
 };
 
-// Tên dễ đọc cho các khoá callback VNPay mà Backend cho phép trả về.
-const callbackLabels: Record<string, string> = {
-  vnp_ResponseCode: 'Mã phản hồi',
-  vnp_TransactionStatus: 'Trạng thái giao dịch',
-  vnp_TransactionNo: 'Mã giao dịch VNPay',
-  vnp_BankCode: 'Ngân hàng',
-  vnp_PayDate: 'Ngày thanh toán',
-  vnp_Amount: 'Số tiền (nhân 100)',
-};
-
 function statusClass(status: PaymentOrderStatus) {
   if (status === 'SUCCESS') return 'bg-success-soft text-success';
   if (status === 'PENDING') return 'bg-warning-soft text-warning';
   if (status === 'FAILED') return 'bg-error-soft text-error';
-  return 'bg-surface-low text-text-muted';
+  if (status === 'EXPIRED') return 'bg-info-soft text-info';
+  return 'admin-topup-status--cancelled';
 }
 
 function formatDateTime(value: string | null) {
   return value ? new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—';
+}
+
+function displayProviderTxnId(value: string | null) {
+  const normalized = value?.trim();
+  return normalized && normalized !== '0' ? normalized : '—';
 }
 
 // Mã đơn dài 32 ký tự nên chỉ hiện đầu và cuối, nút sao chép giữ đủ mã.
@@ -94,7 +92,9 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
   const ledgerReturn = routeState?.ledgerReturn;
   const [result, setResult] = useState<PageResponse<AdminTopUpOrder> | null>(null);
   const [summary, setSummary] = useState<AdminTopUpSummary | null>(null);
-  const [status, setStatus] = useState<PaymentOrderStatus | ''>(() => query.get('status') === 'SUCCESS' ? 'SUCCESS' : '');
+  const [status, setStatus] = useState<PaymentOrderStatus | ''>(() =>
+    query.get('status') === 'SUCCESS' ? 'SUCCESS' : '',
+  );
   const [keywordInput, setKeywordInput] = useState(() => query.get('q') ?? '');
   const [keyword, setKeyword] = useState(keywordInput);
   const [fromDate, setFromDate] = useState(() => query.get('from') ?? '');
@@ -167,7 +167,11 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
     if (dateRangeError) return;
     let active = true;
     adminFinanceApi
-      .topUpSummary({ from: fromDate || undefined, to: toDate || undefined, ...(paidDate && { paidDate }) })
+      .topUpSummary({
+        from: fromDate || undefined,
+        to: toDate || undefined,
+        ...(paidDate && { paidDate }),
+      })
       .then((response) => {
         if (active) setSummary(response);
       })
@@ -201,30 +205,36 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
   };
 
   return (
-    <section className="space-y-5">
-      <PageHeader
-        title="Giao dịch nạp tiền"
-        description="Đối soát từng đơn nạp Credit qua cổng thanh toán. Đơn đã đóng mà VNPay vẫn thu tiền được đánh dấu cần đối soát."
-        action={
-          <div className="flex gap-2">
-            {ledgerReturn ? (
-              <Link
-                to="/admin/finance/ledger"
-                state={{ restoreLedger: ledgerReturn }}
-                className="inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-semibold text-primary hover:bg-surface-low"
+    <section className="admin-topup-page">
+      <div className="admin-topup-header">
+        <PageHeader
+          title="Giao dịch nạp tiền"
+          description="Đối soát từng đơn nạp Credit qua cổng thanh toán. Đơn đã đóng mà VNPay vẫn thu tiền được đánh dấu cần đối soát."
+          action={
+            <div className="flex gap-2">
+              {ledgerReturn ? (
+                <Link
+                  to="/admin/finance/ledger"
+                  state={{ restoreLedger: ledgerReturn }}
+                  className="inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-semibold text-primary hover:bg-surface-low"
+                >
+                  Về lịch sử giao dịch Credit
+                </Link>
+              ) : null}
+              <Button
+                variant="outline"
+                disabled={exporting || Boolean(dateRangeError)}
+                onClick={() => void exportExcel()}
               >
-                Về lịch sử giao dịch Credit
-              </Link>
-            ) : null}
-            <Button variant="outline" disabled={exporting || Boolean(dateRangeError)} onClick={() => void exportExcel()}>
-              {exporting ? 'Đang xuất...' : 'Xuất Excel'}
-            </Button>
-            <Button variant="outline" disabled={loading} onClick={reload}>
-              Tải lại
-            </Button>
-          </div>
-        }
-      />
+                {exporting ? 'Đang xuất...' : 'Xuất Excel'}
+              </Button>
+              <Button variant="outline" disabled={loading} onClick={reload}>
+                Tải lại
+              </Button>
+            </div>
+          }
+        />
+      </div>
 
       <SummaryCards
         summary={summary}
@@ -238,8 +248,9 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
         }}
       />
 
-      <div className="grid gap-4 rounded-lg bg-white p-4 ring-1 ring-border md:grid-cols-2 lg:grid-cols-4">
-        <div className="md:col-span-2 lg:col-span-4">
+      <div className="admin-topup-filters">
+        <div className="admin-topup-filter-search">
+          <span className="label">Tìm kiếm đơn nạp</span>
           <SearchField
             aria-label="Tìm đơn nạp"
             placeholder="Tìm theo mã đơn, tên hoặc email người nạp..."
@@ -248,6 +259,7 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
           />
         </div>
         <Select
+          className="admin-topup-filter-status"
           label="Trạng thái"
           value={status}
           onChange={(event) => chooseStatus(event.target.value as PaymentOrderStatus | '')}
@@ -259,26 +271,30 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
             </option>
           ))}
         </Select>
-        <Field
-          label={fromLabel}
-          type="date"
-          value={fromDate}
-          error={dateRangeError || undefined}
-          onChange={(event) => {
-            setFromDate(event.target.value);
-            setPage(0);
-          }}
-        />
-        <Field
-          label={toLabel}
-          type="date"
-          value={toDate}
-          onChange={(event) => {
-            setToDate(event.target.value);
-            setPage(0);
-          }}
-        />
-        <label className="flex items-center gap-2 self-end pb-2 text-sm font-medium text-text-primary">
+        <div className="admin-topup-filter-date">
+          <Field
+            label={fromLabel}
+            type="date"
+            value={fromDate}
+            error={dateRangeError || undefined}
+            onChange={(event) => {
+              setFromDate(event.target.value);
+              setPage(0);
+            }}
+          />
+        </div>
+        <div className="admin-topup-filter-date">
+          <Field
+            label={toLabel}
+            type="date"
+            value={toDate}
+            onChange={(event) => {
+              setToDate(event.target.value);
+              setPage(0);
+            }}
+          />
+        </div>
+        <label className="admin-topup-filter-reconcile">
           <input
             type="checkbox"
             className="size-4"
@@ -303,18 +319,19 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
       {loading && !result ? (
         <SkeletonRows label="Đang tải đơn nạp" />
       ) : result ? (
-        <div>
-          <div className="table-wrap">
-            <table className="data-table">
+        <div className="admin-topup-table-section">
+          <div className="table-wrap admin-topup-table-wrap">
+            <table className="data-table admin-topup-table">
               <thead>
                 <tr>
-                  <th>Mã đơn</th>
+                  <th>Mã đơn nạp</th>
                   <th>Người nạp</th>
-                  <th>Giá trị</th>
+                  <th>Số tiền / Credit</th>
                   <th>Mã giao dịch VNPay</th>
-                  <th>Trạng thái</th>
-                  <th>Thời gian</th>
+                  <th>Trạng thái thanh toán</th>
+                  <th>Thời gian giao dịch</th>
                   <th>Ghi chú</th>
+                  <th className="text-center">Xem chi tiết</th>
                 </tr>
               </thead>
               <tbody>
@@ -323,7 +340,7 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
                 ))}
                 {result.items.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center text-text-muted">
+                    <td colSpan={8} className="text-center text-text-muted">
                       Không có đơn nạp phù hợp bộ lọc hiện tại.
                     </td>
                   </tr>
@@ -367,31 +384,48 @@ function SummaryCards({
   onReconcile: () => void;
 }) {
   if (!summary) return null;
-  const cardClass = (active: boolean) =>
-    `rounded-lg bg-white p-3 text-left ring-1 transition hover:ring-primary ${active ? 'ring-2 ring-primary' : 'ring-border'}`;
+  const cardClass = (active: boolean, modifier: string) =>
+    `admin-topup-stat ${modifier} ${active ? 'admin-topup-stat--active' : ''}`;
   return (
-    <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-      <button type="button" className={cardClass(reconcileOnly)} onClick={onReconcile}>
-        <p className="text-xs text-text-muted">Cần đối soát</p>
-        <p
-          className={`text-xl font-bold tabular-nums ${summary.needsReconcileCount > 0 ? 'text-error' : 'text-text-primary'}`}
-        >
-          {summary.needsReconcileCount}
-        </p>
-        <p className="text-xs text-text-muted">đơn</p>
+    <div className="admin-topup-stats">
+      <button
+        type="button"
+        className={cardClass(reconcileOnly, 'admin-topup-stat--reconcile')}
+        onClick={onReconcile}
+      >
+        <p className="admin-topup-stat-label">Cần đối soát</p>
+        <p className="admin-topup-stat-value">{summary.needsReconcileCount} đơn</p>
+        <p className="admin-topup-stat-context">Cần kiểm tra thủ công</p>
       </button>
-      {summary.byStatus.map((total) => (
-        <button
-          key={total.status}
-          type="button"
-          className={cardClass(activeStatus === total.status)}
-          onClick={() => onStatus(total.status)}
-        >
-          <p className="text-xs text-text-muted">{statusLabels[total.status]}</p>
-          <p className="text-xl font-bold tabular-nums text-text-primary">{total.orderCount}</p>
-          <p className="text-xs text-text-muted tabular-nums">{formatVnd(total.amountVnd)}</p>
-        </button>
-      ))}
+      {summary.byStatus.map((total) => {
+        const context =
+          total.status === 'SUCCESS'
+            ? 'Tiền thực thu'
+            : total.status === 'PENDING'
+              ? 'Giá trị chưa thanh toán'
+              : total.status === 'FAILED'
+                ? 'Giá trị thanh toán thất bại'
+                : total.status === 'EXPIRED'
+                  ? 'Giá trị đơn hết hạn'
+                  : 'Giá trị đơn đã hủy';
+        return (
+          <button
+            key={total.status}
+            type="button"
+            className={cardClass(
+              activeStatus === total.status,
+              `admin-topup-stat--${total.status.toLowerCase()}`,
+            )}
+            onClick={() => onStatus(total.status)}
+          >
+            <p className="admin-topup-stat-label">{statusLabels[total.status]}</p>
+            <p className="admin-topup-stat-value">{formatVnd(total.amountVnd)}</p>
+            <p className="admin-topup-stat-context">
+              {context} · {total.orderCount} đơn
+            </p>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -409,21 +443,22 @@ function CopyCodeButton({ orderCode }: { orderCode: string }) {
   return (
     <button
       type="button"
-      aria-label="Sao chép mã đơn"
-      className="text-xs font-semibold text-primary hover:underline"
+      aria-label={copied ? 'Đã sao chép mã đơn' : 'Sao chép mã đơn'}
+      title={copied ? 'Đã sao chép' : 'Sao chép mã đơn đầy đủ'}
+      className="admin-topup-copy"
       onClick={(event) => {
         event.stopPropagation();
         void copy();
       }}
     >
-      {copied ? 'Đã chép' : 'Chép'}
+      <Icon name="copy" className="size-4" weight={copied ? 'fill' : 'regular'} />
     </button>
   );
 }
 
 function StatusPill({ order }: { order: AdminTopUpOrder }) {
   return (
-    <div className="flex flex-col items-start gap-1">
+    <div className="admin-topup-status-stack">
       <span
         className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-2xs font-semibold ${statusClass(order.status)}`}
       >
@@ -446,9 +481,9 @@ function TopUpRow({
   onOpen: (orderCode: string) => void;
 }) {
   return (
-    <tr className="cursor-pointer hover:bg-surface-low" onClick={() => onOpen(order.orderCode)}>
-      <td>
-        <div className="flex items-center gap-2">
+    <tr className="admin-topup-row" onClick={() => onOpen(order.orderCode)}>
+      <td className="admin-topup-code-cell">
+        <div className="admin-topup-code-wrap">
           <button
             type="button"
             className="font-mono text-xs font-semibold text-primary hover:underline"
@@ -462,32 +497,52 @@ function TopUpRow({
           <CopyCodeButton orderCode={order.orderCode} />
         </div>
       </td>
-      <td>
+      <td className="admin-topup-user-cell">
         <p className="font-semibold text-text-primary">{order.userName || 'Người dùng đã xóa'}</p>
-        {order.userEmail ? <p className="text-xs text-text-muted">{order.userEmail}</p> : null}
+        {order.userEmail ? <p className="admin-topup-email">{order.userEmail}</p> : null}
       </td>
-      <td>
+      <td className="admin-topup-value-cell">
         <p className="font-semibold tabular-nums">{formatVnd(order.amountVnd)}</p>
         <p className="text-xs text-text-muted">{order.credits} Credit</p>
       </td>
-      <td className="text-xs">{order.providerTxnId || '—'}</td>
+      <td className="admin-topup-provider-code">{displayProviderTxnId(order.providerTxnId)}</td>
       <td>
         <StatusPill order={order} />
       </td>
-      <td className="text-xs">
-        <p>Tạo lúc: {formatDateTime(order.createdAt)}</p>
-        <p>Thanh toán lúc: {formatDateTime(order.paidAt)}</p>
+      <td className="admin-topup-time-cell">
+        <p>
+          <span>Tạo:</span> {formatDateTime(order.createdAt)}
+        </p>
+        {order.paidAt ? (
+          <p>
+            <span>Thanh toán:</span> {formatDateTime(order.paidAt)}
+          </p>
+        ) : null}
       </td>
-      <td className="max-w-56 text-xs text-text-muted">{order.reviewNote || '—'}</td>
+      <td className="admin-topup-note-cell" title={order.reviewNote || undefined}>
+        {order.reviewNote || '—'}
+      </td>
+      <td className="text-center">
+        <button
+          type="button"
+          className="admin-topup-view-action"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen(order.orderCode);
+          }}
+        >
+          Xem chi tiết
+        </button>
+      </td>
     </tr>
   );
 }
 
 function DetailRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-wrap justify-between gap-2 py-2 text-sm">
-      <dt className="text-text-muted">{label}</dt>
-      <dd className="text-right font-medium text-text-primary">{children}</dd>
+    <div className="admin-topup-detail-item">
+      <dt>{label}</dt>
+      <dd>{children}</dd>
     </div>
   );
 }
@@ -584,60 +639,83 @@ function OrderDialog({
           <SkeletonRows rows={3} label="Đang tải chi tiết đơn" />
         )
       ) : (
-        <div className="space-y-4">
-          <dl className="divide-y divide-border/60">
-            <DetailRow label="Mã đơn">
+        <div className="admin-topup-dialog-content">
+          <dl className="admin-topup-detail-grid">
+            <DetailRow label="Mã đơn nạp">
               <span className="inline-flex items-center gap-2">
                 <span className="break-all font-mono text-xs">{order.orderCode}</span>
                 <CopyCodeButton orderCode={order.orderCode} />
               </span>
             </DetailRow>
-            <DetailRow label="Người nạp">
-              {order.userName || 'Người dùng đã xóa'}
-              {order.userEmail ? ` (${order.userEmail})` : ''}
+            <DetailRow label="Thông tin người nạp">
+              <p className="font-semibold text-text-primary">
+                {order.userName || 'Người dùng đã xóa'}
+              </p>
+              {order.userEmail ? (
+                <p className="break-all text-xs text-text-muted">{order.userEmail}</p>
+              ) : null}
             </DetailRow>
-            <DetailRow label="Giá trị">
-              {formatVnd(order.amountVnd)} cho {order.credits} Credit
+            <DetailRow label="Số tiền thanh toán">
+              <span className="font-semibold tabular-nums text-text-primary">
+                {formatVnd(order.amountVnd)}
+              </span>
             </DetailRow>
-            <DetailRow label="Cổng thanh toán">{providerLabels[order.provider]}</DetailRow>
-            <DetailRow label="Trạng thái">
-              <StatusPill order={order} />
+            <DetailRow label="Số Credit của đơn nạp">
+              <span className="font-semibold tabular-nums text-text-primary">
+                {order.credits} Credit
+              </span>
             </DetailRow>
-            <DetailRow label="Tạo lúc">{formatDateTime(order.createdAt)}</DetailRow>
-            <DetailRow label="VNPay báo thu tiền lúc">{formatDateTime(order.paidAt)}</DetailRow>
-            {order.reviewedAt ? (
-              <DetailRow label="Đã đối soát">
-                {formatDateTime(order.reviewedAt)} bởi {order.reviewedByName || 'quản trị viên'}
+            {detail.ledgerLines.length > 0 ? (
+              <DetailRow label="Số Credit thực tế đã cộng">
+                <div className="space-y-1">
+                  {detail.ledgerLines.map((line) => (
+                    <p key={line.id}>
+                      <span className="font-bold tabular-nums text-success">
+                        +{line.amount} Credit
+                      </span>
+                      <span className="block text-xs text-text-muted">
+                        {formatDateTime(line.createdAt)}
+                      </span>
+                      <span className="block text-xs text-text-muted">
+                        Số dư sau: {line.balanceAfter} Credit
+                      </span>
+                    </p>
+                  ))}
+                </div>
               </DetailRow>
             ) : null}
-            {order.reviewNote ? <DetailRow label="Ghi chú">{order.reviewNote}</DetailRow> : null}
+            <DetailRow label="Phương thức thanh toán">{providerLabels[order.provider]}</DetailRow>
+            <DetailRow label="Mã giao dịch VNPay">
+              <span className="break-all font-mono text-xs">
+                {displayProviderTxnId(order.providerTxnId)}
+              </span>
+            </DetailRow>
+            <DetailRow label="Trạng thái thanh toán">
+              <StatusPill order={order} />
+            </DetailRow>
+            <DetailRow label="Thời gian tạo đơn">{formatDateTime(order.createdAt)}</DetailRow>
+            {order.paidAt ? (
+              <DetailRow label="Thời gian thanh toán">{formatDateTime(order.paidAt)}</DetailRow>
+            ) : null}
+            {order.needsReconcile || order.reviewedAt ? (
+              <DetailRow label="Trạng thái đối soát">
+                {order.needsReconcile ? (
+                  <span className="font-semibold text-error">Cần đối soát</span>
+                ) : (
+                  <>
+                    <p className="font-semibold text-success">Đã xử lý đối soát</p>
+                    {order.reviewedAt ? <p>{formatDateTime(order.reviewedAt)}</p> : null}
+                    {order.reviewedByName ? (
+                      <p className="text-xs text-text-muted">Bởi {order.reviewedByName}</p>
+                    ) : null}
+                  </>
+                )}
+              </DetailRow>
+            ) : null}
+            {order.reviewNote ? (
+              <DetailRow label="Ghi chú đối soát">{order.reviewNote}</DetailRow>
+            ) : null}
           </dl>
-
-          {Object.keys(detail.callbackData).length > 0 ? (
-            <div>
-              <h3 className="text-sm font-bold text-text-primary">Phản hồi từ VNPay</h3>
-              <dl className="mt-1 divide-y divide-border/60">
-                {Object.entries(detail.callbackData).map(([key, value]) => (
-                  <DetailRow key={key} label={callbackLabels[key] ?? key}>
-                    {value}
-                  </DetailRow>
-                ))}
-              </dl>
-            </div>
-          ) : null}
-
-          {detail.ledgerLines.length > 0 ? (
-            <div>
-              <h3 className="text-sm font-bold text-text-primary">Credit đã cộng</h3>
-              <ul className="mt-1 space-y-1 text-sm">
-                {detail.ledgerLines.map((line) => (
-                  <li key={line.id}>
-                    +{line.amount} Credit lúc {formatDateTime(line.createdAt)}, số dư sau đó {line.balanceAfter}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
 
           {error ? (
             <div role="alert" className="rounded-md bg-error-soft p-3 text-xs text-error">
@@ -683,7 +761,10 @@ function OrderDialog({
                 >
                   Quay lại
                 </Button>
-                <Button disabled={busy || trimmed.length < REASON_MIN} onClick={() => void submit()}>
+                <Button
+                  disabled={busy || trimmed.length < REASON_MIN}
+                  onClick={() => void submit()}
+                >
                   {busy ? 'Đang xử lý...' : 'Xác nhận'}
                 </Button>
               </div>

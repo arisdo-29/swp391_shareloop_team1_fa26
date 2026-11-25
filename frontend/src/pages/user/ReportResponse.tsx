@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { DisputeResponseForm } from '../../components/DisputeResponseDialog';
 import { Alert, Button, Icon, SkeletonRows } from '../../components/ui';
-import { reportApi, type ReportEvidence, type RespondentReportDetail } from '../../services/reportApi';
+import {
+  reportApi,
+  type ReportEvidence,
+  type RespondentReportDetail,
+} from '../../services/reportApi';
 import { disputeReasonLabels } from '../../utils/disputeErrors';
 import { formatRemaining } from '../../utils/disputeView';
 
@@ -15,7 +19,6 @@ function reasonLabel(detail: RespondentReportDetail) {
   if (detail.targetType === 'REQUEST' && detail.reason === 'NO_SHOW') return 'Sự cố giao nhận';
   return disputeReasonLabels[detail.reason] ?? detail.reason;
 }
-
 export function ReportResponse({ kind = 'report' }: { kind?: Kind }) {
   const { reportId } = useParams();
   return <ResponsePage key={`${kind}-${reportId}`} reportId={Number(reportId)} kind={kind} />;
@@ -101,7 +104,6 @@ function ResponsePage({ reportId, kind }: { reportId: number; kind: Kind }) {
     </div>
   );
 }
-
 /** Hạn giải trình hiện ngay trên trang để người dùng không phải quay lại thông báo xem hạn. */
 function DeadlineNotice({
   detail,
@@ -292,4 +294,3 @@ function EvidenceImage({ reportId, evidence }: { reportId: number; evidence: Rep
     </li>
   );
 }
-

@@ -45,6 +45,7 @@ import { CaretRight } from '@phosphor-icons/react/dist/csr/CaretRight';
 import { Trash } from '@phosphor-icons/react/dist/csr/Trash';
 import { RocketLaunch } from '@phosphor-icons/react/dist/csr/RocketLaunch';
 import { HourglassMedium } from '@phosphor-icons/react/dist/csr/HourglassMedium';
+import { Copy } from '@phosphor-icons/react/dist/csr/Copy';
 import { Link } from 'react-router-dom';
 import type {
   Item,
@@ -100,6 +101,7 @@ const iconMap = {
   // Thông báo đẩy bài (BOOST_*) và nhắc bài sắp hết hạn (ITEM_EXPIRING_*).
   boost: RocketLaunch,
   expiring: HourglassMedium,
+  copy: Copy,
 } as const;
 
 export type IconName = keyof typeof iconMap;
