@@ -8,5 +8,6 @@ public enum MessageKind {
     IMAGE,
     ITEM_CARD,
     OFFER_CHANGE,
+    SCHEDULE_SET,
     SYSTEM
 }

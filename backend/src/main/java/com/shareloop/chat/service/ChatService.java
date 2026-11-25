@@ -401,6 +401,12 @@ public class ChatService {
         }
     }
 
+    /** Lưu thẻ lịch hẹn cùng transaction với thao tác lưu lịch. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void postScheduleSavedNotice(long requestId, long actorId) {
+        messageRepository.save(new Message(requestId, actorId, MessageKind.SCHEDULE_SET, "Lịch hẹn đã được lưu"));
+    }
+
     /**
      * Thêm một dòng tin hệ thống vào khung chat khi giao dịch bị khiếu nại (D-04). Không ghi ai khiếu nại để tin giống
      * nhau cho cả hai bên; banner trên ô soạn tin mới phân biệt bên khiếu nại và bên bị khiếu nại.
