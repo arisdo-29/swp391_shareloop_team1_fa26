@@ -3,7 +3,6 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   Button,
   EmptyState,
-  Field,
   Icon,
   LoadingState,
   PageHeader,
@@ -42,6 +41,7 @@ import { selectCurrentUser } from '../../app/store';
 import './browse.css';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 import { loginPath } from '../../utils/authRedirect';
+import { BrowsePriceFilter } from './BrowsePriceFilter';
 
 // Giá trị hình thức ở thanh địa chỉ (gift, trade) khác tên của API
 const OFFER_TYPE_BY_TYPE: Record<ItemType, OfferType> = { gift: 'GIVE', trade: 'SWAP' };
@@ -153,44 +153,6 @@ function BrowseAiPrompt({ signedIn }: { signedIn: boolean }) {
         Thử Trợ lý AI
       </Link>
     </aside>
-  );
-}
-
-function PriceFilter({
-  minPrice,
-  maxPrice,
-  onApply,
-}: {
-  minPrice?: number;
-  maxPrice?: number;
-  onApply: (min: string, max: string) => void;
-}) {
-  const [minInput, setMinInput] = useState(minPrice?.toString() ?? '');
-  const [maxInput, setMaxInput] = useState(maxPrice?.toString() ?? '');
-  const [error, setError] = useState('');
-
-  function apply() {
-    const min = positiveIntegerParam(minInput.trim());
-    const max = positiveIntegerParam(maxInput.trim());
-    if ((minInput.trim() && min === undefined) || (maxInput.trim() && max === undefined)) {
-      setError('Nhập giá bằng số nguyên dương.');
-      return;
-    }
-    if (min !== undefined && max !== undefined && min > max) {
-      setError('Giá từ phải nhỏ hơn hoặc bằng giá đến.');
-      return;
-    }
-    setError('');
-    onApply(min?.toString() ?? '', max?.toString() ?? '');
-  }
-
-  return (
-    <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); apply(); }}>
-      <Field label="Giá từ (đồng)" inputMode="numeric" value={minInput} onChange={(event) => setMinInput(event.target.value)} />
-      <Field label="Giá đến (đồng)" inputMode="numeric" value={maxInput} onChange={(event) => setMaxInput(event.target.value)} />
-      {error ? <p role="alert" className="text-xs text-error">{error}</p> : null}
-      <Button variant="outline" type="submit">Áp dụng giá</Button>
-    </form>
   );
 }
 
@@ -471,7 +433,7 @@ export function Browse() {
         value={type}
         onChange={(value) => setFilter('type', value)}
       />
-      <PriceFilter
+      <BrowsePriceFilter
         key={String(rawMinPrice) + ':' + String(rawMaxPrice)}
         minPrice={rawMinPrice}
         maxPrice={rawMaxPrice}
