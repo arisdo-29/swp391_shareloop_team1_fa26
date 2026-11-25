@@ -141,6 +141,7 @@ export const router = createBrowserRouter([
               { path: 'keywords', element: <AdminContentPage kind="keywords" /> },
               { path: 'districts', element: <AdminContentPage kind="districts" /> },
               { path: 'users', element: <AdminAccounts /> },
+              { path: 'users/:userId/profile', element: <UserProfile inAdmin /> },
               { path: 'users/:userId', element: <AdminFinanceUserDetail /> },
               { path: 'reputation', element: <AdminReputation /> },
               // Gộp "Khóa tài khoản" vào Quản lý tài khoản: giữ đường dẫn cũ để link đã lưu vẫn dùng được.

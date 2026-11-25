@@ -97,7 +97,7 @@ function mockItems(byTab: Record<UserItemTab, PageResponse<ItemResponse>>) {
   vi.mocked(userApi.getUserItems).mockImplementation(async (_id, tab) => byTab[tab]);
 }
 
-function renderProfile(path = `/users/${PROFILE_ID}`, viewerUser: User = viewer) {
+function renderProfile(path = `/users/${PROFILE_ID}`, viewerUser: User = viewer, inAdmin = false) {
   store.dispatch(actions.loginFromApi(viewerUser));
   vi.mocked(catalogApi.categories).mockResolvedValue([]);
   vi.mocked(catalogApi.areas).mockResolvedValue([]);
@@ -106,6 +106,7 @@ function renderProfile(path = `/users/${PROFILE_ID}`, viewerUser: User = viewer)
       <MemoryRouter initialEntries={['/messages', path]} initialIndex={1}>
         <Routes>
           <Route path="/users/:userId" element={<UserProfile />} />
+          <Route path="/admin/users/:userId/profile" element={<UserProfile inAdmin={inAdmin} />} />
           <Route path="*" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>
@@ -208,6 +209,22 @@ describe('Trang Hồ sơ công khai', () => {
     // then
     expect(screen.getByRole('button', { name: 'Báo cáo' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Nhắn tin' })).toBeNull();
+  });
+
+  it('chế độ Admin không hiện Báo cáo và mở bài đăng bằng route Admin', async () => {
+    // given
+    vi.mocked(userApi.getPublicProfile).mockResolvedValue(profile());
+    mockItems({ ACTIVE: page([itemResponse(1)]), DONE: page([]) });
+
+    // when
+    renderProfile(`/admin/users/${PROFILE_ID}/profile`, viewer, true);
+    const active = await screen.findByRole('region', { name: /Đang hoạt động/ });
+
+    // then
+    expect(screen.queryByRole('button', { name: 'Báo cáo' })).toBeNull();
+    expect((await within(active).findByRole('link', { name: /Món số 1/ })).getAttribute('href')).toBe(
+      '/admin/items/1',
+    );
   });
 
   it('xem hồ sơ của chính mình thì ẩn Báo cáo', async () => {
