@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { Pagination } from '../../components/Pagination';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Alert, Button, Field, ItemImage, PageHeader, Select, SkeletonRows, TextArea } from '../../components/ui';
+import { Alert, Button, Field, Icon, ItemImage, PageHeader, Select, SkeletonRows, TextArea, type IconName } from '../../components/ui';
+import { DashboardGrid, DashboardStatCard } from './AdminDashboardCards';
+import { formatDashboardCount, type DashboardCount } from './dashboardCount';
 import {
   adminRequestApi,
   type AdminRequestListParams,
@@ -30,12 +32,36 @@ const cancellableStatuses: ItemRequestStatus[] = [
   'DISPUTED',
 ];
 
+// Giao dịch đã chọn người và chưa kết thúc, cùng nhóm "Giao dịch đang diễn ra" ở trang Tổng quan.
+const RUNNING_STATUSES: ItemRequestStatus[] = ['RESERVED', 'AWAITING_LOGISTICS', 'LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER'];
+
+// Màu trạng thái theo các trang Admin khác: hoàn tất xanh lá, đang chạy xanh dương, sự cố và huỷ đỏ, chờ phản hồi xám.
 function statusClass(status: ItemRequestStatus) {
   if (status === 'COMPLETED') return 'bg-success-soft text-success';
   if (status === 'DISPUTED' || status === 'CANCELLED' || status === 'REJECTED') return 'bg-error-soft text-error';
   if (status === 'PENDING') return 'bg-surface-low text-text-muted';
-  return 'bg-warning-soft text-warning';
+  return 'bg-info-soft text-info';
 }
+
+interface TransactionStats {
+  total: DashboardCount;
+  running: DashboardCount;
+  completed: DashboardCount;
+  cancelled: DashboardCount;
+}
+
+const EMPTY_STATS: TransactionStats = { total: null, running: null, completed: null, cancelled: null };
+
+const countRequests = (status?: ItemRequestStatus) =>
+  adminRequestApi.list({ ...(status ? { status } : {}), page: 0, size: 1 }).then((response) => response.totalElements);
+
+// Ba bộ lọc nhanh cho giao dịch cần Admin xử lý.
+type QuickFilterKey = 'stuck' | 'pendingCancel' | 'sendOverdue';
+const QUICK_FILTERS: Array<{ key: QuickFilterKey; label: string; icon: IconName }> = [
+  { key: 'stuck', label: 'Quá giờ xác nhận bàn giao', icon: 'expiring' },
+  { key: 'pendingCancel', label: 'Đang chờ phản hồi đề nghị huỷ', icon: 'warning' },
+  { key: 'sendOverdue', label: 'Giao hàng quá hạn gửi', icon: 'alert' },
+];
 
 function formatDateTime(value: string | null) {
   return value ? new Date(value).toLocaleString('vi-VN') : '—';
@@ -77,8 +103,60 @@ export function AdminTransactions() {
   const [pendingCancelOnly, setPendingCancelOnly] = useState(false);
   const [sendOverdueOnly, setSendOverdueOnly] = useState(false);
 
+  const [stats, setStats] = useState<TransactionStats>(EMPTY_STATS);
+
   const dateRangeError =
     fromDate && toDate && fromDate > toDate ? '"Từ ngày" không được sau "Đến ngày".' : '';
+  const quickFilterState: Record<QuickFilterKey, boolean> = {
+    stuck: stuckOnly,
+    pendingCancel: pendingCancelOnly,
+    sendOverdue: sendOverdueOnly,
+  };
+  const toggleQuickFilter = (key: QuickFilterKey) => {
+    if (key === 'stuck') setStuckOnly((current) => !current);
+    if (key === 'pendingCancel') setPendingCancelOnly((current) => !current);
+    if (key === 'sendOverdue') setSendOverdueOnly((current) => !current);
+    setPage(0);
+  };
+  const hasFilters = Boolean(
+    status || type || deliveryMethod || fromDate || toDate || queryInput.trim() || query
+    || stuckOnly || pendingCancelOnly || sendOverdueOnly,
+  );
+  const resetFilters = () => {
+    setStatus('');
+    setType('');
+    setDeliveryMethod('');
+    setFromDate('');
+    setToDate('');
+    setQueryInput('');
+    setQuery('');
+    setStuckOnly(false);
+    setPendingCancelOnly(false);
+    setSendOverdueOnly(false);
+    setPage(0);
+  };
+
+  // Thẻ thống kê: tổng số toàn hệ thống theo trạng thái, không phụ thuộc bộ lọc. Tải lại sau khi huỷ giao dịch.
+  useEffect(() => {
+    let active = true;
+    setStats(EMPTY_STATS);
+    const load = (key: keyof TransactionStats, request: Promise<number>) => {
+      request
+        .then((value) => {
+          if (active) setStats((current) => ({ ...current, [key]: value }));
+        })
+        .catch(() => {
+          if (active) setStats((current) => ({ ...current, [key]: 'error' }));
+        });
+    };
+    load('total', countRequests());
+    load('running', Promise.all(RUNNING_STATUSES.map(countRequests)).then((totals) => totals.reduce((sum, value) => sum + value, 0)));
+    load('completed', countRequests('COMPLETED'));
+    load('cancelled', countRequests('CANCELLED'));
+    return () => {
+      active = false;
+    };
+  }, [reloadKey]);
 
   useEffect(() => {
     if (dateRangeError) return;
@@ -172,6 +250,27 @@ export function AdminTransactions() {
         />
       </div>
 
+      <div className="admin-dash-vars" role="group" aria-label="Thống kê giao dịch">
+        <DashboardGrid>
+          {([
+            { key: 'total', label: 'Tổng giao dịch', icon: 'transactions', note: 'Mọi giao dịch trong hệ thống.' },
+            { key: 'running', label: 'Đang diễn ra', icon: 'expiring', note: 'Đã chọn người nhận, chưa kết thúc.' },
+            { key: 'completed', label: 'Đã hoàn tất', icon: 'completed', note: 'Hai bên đã xác nhận giao nhận.' },
+            { key: 'cancelled', label: 'Đã hủy', icon: 'banned', note: 'Giao dịch đã bị hủy.' },
+          ] as const).map((card) => (
+            <DashboardStatCard
+              key={card.key}
+              variant="system"
+              icon={card.icon}
+              label={card.label}
+              value={formatDashboardCount(stats[card.key])}
+              loading={stats[card.key] === null}
+              note={stats[card.key] === 'error' ? 'Chưa tải được số liệu.' : card.note}
+            />
+          ))}
+        </DashboardGrid>
+      </div>
+
       <form
         className="admin-transactions-filters"
         onSubmit={(event) => {
@@ -248,50 +347,46 @@ export function AdminTransactions() {
             }}
           />
         </div>
-        <label className="admin-transactions-filter-search grid gap-1.5 text-sm font-medium">
-          Tìm theo tên bài hoặc tên người
-          <input
-            className="admin-transactions-search-input rounded-md border border-border bg-white px-3 py-2"
-            value={queryInput}
-            maxLength={100}
-            onChange={(event) => setQueryInput(event.target.value)}
-          />
-        </label>
-        <Button variant="outline">Tìm</Button>
-        <Button
-          type="button"
-          variant={stuckOnly ? 'primary' : 'outline'}
-          aria-pressed={stuckOnly}
-          onClick={() => {
-            setStuckOnly((current) => !current);
-            setPage(0);
-          }}
-        >
-          Quá giờ xác nhận bàn giao
-        </Button>
-        <Button
-          type="button"
-          variant={pendingCancelOnly ? 'primary' : 'outline'}
-          aria-pressed={pendingCancelOnly}
-          onClick={() => {
-            setPendingCancelOnly((current) => !current);
-            setPage(0);
-          }}
-        >
-          Đang chờ phản hồi đề nghị huỷ
-        </Button>
-        <Button
-          type="button"
-          variant={sendOverdueOnly ? 'primary' : 'outline'}
-          aria-pressed={sendOverdueOnly}
-          onClick={() => {
-            setSendOverdueOnly((current) => !current);
-            setPage(0);
-          }}
-        >
-          Giao hàng quá hạn gửi
-        </Button>
+        <div className="admin-transactions-filter-search">
+          <label className="label" htmlFor="admin-transactions-search">Tìm theo tên bài hoặc tên người</label>
+          <div className="admin-transactions-search-row">
+            <input
+              id="admin-transactions-search"
+              className="admin-transactions-search-input rounded-md border border-border bg-white px-3 py-2"
+              value={queryInput}
+              maxLength={100}
+              onChange={(event) => setQueryInput(event.target.value)}
+            />
+            <Button variant="outline">Tìm</Button>
+          </div>
+        </div>
+        <div className="admin-transactions-filter-reset">
+          <Button type="button" variant="outline" disabled={!hasFilters} onClick={resetFilters}>
+            Đặt lại bộ lọc
+          </Button>
+        </div>
       </form>
+
+      <div className="admin-transactions-quick" role="group" aria-labelledby="admin-transactions-quick-title">
+        <p id="admin-transactions-quick-title" className="admin-transactions-quick-title">
+          <Icon name="alert" weight="bold" />
+          Giao dịch cần xử lý
+        </p>
+        <div className="admin-transactions-quick-buttons">
+          {QUICK_FILTERS.map((filter) => (
+            <button
+              key={filter.key}
+              type="button"
+              className="admin-transactions-quick-button"
+              aria-pressed={quickFilterState[filter.key]}
+              onClick={() => toggleQuickFilter(filter.key)}
+            >
+              <Icon name={filter.icon} weight="bold" />
+              {filter.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {error ? (
         <div className="space-y-3">

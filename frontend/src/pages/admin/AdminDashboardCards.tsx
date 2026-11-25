@@ -61,7 +61,8 @@ export function DashboardStatCard({
   pending = false,
   loading = false,
 }: {
-  to: string;
+  /** Trang quản lý tương ứng. Bỏ trống thì thẻ chỉ hiển thị số, không bấm được. */
+  to?: string;
   icon: IconName;
   label: string;
   value: ReactNode;
@@ -83,13 +84,13 @@ export function DashboardStatCard({
       {unit ? <span className="admin-dash-unit">{unit}</span> : null}
     </p>
   );
-  return (
-    <Link
-      to={to}
-      aria-busy={loading || undefined}
-      data-state={variant === 'task' ? (pending ? 'pending' : 'idle') : undefined}
-      className={`admin-dash-card admin-dash-card--${variant}${accent ? ` admin-dash-card--${accent}` : ''}`}
-    >
+  const cardProps = {
+    'aria-busy': loading || undefined,
+    'data-state': variant === 'task' ? (pending ? 'pending' : 'idle') : undefined,
+    className: `admin-dash-card admin-dash-card--${variant}${accent ? ` admin-dash-card--${accent}` : ''}${to ? '' : ' admin-dash-card--static'}`,
+  };
+  const content = (
+    <>
       {variant === 'task' ? (
         <>
           <div className="admin-dash-top">
@@ -108,6 +109,7 @@ export function DashboardStatCard({
         </>
       )}
       <p className="admin-dash-note">{note}</p>
-    </Link>
+    </>
   );
+  return to ? <Link to={to} {...cardProps}>{content}</Link> : <div {...cardProps}>{content}</div>;
 }
