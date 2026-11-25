@@ -81,7 +81,8 @@ export function AdminItems() {
   const [offerType, setOfferType] = useState<OfferType | ''>('');
   const [categoryId, setCategoryId] = useState('');
   const [keywordInput, setKeywordInput] = useState('');
-  const keyword = useDebouncedValue(keywordInput.trim());
+  const debouncedKeyword = useDebouncedValue(keywordInput.trim());
+  const keyword = keywordInput.trim() ? debouncedKeyword : '';
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [boostedOnly, setBoostedOnly] = useState(false);
@@ -91,22 +92,22 @@ export function AdminItems() {
   const [error, setError] = useState('');
   const [dialog, setDialog] = useState<{ row: AdminItemRow; mode: 'hide' | 'unhide' } | null>(null);
 
+  const hasFilters = Boolean(
+    keywordInput || status || visibility || offerType || categoryId || fromDate || toDate || boostedOnly,
+  );
   const dateRangeError =
     fromDate && toDate && fromDate > toDate ? '"Từ ngày" không được sau "Đến ngày".' : '';
-  const hasFilters = Boolean(
-    status || visibility || offerType || categoryId || keywordInput.trim() || fromDate || toDate || boostedOnly,
-  );
-
-  const clearFilters = () => {
+  function clearFilters() {
+    setKeywordInput('');
     setStatus('');
     setVisibility('');
     setOfferType('');
     setCategoryId('');
-    setKeywordInput('');
     setFromDate('');
     setToDate('');
     setBoostedOnly(false);
-  };
+    setPage(0);
+  }
 
   useEffect(() => {
     let active = true;
@@ -189,11 +190,6 @@ export function AdminItems() {
         <PageHeader
           title="Quản lý bài đăng"
           description="Xem mọi bài đăng ở mọi trạng thái, ẩn bài vi phạm hoặc hiện lại bài đã ẩn."
-          action={
-            <Button variant="outline" disabled={loading} onClick={() => setReloadKey((current) => current + 1)}>
-              Tải lại
-            </Button>
-          }
         />
       </div>
 

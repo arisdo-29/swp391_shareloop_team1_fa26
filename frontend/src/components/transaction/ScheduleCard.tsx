@@ -8,6 +8,7 @@ import {
 import type { ApiError } from '../../services/http';
 import { canSchedule, formatDateTime } from '../../utils/request';
 import { usePublicConfig } from '../../utils/usePublicConfig';
+import { SCHEDULE_SECTION_ID } from '../../utils/chatMessages';
 import { ReschedulePanel } from './ReschedulePanel';
 import { ownShippingAddress, partnerAddressProvided, partnerNeedsAddress, viewerNeedsOwnAddress } from '../../utils/shipping';
 import {
@@ -46,8 +47,8 @@ export function ScheduleCard(props: ScheduleCardProps) {
   ]);
 
   return (
-    <section className="card space-y-4 p-5 sm:p-6" aria-labelledby="meeting-title">
-      <h2 id="meeting-title" className="section-title">
+    <section className="card space-y-4 p-5 sm:p-6" aria-labelledby={SCHEDULE_SECTION_ID}>
+      <h2 id={SCHEDULE_SECTION_ID} tabIndex={-1} className="section-title scroll-mt-24">
         Lịch giao nhận
       </h2>
       {editable ? (

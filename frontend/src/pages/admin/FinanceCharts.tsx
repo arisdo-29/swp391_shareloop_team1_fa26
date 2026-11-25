@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Bar,
@@ -7,6 +8,7 @@ import {
   PieChart,
   Rectangle,
   ResponsiveContainer,
+  Sector,
   Tooltip,
   XAxis,
   YAxis,
@@ -17,13 +19,13 @@ import type { DailyCash } from '../../services/adminFinanceApi';
 
 const CASH_COLOR = 'var(--color-info)';
 const PIE_COLORS = [
-  'var(--color-primary)',
-  'var(--color-info)',
-  'var(--color-warning)',
-  'var(--color-error)',
-  'var(--color-success)',
-  'var(--color-text-muted)',
-  'var(--color-text-secondary)',
+  'var(--color-chart-teal)',
+  'var(--color-chart-blue)',
+  'var(--color-chart-gold)',
+  'var(--color-chart-coral)',
+  'var(--color-chart-violet)',
+  'var(--color-chart-lime)',
+  'var(--color-chart-pink)',
 ];
 const AXIS_INK = 'var(--color-text-secondary)';
 const GRID_LINE = 'var(--color-border)';
@@ -35,28 +37,6 @@ export interface ChartRow {
   detail?: string;
 }
 
-function ChartTooltip({
-  active,
-  payload,
-  unit,
-}: {
-  active?: boolean;
-  payload?: ReadonlyArray<{ payload?: ChartRow }>;
-  unit: string;
-}) {
-  const row = payload?.[0]?.payload;
-  if (!active || !row) return null;
-  return (
-    <div className="rounded-md bg-white px-3 py-2 text-xs shadow-md ring-1 ring-border">
-      <p className="font-semibold text-text-primary">{row.label}</p>
-      <p className="mt-0.5 tabular-nums text-text-secondary">
-        {row.value.toLocaleString('vi-VN')} {unit}
-      </p>
-      {row.detail ? <p className="mt-0.5 text-text-muted">{row.detail}</p> : null}
-    </div>
-  );
-}
-
 function ChartEmpty() {
   return (
     <p className="rounded-md bg-surface-low px-4 py-8 text-center text-sm text-text-muted">
@@ -65,45 +45,81 @@ function ChartEmpty() {
   );
 }
 
-/** Kích thước lát cắt dùng độ lớn của số Credit. Danh sách dưới biểu đồ hiển thị cả giá trị và tỷ lệ. */
+/** Kích thước lát cắt dùng độ lớn của số Credit. Danh sách hiển thị cả giá trị và tỷ lệ. */
 export function CreditByTypeChart({ title, rows }: { title: string; rows: ChartRow[] }) {
-  const slices = rows
-    .filter((row) => row.value !== 0)
-    .map((row, index) => ({
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const slices = useMemo(
+    () => rows.filter((row) => row.value !== 0).map((row, index) => ({
       ...row,
       value: Math.abs(row.value),
       fill: PIE_COLORS[index % PIE_COLORS.length],
-    }));
+    })),
+    [rows],
+  );
   const total = slices.reduce((sum, slice) => sum + slice.value, 0);
+  const activeSlice = activeIndex === null ? undefined : slices[activeIndex];
   if (!total) return <ChartEmpty />;
   return (
-    <figure aria-label={title} className="m-0">
-      <ResponsiveContainer width="100%" height={220}>
-        <PieChart>
-          <Pie
-            data={slices}
-            dataKey="value"
-            nameKey="label"
-            outerRadius="90%"
-            stroke="var(--color-surface)"
-            isAnimationActive={false}
-          />
-          <Tooltip content={<ChartTooltip unit="Credit" />} />
-        </PieChart>
-      </ResponsiveContainer>
-      <ul className="mx-auto max-w-lg divide-y divide-border text-sm">
-        {slices.map((slice) => (
+    <figure aria-label={title} className="m-0 grid items-center gap-4 sm:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] sm:gap-8">
+      <div className="relative mx-auto w-full max-w-72 min-w-0" aria-hidden="true">
+        <ResponsiveContainer width="100%" height={272}>
+          <PieChart accessibilityLayer={false}>
+            <Pie
+              data={slices}
+              dataKey="value"
+              nameKey="label"
+              innerRadius="65%"
+              outerRadius="89%"
+              paddingAngle={slices.length > 1 ? 2 : 0}
+              cornerRadius={4}
+              stroke="none"
+              rootTabIndex={-1}
+              isAnimationActive={false}
+              onMouseEnter={(_, index) => setActiveIndex(index)}
+              onMouseLeave={() => setActiveIndex(null)}
+              onClick={(_, index) => setActiveIndex(index)}
+              shape={({ cx, cy, innerRadius, outerRadius, startAngle, endAngle, cornerRadius, fill, index }) => (
+                <Sector
+                  cx={cx}
+                  cy={cy}
+                  innerRadius={innerRadius}
+                  outerRadius={outerRadius + (index === activeIndex ? 7 : 0)}
+                  startAngle={startAngle}
+                  endAngle={endAngle}
+                  cornerRadius={cornerRadius}
+                  fill={fill}
+                  opacity={!activeSlice || index === activeIndex ? 1 : 0.4}
+                />
+              )}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+          <p className="max-w-[50%] text-2xs font-medium text-text-secondary">{activeSlice?.label ?? 'Tổng Credit trừ'}</p>
+          <p className="text-xl font-bold tabular-nums text-text-primary">
+            {(activeSlice?.value ?? total).toLocaleString('vi-VN')}
+          </p>
+          <p className="text-2xs text-text-muted">Credit</p>
+        </div>
+      </div>
+      <ul className="divide-y divide-border text-sm">
+        {slices.map((slice, index) => (
           <li
-            key={slice.label}
-            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2"
+            key={index}
+            className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-2 ${index === activeIndex ? 'bg-surface-low' : ''}`}
+            onMouseEnter={() => setActiveIndex(index)}
+            onMouseLeave={() => setActiveIndex(null)}
           >
-            <span className="inline-flex items-center gap-2 text-text-primary">
+            <span className="inline-flex items-center gap-3 text-text-primary">
               <span
                 aria-hidden
                 className="size-3 shrink-0 rounded-full"
                 style={{ backgroundColor: slice.fill }}
               />
-              {slice.label}
+              <span>
+                <span className="block font-medium">{slice.label}</span>
+                {slice.detail ? <span className="block text-xs text-text-muted">{slice.detail}</span> : null}
+              </span>
             </span>
             <span className="tabular-nums text-text-secondary">
               {slice.value.toLocaleString('vi-VN')} Credit ·{' '}

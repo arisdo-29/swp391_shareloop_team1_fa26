@@ -16,12 +16,6 @@
   line-height: 1.45;
 }
 
-.admin-items-header button {
-  min-height: 38px;
-  padding-block: 6px;
-  border-radius: 8px;
-}
-
 .admin-items-stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

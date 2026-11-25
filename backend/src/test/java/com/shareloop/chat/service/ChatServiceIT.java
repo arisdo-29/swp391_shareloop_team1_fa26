@@ -8,9 +8,12 @@ import com.shareloop.chat.dto.MessageResponse;
 import com.shareloop.chat.dto.SendMessageRequest;
 import com.shareloop.chat.entity.MessageKind;
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.request.dto.ScheduleRequest;
+import com.shareloop.request.service.RequestService;
 import com.shareloop.support.IntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -29,6 +32,9 @@ class ChatServiceIT extends IntegrationTest {
 
     @Autowired
     ChatService chatService;
+
+    @Autowired
+    RequestService requestService;
 
     @Autowired
     JdbcTemplate jdbc;
@@ -175,6 +181,29 @@ class ChatServiceIT extends IntegrationTest {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(ChatErrorCode.CHAT_ITEM_NOT_APPROVED));
+    }
+
+    @Test
+    void updateSchedule_addsNoticeVisibleToBothParticipantsOnlyInThatChat() {
+        long donorId = insertUser();
+        long receiverId = insertUser();
+        long itemId = insertItem(donorId, "RESERVED");
+        long requestId = insertRequest(itemId, receiverId, "RESERVED");
+        long otherRequestId = insertRequest(insertItem(donorId, "RESERVED"), receiverId, "RESERVED");
+
+        requestService.updateSchedule(
+                requestId,
+                donorId,
+                new ScheduleRequest("IN_PERSON", "Cổng trường", Instant.now().plus(1, ChronoUnit.DAYS), true));
+
+        var messages = chatService.getMessages(requestId, receiverId, null);
+        assertThat(messages).singleElement().satisfies(message -> {
+            assertThat(message.kind()).isEqualTo(MessageKind.SCHEDULE_SET.name());
+            assertThat(message.senderId()).isEqualTo(donorId);
+            assertThat(message.content()).isEqualTo("Lịch hẹn đã được lưu");
+        });
+        assertThat(chatService.getMessages(requestId, donorId, null)).isEqualTo(messages);
+        assertThat(chatService.getMessages(otherRequestId, receiverId, null)).isEmpty();
     }
 
     // ---------- Tiện ích hỗ trợ test ----------

@@ -363,10 +363,8 @@ chuyện của giao dịch.
 |---|---|---|
 | `id` | number | ID tin nhắn |
 | `requestId` | number | ID yêu cầu giao dịch |
-| `senderId` | number? | ID người gửi tin; `null` với tin `SYSTEM` |
-| `kind` | string | `TEXT`, `IMAGE`, `ITEM_CARD`, `OFFER_CHANGE`, `SYSTEM` |
-
-Tin `SYSTEM` cũng được thêm khi giao dịch bị khiếu nại (nghe `DisputeOpenedEvent` của module report, xem `report.md`).
+| `senderId` | number? | ID người gửi tin hoặc người lưu lịch hẹn (`SCHEDULE_SET`). Tin `SYSTEM` có giá trị `null` |
+| `kind` | string | `TEXT`, `IMAGE`, `ITEM_CARD`, `OFFER_CHANGE`, `SCHEDULE_SET`, `SYSTEM` |
 | `content` | string? | Nội dung văn bản |
 | `mediaId` | number? | ID ảnh đính kèm (nếu `kind == IMAGE`) |
 | `refItemId` | number? | ID bài đăng đính kèm (`ITEM_CARD`) hoặc món đề nghị đổi (`OFFER_CHANGE`) |
@@ -375,6 +373,10 @@ Tin `SYSTEM` cũng được thêm khi giao dịch bị khiếu nại (nghe `Disp
 | `moderation` | string | `PASS` hoặc `BLOCKED` |
 | `blockedReason` | string? | Lý do nếu tin bị chặn |
 | `createdAt` | string | Thời điểm tạo ISO-8601 UTC |
+
+Tin `SYSTEM` cũng được thêm khi giao dịch bị khiếu nại (nghe `DisputeOpenedEvent` của module report, xem `report.md`).
+
+Tin `SCHEDULE_SET` do hệ thống ghi khi một bên lưu lịch hẹn qua `POST /api/v1/requests/{id}/schedule`. Cả hai bên đọc được thẻ trong luồng tin nhắn và có thể mở mục lịch giao nhận của giao dịch từ thẻ.
 
 ## Ảnh trong chat là ảnh riêng tư (D2)
 

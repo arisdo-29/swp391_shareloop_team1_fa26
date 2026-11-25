@@ -47,6 +47,7 @@ import com.shareloop.request.event.CancelRequestRejectedEvent;
 import com.shareloop.request.event.HandoverIssueReportedEvent;
 import com.shareloop.request.event.NotAsDescribedReportedEvent;
 import com.shareloop.request.event.RequestNegotiationEndedEvent;
+import com.shareloop.request.event.ScheduleSavedEvent;
 import com.shareloop.request.event.SilentCancelRequestReportedEvent;
 import com.shareloop.request.mapper.RequestMapper;
 import com.shareloop.request.repository.RequestMediaRepository;
@@ -2675,6 +2676,9 @@ public class RequestService {
 
         Request saved = requestRepository.save(request);
 
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new ScheduleSavedEvent(requestId, currentUserId));
+        }
         // Bắn thông báo cho bên còn lại
         long otherUserId = isDonor ? request.getReceiverId() : item.donorId();
         notificationService.notify(

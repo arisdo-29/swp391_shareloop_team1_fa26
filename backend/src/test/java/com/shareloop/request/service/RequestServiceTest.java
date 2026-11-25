@@ -39,6 +39,7 @@ import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.event.NotAsDescribedReportedEvent;
 import com.shareloop.request.event.RequestNegotiationEndedEvent;
+import com.shareloop.request.event.ScheduleSavedEvent;
 import com.shareloop.request.repository.RequestMediaRepository;
 import com.shareloop.request.repository.RequestRepository;
 import com.shareloop.setting.ConfigKey;
@@ -1379,6 +1380,7 @@ class RequestServiceTest {
         assertThat(response.meetingTime()).isEqualTo(meetingTime);
         assertThat(response.donorScheduleOkAt()).isNotNull();
         assertThat(response.receiverScheduleOkAt()).isNull();
+        verify(eventPublisher).publishEvent(new ScheduleSavedEvent(101L, 20L));
         verify(notificationService).notify(eq(10L), eq("SCHEDULE_UPDATED"), any(), any(), eq("/requests/101"));
     }
 
@@ -1402,6 +1404,7 @@ class RequestServiceTest {
         assertThat(response.status()).isEqualTo("AWAITING_LOGISTICS");
         assertThat(response.receiverScheduleOkAt()).isNotNull();
         assertThat(response.donorScheduleOkAt()).isNull();
+        verify(eventPublisher).publishEvent(new ScheduleSavedEvent(101L, 10L));
         verify(notificationService).notify(eq(20L), eq("SCHEDULE_UPDATED"), any(), any(), eq("/requests/101"));
     }
 
@@ -1422,6 +1425,7 @@ class RequestServiceTest {
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_SCHEDULE_PAST_TIME);
                 });
+        verify(eventPublisher, never()).publishEvent(any(ScheduleSavedEvent.class));
     }
 
     @Test
