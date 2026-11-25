@@ -8,6 +8,7 @@ const offerStatusLabels: Record<string, string> = {
 
 export const CHAT_DETAIL_REFRESH_EVERY = 6;
 export const CHAT_POLL_INTERVAL_MS = 5_000;
+export const SCHEDULE_SECTION_ID = 'lich-giao-nhan';
 
 export function mergeChatMessages(
   current: MessageResponse[],

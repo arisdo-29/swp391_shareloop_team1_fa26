@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import { Alert, Button, EmptyState, LoadingState, StatusBadge } from '../../components/ui';
@@ -40,7 +40,7 @@ import {
 import { canCancelTransaction, formatDeadline, requestStatusLabel } from '../../utils/request';
 import { transactionDisputeReasonLabel } from '../../utils/disputeView';
 import { DisputeResponseDialog } from '../../components/DisputeResponseDialog';
-import { requestConversationPath } from '../../utils/chatMessages';
+import { requestConversationPath, SCHEDULE_SECTION_ID } from '../../utils/chatMessages';
 import { useTransactionDetail } from './useTransactionDetail';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
@@ -83,6 +83,7 @@ function TransactionProgressView({
   currentUserId: number;
 }) {
   const navigate = useNavigate();
+  const { hash } = useLocation();
   const { request, offeredItem, loading, error, applyUpdate, reload } = useTransactionDetail(
     requestId,
     currentUserId,
@@ -94,6 +95,19 @@ function TransactionProgressView({
   const [notice, setNotice] = useState('');
   const [disputeReceipt, setDisputeReceipt] = useState<DisputeResponse | null>(null);
   const [respondingDispute, setRespondingDispute] = useState<RequestDispute | null>(null);
+  const loadedRequestId = request?.id;
+
+  useEffect(() => {
+    if (!loadedRequestId || hash !== `#${SCHEDULE_SECTION_ID}`) return;
+
+    // Chờ hiệu ứng cuộn về đầu trang của khung ứng dụng trước khi đến mục lịch hẹn.
+    const frame = window.requestAnimationFrame(() => {
+      const heading = document.getElementById(SCHEDULE_SECTION_ID);
+      heading?.focus({ preventScroll: true });
+      heading?.scrollIntoView?.({ block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [hash, loadedRequestId]);
 
   if (loading && !request) {
     return (

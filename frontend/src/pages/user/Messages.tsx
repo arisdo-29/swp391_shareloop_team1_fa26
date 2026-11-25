@@ -825,6 +825,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       side={messageSideForSender(selected, entry.senderId)}
                       progressPath={transactionProgressPath(selected.request.id)}
                       requestId={selected.request.id}
+                      scheduleActorName={entry.senderId === currentUserId ? 'Bạn' : selectedParticipantName}
                       onOpenItem={(itemId) => navigate(`/items/${itemId}`)}
                       offerActions={
                         offerChangeOpen && selectedAsDonor && entry.id === pendingOfferChange?.id

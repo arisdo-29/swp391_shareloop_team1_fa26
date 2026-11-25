@@ -271,6 +271,7 @@ Xem chi tiết thông tin của một yêu cầu giao dịch (F10, UC-26).
   - Thời gian hẹn phải ở tương lai.
   - Bên đề xuất được ghi nhận đồng ý và cam kết cho lịch mới. Hệ thống xoá thời điểm đồng ý và cam kết của bên còn lại.
   - Gửi thông báo `SCHEDULE_UPDATED` cho bên còn lại.
+  - Thêm một thẻ `SCHEDULE_SET` vào khung chat của giao dịch trong cùng lần lưu lịch.
 - **Thành công:** `200 OK`, trả về `RequestResponse`.
 - **Lỗi:**
   - `400 REQUEST_SCHEDULE_PAST_TIME`: Thời gian hẹn ở quá khứ.

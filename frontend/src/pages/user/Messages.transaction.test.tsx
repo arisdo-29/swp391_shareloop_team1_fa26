@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Provider } from 'react-redux';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -15,6 +15,7 @@ import {
 } from '../../services/requestApi';
 import type { User } from '../../types/domain';
 import { Messages } from './Messages';
+import { TransactionProgress } from './TransactionProgress';
 
 vi.mock('../../services/requestApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../services/requestApi')>()),
@@ -28,6 +29,7 @@ vi.mock('../../services/requestApi', async (importOriginal) => ({
     handoverFailed: vi.fn(),
     refuseHandover: vi.fn(),
     getContact: vi.fn(),
+    confirmLogistics: vi.fn(),
     select: vi.fn(),
   },
 }));
@@ -131,6 +133,7 @@ async function renderMessages(
       <MemoryRouter initialEntries={['/requests/101']}>
         <Routes>
           <Route path="/requests/:requestId" element={<Messages />} />
+          <Route path="/messages/:conversationId/progress" element={<TransactionProgress />} />
           <Route path="/items/:itemId" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>
@@ -160,6 +163,41 @@ describe('Trang Tin nhắn sau khi tách trang Tiến trình', () => {
     expect(screen.queryByLabelText('Tiến trình giao dịch')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Huỷ giao dịch' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Xem tiến trình' })).toBeTruthy();
+  });
+
+  it('mở thẻ lịch hẹn của đối phương và đi thẳng đến mục lịch giao nhận', async () => {
+    vi.mocked(chatApi.list).mockResolvedValueOnce([{
+      id: 1,
+      requestId: 101,
+      senderId: DONOR_ID,
+      kind: 'SCHEDULE_SET',
+      content: 'Lịch hẹn đã được lưu',
+      mediaId: null,
+      refItemId: null,
+      itemCard: null,
+      offerStatus: null,
+      moderation: 'PASS',
+      blockedReason: null,
+      createdAt: '2026-10-20T10:00:00Z',
+    }]);
+    await renderMessages(RECEIVER_ID, request({
+      status: 'AWAITING_LOGISTICS',
+      contactRevealedAt: undefined,
+      deliveryMethod: 'IN_PERSON',
+      meetingTime: new Date(Date.now() + 86_400_000).toISOString(),
+      meetingPlace: 'Cổng trường',
+    }));
+
+    const card = await screen.findByRole('link', { name: /Lịch hẹn đã được lưu.*Xem lịch hẹn/ });
+    expect(within(card).getByText(/An Chủ Bài đã lưu lịch hẹn/)).toBeTruthy();
+    expect(card.getAttribute('href')).toBe('/messages/101/progress#lich-giao-nhan');
+    await userEvent.setup().click(card);
+
+    const scheduleHeading = await screen.findByRole('heading', { name: 'Lịch giao nhận' });
+    await waitFor(() => expect(document.activeElement).toBe(scheduleHeading));
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+    expect(screen.getByRole('button', { name: 'Xác nhận lịch' })).toBeTruthy();
+    expect(requestApi.confirmLogistics).not.toHaveBeenCalled();
   });
 });
 
