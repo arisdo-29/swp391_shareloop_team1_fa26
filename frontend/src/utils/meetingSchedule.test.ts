@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  canConfirmMeetingSchedule,
   minimumMeetingTimeValue,
   parseLocalMeetingTime,
   scheduleApiErrorMessage,
   validateLocalMeetingTime,
   validateMeetingPlace,
+  validateStoredMeetingTime,
 } from './meetingSchedule';
 
 const now = new Date(2026, 9, 22, 10, 30, 0, 0);
@@ -27,35 +27,15 @@ describe('meetingSchedule', () => {
     expect(minimumMeetingTimeValue(new Date(2026, 9, 22, 10, 30, 45))).toBe('2026-10-22T10:31');
   });
 
-  it('khóa xác nhận khi thiếu địa điểm, chưa cam kết hoặc có thay đổi chưa lưu', () => {
-    const validInput = {
-      meetingPlace: 'Cổng trường FPT',
-      localMeetingTime: '2026-10-22T10:31',
-      storedMeetingTime: new Date(2026, 9, 22, 10, 31).toISOString(),
-      agreed: true,
-      hasUnsavedChanges: false,
-      now,
-    };
-
-    expect(canConfirmMeetingSchedule(validInput)).toBe(true);
-    expect(canConfirmMeetingSchedule({ ...validInput, meetingPlace: '   ' })).toBe(false);
-    expect(canConfirmMeetingSchedule({ ...validInput, agreed: false })).toBe(false);
-    expect(canConfirmMeetingSchedule({ ...validInput, hasUnsavedChanges: true })).toBe(false);
+  it('kiểm tra địa điểm trống và quá dài', () => {
+    expect(validateMeetingPlace('   ')).toBeTruthy();
     expect(validateMeetingPlace('x'.repeat(256))).toMatch(/255/);
   });
 
   it('tự hết hợp lệ khi thời gian thực vượt qua lịch đã chọn', () => {
-    const selectedTime = '2026-10-22T10:31';
-    const input = {
-      meetingPlace: 'Cổng trường FPT',
-      localMeetingTime: selectedTime,
-      storedMeetingTime: new Date(2026, 9, 22, 10, 31).toISOString(),
-      agreed: true,
-      hasUnsavedChanges: false,
-    };
-
-    expect(canConfirmMeetingSchedule({ ...input, now })).toBe(true);
-    expect(canConfirmMeetingSchedule({ ...input, now: new Date(2026, 9, 22, 10, 31) })).toBe(false);
+    const storedMeetingTime = new Date(2026, 9, 22, 10, 31).toISOString();
+    expect(validateStoredMeetingTime(storedMeetingTime, now)).toBeNull();
+    expect(validateStoredMeetingTime(storedMeetingTime, new Date(2026, 9, 22, 10, 31))).toMatch(/đã qua/);
   });
 
   it('hiển thị thông báo rõ ràng khi Backend từ chối validation thời gian', () => {

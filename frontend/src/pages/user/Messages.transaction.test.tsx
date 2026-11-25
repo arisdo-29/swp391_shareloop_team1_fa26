@@ -202,7 +202,7 @@ describe('Trang Tin nhắn sau khi tách trang Tiến trình', () => {
     const scheduleHeading = await screen.findByRole('heading', { name: 'Lịch giao nhận' });
     await waitFor(() => expect(document.activeElement).toBe(scheduleHeading));
     expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
-    expect(screen.getByRole('button', { name: 'Xác nhận lịch' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Đồng ý lịch hẹn này' })).toBeTruthy();
     expect(requestApi.confirmLogistics).not.toHaveBeenCalled();
   });
 });

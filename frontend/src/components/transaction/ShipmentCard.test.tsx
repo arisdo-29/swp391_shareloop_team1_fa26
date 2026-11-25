@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { requestApi, type RequestResponse } from '../../services/requestApi';
 import { shippingFailedConsequence, shippingLegs, shippingProgressSummary } from '../../utils/shipping';
+import { formatDeadline } from '../../utils/request';
 import { ShipmentCard } from './ShipmentCard';
 
 afterEach(() => {
@@ -110,6 +111,25 @@ describe('ShipmentCard Cho tặng', () => {
 });
 
 describe('ShipmentCard Trao đổi', () => {
+  it('hiện hạn xác nhận đã nhận từ máy chủ theo từng chiều', () => {
+    const leg1AutoReceiveAt = hoursFromNow(30);
+    const leg2AutoReceiveAt = hoursFromNow(54);
+    renderCard({
+      ...swapBase,
+      status: 'AWAITING_HANDOVER',
+      donorShippedAt: hoursFromNow(-10),
+      receiverShippedAt: hoursFromNow(-2),
+      leg1AutoReceiveAt,
+      leg2AutoReceiveAt,
+    }, true);
+    const sent = within(screen.getByTestId('shipment-leg-1'));
+    const received = within(screen.getByTestId('shipment-leg-2'));
+    expect(sent.getByText('Hạn xác nhận đã nhận')).toBeTruthy();
+    expect(sent.getByText(formatDeadline(leg1AutoReceiveAt))).toBeTruthy();
+    expect(received.getByText('Hạn xác nhận đã nhận')).toBeTruthy();
+    expect(received.getByText(formatDeadline(leg2AutoReceiveAt))).toBeTruthy();
+  });
+
   it('cả hai bên có hai khối, chiều chưa gửi chỉ bên gửi có nút Tôi đã gửi hàng', () => {
     renderCard(swapBase, true);
     expect(screen.getByText('Món bạn gửi')).toBeTruthy();

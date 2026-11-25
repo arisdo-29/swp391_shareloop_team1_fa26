@@ -269,16 +269,16 @@ describe('Nút theo trạng thái và vai', () => {
     expect(screen.queryByRole('button', { name: 'Hủy yêu cầu' })).toBeNull();
   });
 
-  it('chờ chốt lịch: hiện form lịch với Lưu lịch hẹn và Xác nhận lịch, chưa có số điện thoại', async () => {
+  it('chờ chốt lịch: chỉ hiện nút đồng ý, chưa có số điện thoại', async () => {
     // when
     await renderProgress(
       RECEIVER_ID,
-      request({ status: 'AWAITING_LOGISTICS', contactRevealedAt: undefined }),
+      request({ status: 'AWAITING_LOGISTICS', contactRevealedAt: undefined, deliveryMethod: 'IN_PERSON' }),
     );
 
     // then
-    expect(screen.getByRole('button', { name: 'Lưu lịch hẹn' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Xác nhận lịch' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Gửi lịch hẹn' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Đồng ý lịch hẹn này' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Xem số điện thoại' })).toBeNull();
   });
 

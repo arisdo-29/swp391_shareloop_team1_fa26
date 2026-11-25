@@ -72,33 +72,9 @@ export function validateStoredMeetingTime(value: string | undefined, now: Date):
   const meetingTime = new Date(value);
   if (Number.isNaN(meetingTime.getTime())) return 'Thời gian giao nhận không hợp lệ.';
   if (meetingTime.getTime() <= now.getTime()) {
-    return 'Thời gian giao nhận đã qua. Vui lòng chọn và lưu lại một thời gian mới.';
+    return 'Thời gian giao nhận đã qua. Vui lòng chọn và gửi lại thời gian mới.';
   }
   return null;
-}
-
-export function canConfirmMeetingSchedule({
-  meetingPlace,
-  localMeetingTime,
-  storedMeetingTime,
-  agreed,
-  hasUnsavedChanges,
-  now,
-}: {
-  meetingPlace: string;
-  localMeetingTime: string;
-  storedMeetingTime?: string;
-  agreed: boolean;
-  hasUnsavedChanges: boolean;
-  now: Date;
-}): boolean {
-  return Boolean(
-    agreed &&
-    !hasUnsavedChanges &&
-    !validateMeetingPlace(meetingPlace) &&
-    !validateLocalMeetingTime(localMeetingTime, now) &&
-    !validateStoredMeetingTime(storedMeetingTime, now),
-  );
 }
 
 export function hasConfirmedMeetingSchedule(scheduleOkAt?: string, waiverAt?: string): boolean {
