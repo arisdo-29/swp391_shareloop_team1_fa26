@@ -2,7 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { Pagination } from '../../components/Pagination';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Alert, Button, Field, Icon, ItemImage, PageHeader, Select, SkeletonRows, TextArea, type IconName } from '../../components/ui';
+import {
+  Alert,
+  Button,
+  Field,
+  Icon,
+  ItemImage,
+  PageHeader,
+  Select,
+  SkeletonRows,
+  TextArea,
+  type IconName,
+} from '../../components/ui';
 import { DashboardGrid, DashboardStatCard } from './AdminDashboardCards';
 import { formatDashboardCount, type DashboardCount } from './dashboardCount';
 import {
@@ -33,12 +44,18 @@ const cancellableStatuses: ItemRequestStatus[] = [
 ];
 
 // Giao dịch đã chọn người và chưa kết thúc, cùng nhóm "Giao dịch đang diễn ra" ở trang Tổng quan.
-const RUNNING_STATUSES: ItemRequestStatus[] = ['RESERVED', 'AWAITING_LOGISTICS', 'LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER'];
+const RUNNING_STATUSES: ItemRequestStatus[] = [
+  'RESERVED',
+  'AWAITING_LOGISTICS',
+  'LOGISTICS_CONFIRMED',
+  'AWAITING_HANDOVER',
+];
 
 // Màu trạng thái theo các trang Admin khác: hoàn tất xanh lá, đang chạy xanh dương, sự cố và huỷ đỏ, chờ phản hồi xám.
 function statusClass(status: ItemRequestStatus) {
   if (status === 'COMPLETED') return 'bg-success-soft text-success';
-  if (status === 'DISPUTED' || status === 'CANCELLED' || status === 'REJECTED') return 'bg-error-soft text-error';
+  if (status === 'DISPUTED' || status === 'CANCELLED' || status === 'REJECTED')
+    return 'bg-error-soft text-error';
   if (status === 'PENDING') return 'bg-surface-low text-text-muted';
   return 'bg-info-soft text-info';
 }
@@ -50,10 +67,17 @@ interface TransactionStats {
   cancelled: DashboardCount;
 }
 
-const EMPTY_STATS: TransactionStats = { total: null, running: null, completed: null, cancelled: null };
+const EMPTY_STATS: TransactionStats = {
+  total: null,
+  running: null,
+  completed: null,
+  cancelled: null,
+};
 
 const countRequests = (status?: ItemRequestStatus) =>
-  adminRequestApi.list({ ...(status ? { status } : {}), page: 0, size: 1 }).then((response) => response.totalElements);
+  adminRequestApi
+    .list({ ...(status ? { status } : {}), page: 0, size: 1 })
+    .then((response) => response.totalElements);
 
 // Ba bộ lọc nhanh cho giao dịch cần Admin xử lý.
 type QuickFilterKey = 'stuck' | 'pendingCancel' | 'sendOverdue';
@@ -119,8 +143,16 @@ export function AdminTransactions() {
     setPage(0);
   };
   const hasFilters = Boolean(
-    status || type || deliveryMethod || fromDate || toDate || queryInput.trim() || query
-    || stuckOnly || pendingCancelOnly || sendOverdueOnly,
+    status ||
+    type ||
+    deliveryMethod ||
+    fromDate ||
+    toDate ||
+    queryInput.trim() ||
+    query ||
+    stuckOnly ||
+    pendingCancelOnly ||
+    sendOverdueOnly,
   );
   const resetFilters = () => {
     setStatus('');
@@ -150,7 +182,12 @@ export function AdminTransactions() {
         });
     };
     load('total', countRequests());
-    load('running', Promise.all(RUNNING_STATUSES.map(countRequests)).then((totals) => totals.reduce((sum, value) => sum + value, 0)));
+    load(
+      'running',
+      Promise.all(RUNNING_STATUSES.map(countRequests)).then((totals) =>
+        totals.reduce((sum, value) => sum + value, 0),
+      ),
+    );
     load('completed', countRequests('COMPLETED'));
     load('cancelled', countRequests('CANCELLED'));
     return () => {
@@ -198,7 +235,11 @@ export function AdminTransactions() {
         ).then((entries) => {
           if (!active) return;
           setRowItems(
-            Object.fromEntries(entries.filter((entry): entry is readonly [number, RequestItems] => entry[1] !== null)),
+            Object.fromEntries(
+              entries.filter(
+                (entry): entry is readonly [number, RequestItems] => entry[1] !== null,
+              ),
+            ),
           );
         });
       })
@@ -243,7 +284,11 @@ export function AdminTransactions() {
           title="Giao dịch"
           description="Theo dõi mọi giao dịch và huỷ giao dịch bị kẹt: quá giờ hẹn mà chưa ai xác nhận bàn giao, hoặc một bên đang bị khoá tài khoản."
           action={
-            <Button variant="outline" disabled={loading} onClick={() => setReloadKey((current) => current + 1)}>
+            <Button
+              variant="outline"
+              disabled={loading}
+              onClick={() => setReloadKey((current) => current + 1)}
+            >
               Tải lại
             </Button>
           }
@@ -252,16 +297,43 @@ export function AdminTransactions() {
 
       <div className="admin-dash-vars" role="group" aria-label="Thống kê giao dịch">
         <DashboardGrid>
-          {([
-            { key: 'total', label: 'Tổng giao dịch', icon: 'transactions', note: 'Mọi giao dịch trong hệ thống.' },
-            { key: 'running', label: 'Đang diễn ra', icon: 'expiring', note: 'Đã chọn người nhận, chưa kết thúc.' },
-            { key: 'completed', label: 'Đã hoàn tất', icon: 'completed', note: 'Hai bên đã xác nhận giao nhận.' },
-            { key: 'cancelled', label: 'Đã hủy', icon: 'banned', note: 'Giao dịch đã bị hủy.' },
-          ] as const).map((card) => (
+          {(
+            [
+              {
+                key: 'total',
+                label: 'Tổng giao dịch',
+                icon: 'transactions',
+                accent: 'green',
+                note: 'Mọi giao dịch trong hệ thống.',
+              },
+              {
+                key: 'running',
+                label: 'Đang diễn ra',
+                icon: 'expiring',
+                accent: 'blue',
+                note: 'Đã chọn người nhận, chưa kết thúc.',
+              },
+              {
+                key: 'completed',
+                label: 'Đã hoàn tất',
+                icon: 'completed',
+                accent: 'green',
+                note: 'Hai bên đã xác nhận giao nhận.',
+              },
+              {
+                key: 'cancelled',
+                label: 'Đã hủy',
+                icon: 'banned',
+                accent: 'red',
+                note: 'Giao dịch đã bị hủy.',
+              },
+            ] as const
+          ).map((card) => (
             <DashboardStatCard
               key={card.key}
               variant="system"
               icon={card.icon}
+              accent={card.accent}
               label={card.label}
               value={formatDashboardCount(stats[card.key])}
               loading={stats[card.key] === null}
@@ -348,7 +420,9 @@ export function AdminTransactions() {
           />
         </div>
         <div className="admin-transactions-filter-search">
-          <label className="label" htmlFor="admin-transactions-search">Tìm theo tên bài hoặc tên người</label>
+          <label className="label" htmlFor="admin-transactions-search">
+            Tìm theo tên bài hoặc tên người
+          </label>
           <div className="admin-transactions-search-row">
             <input
               id="admin-transactions-search"
@@ -367,7 +441,11 @@ export function AdminTransactions() {
         </div>
       </form>
 
-      <div className="admin-transactions-quick" role="group" aria-labelledby="admin-transactions-quick-title">
+      <div
+        className="admin-transactions-quick"
+        role="group"
+        aria-labelledby="admin-transactions-quick-title"
+      >
         <p id="admin-transactions-quick-title" className="admin-transactions-quick-title">
           <Icon name="alert" weight="bold" />
           Giao dịch cần xử lý
@@ -453,7 +531,9 @@ export function AdminTransactions() {
         </div>
       ) : null}
 
-      {cancelling ? <CancelDialog row={cancelling} onClose={closeDialog} onDone={onCancelled} /> : null}
+      {cancelling ? (
+        <CancelDialog row={cancelling} onClose={closeDialog} onDone={onCancelled} />
+      ) : null}
     </section>
   );
 }
@@ -469,14 +549,30 @@ function TransactionItem({ item }: { item: AdminRequestItemInfo | null }) {
   const target = `/admin/items/${item.itemId}`;
   return (
     <div className="admin-transaction-item">
-      <Link to={target} aria-label={`Xem chi tiết ${item.title}`} className="admin-transaction-item-image">
-        <ItemImage src={item.imageUrl ?? undefined} alt={item.title} className="size-14 rounded-md object-cover" />
+      <Link
+        to={target}
+        aria-label={`Xem chi tiết ${item.title}`}
+        className="admin-transaction-item-image"
+      >
+        <ItemImage
+          src={item.imageUrl ?? undefined}
+          alt={item.title}
+          className="size-14 rounded-md object-cover"
+        />
       </Link>
       <div className="admin-transaction-item-content">
-        <Link to={target} className="admin-transaction-item-title font-semibold text-primary hover:underline" title={item.title}>
+        <Link
+          to={target}
+          className="admin-transaction-item-title font-semibold text-primary hover:underline"
+          title={item.title}
+        >
           {item.title}
         </Link>
-        <Link to={target} className="admin-transaction-item-detail" aria-label={`Xem đầy đủ ${item.title}`}>
+        <Link
+          to={target}
+          className="admin-transaction-item-detail"
+          aria-label={`Xem đầy đủ ${item.title}`}
+        >
           Xem chi tiết
         </Link>
       </div>
@@ -484,7 +580,15 @@ function TransactionItem({ item }: { item: AdminRequestItemInfo | null }) {
   );
 }
 
-function TransactionRow({ row, items, onCancel }: { row: AdminRequestRow; items?: RequestItems; onCancel: () => void }) {
+function TransactionRow({
+  row,
+  items,
+  onCancel,
+}: {
+  row: AdminRequestRow;
+  items?: RequestItems;
+  onCancel: () => void;
+}) {
   const mainItem: AdminRequestItemInfo = items?.item ?? {
     itemId: row.itemId,
     title: row.itemTitle,
@@ -498,9 +602,17 @@ function TransactionRow({ row, items, onCancel }: { row: AdminRequestRow; items?
       <td>
         <TransactionItem item={mainItem} />
       </td>
-      <td>{row.type === 'SWAP' ? <TransactionItem item={items?.offeredItem ?? null} /> : <span className="text-text-muted">—</span>}</td>
+      <td>
+        {row.type === 'SWAP' ? (
+          <TransactionItem item={items?.offeredItem ?? null} />
+        ) : (
+          <span className="text-text-muted">—</span>
+        )}
+      </td>
       <td className="admin-transaction-type-cell">
-        <span className={`admin-transaction-type ${row.type === 'SWAP' ? 'admin-transaction-type-swap' : 'admin-transaction-type-give'}`}>
+        <span
+          className={`admin-transaction-type ${row.type === 'SWAP' ? 'admin-transaction-type-swap' : 'admin-transaction-type-give'}`}
+        >
           {row.type === 'SWAP' ? 'Trao đổi' : 'Cho tặng'}
         </span>
       </td>
@@ -512,14 +624,18 @@ function TransactionRow({ row, items, onCancel }: { row: AdminRequestRow; items?
         >
           {requestStatusLabel[row.status]}
         </span>
-        {row.flagReason ? <p className="mt-1 max-w-56 text-xs font-semibold text-error">Bị kẹt: {row.flagReason}</p> : null}
+        {row.flagReason ? (
+          <p className="mt-1 max-w-56 text-xs font-semibold text-error">Bị kẹt: {row.flagReason}</p>
+        ) : null}
         {(row.labels ?? []).map((label) => (
           <p key={label} className="mt-1 max-w-56 text-xs font-semibold text-warning">
             {label}
           </p>
         ))}
       </td>
-      <td className="admin-transaction-delivery text-xs">{row.deliveryMethod ? deliveryMethodLabels[row.deliveryMethod] : '—'}</td>
+      <td className="admin-transaction-delivery text-xs">
+        {row.deliveryMethod ? deliveryMethodLabels[row.deliveryMethod] : '—'}
+      </td>
       <td className="admin-transaction-time text-xs">{formatDateTime(row.meetingTime)}</td>
       <td className="admin-transaction-actions">
         {cancellableStatuses.includes(row.status) ? (
@@ -572,8 +688,8 @@ export function CancelDialog({
   return (
     <Dialog title="Huỷ giao dịch" busy={busy} onClose={onClose}>
       <p className="mt-3 text-sm text-text-secondary">
-        {row.itemTitle || 'Bài đã xoá'}: {row.donorName || '—'} và {row.receiverName || '—'}. Bài đăng được mở lại, cả
-        hai bên nhận thông báo kèm lý do.
+        {row.itemTitle || 'Bài đã xoá'}: {row.donorName || '—'} và {row.receiverName || '—'}. Bài
+        đăng được mở lại, cả hai bên nhận thông báo kèm lý do.
       </p>
       <TextArea
         className="mt-4"
@@ -595,7 +711,11 @@ export function CancelDialog({
         <Button variant="outline" disabled={busy} onClick={onClose}>
           Đóng
         </Button>
-        <Button variant="danger" disabled={busy || trimmed.length < REASON_MIN} onClick={() => void submit()}>
+        <Button
+          variant="danger"
+          disabled={busy || trimmed.length < REASON_MIN}
+          onClick={() => void submit()}
+        >
           {busy ? 'Đang huỷ...' : 'Huỷ giao dịch'}
         </Button>
       </div>

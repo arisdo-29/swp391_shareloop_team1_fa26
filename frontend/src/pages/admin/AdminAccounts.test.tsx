@@ -227,12 +227,11 @@ describe('AdminAccounts', () => {
     await screen.findByText('Lan An');
     expect(screen.getByText('Tổng tài khoản').parentElement?.textContent).toContain('4');
     expect(
-      screen.getByText('Đang hoạt động', { selector: '.admin-accounts-stat p' }).parentElement
+      screen.getByText('Đang hoạt động', { selector: '.admin-dash-label' }).parentElement
         ?.textContent,
     ).toContain('2');
     expect(
-      screen.getByText('Đã khóa', { selector: '.admin-accounts-stat p' }).parentElement
-        ?.textContent,
+      screen.getByText('Đã khóa', { selector: '.admin-dash-label' }).parentElement?.textContent,
     ).toContain('1');
     expect(adminUserApi.list).toHaveBeenCalledWith({ page: 0, size: 1 });
     expect(adminUserApi.list).toHaveBeenCalledWith({ status: 'ACTIVE', page: 0, size: 1 });

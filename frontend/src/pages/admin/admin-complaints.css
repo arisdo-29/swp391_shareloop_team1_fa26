@@ -40,14 +40,14 @@
   max-height: clamp(380px, calc(100dvh - 330px), 720px);
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: auto;
   background: white;
 }
 
 .admin-complaints-table {
   width: 100%;
-  min-width: 0;
+  min-width: 1180px;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 0.75rem;
@@ -91,7 +91,7 @@
 
 .admin-complaints-table th,
 .admin-complaints-table td {
-  padding: 10px 8px;
+  padding: 8px;
   border-bottom: 1px solid var(--color-border);
   overflow-wrap: anywhere;
   vertical-align: middle;
@@ -111,13 +111,14 @@
 }
 
 .admin-complaints-table th:nth-child(1),
+.admin-complaints-table th:nth-child(7),
 .admin-complaints-table th:nth-child(8),
 .admin-complaints-table th:nth-child(9) {
   text-align: center;
 }
 
 .admin-complaints-table tbody tr {
-  min-height: 72px;
+  min-height: 64px;
   transition: background-color 160ms ease;
 }
 
@@ -149,7 +150,9 @@
 .admin-complaint-item-title:focus-visible,
 .admin-complaint-item-detail:focus-visible {
   border-radius: 6px;
-  box-shadow: 0 0 0 2px var(--color-primary-soft), 0 0 0 4px var(--color-primary);
+  box-shadow:
+    0 0 0 2px var(--color-primary-soft),
+    0 0 0 4px var(--color-primary);
 }
 
 .admin-complaint-item-title {
@@ -184,8 +187,8 @@
 }
 
 .admin-complaint-target-user > [aria-label] {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
 }
 
 .admin-complaint-target-name {
@@ -226,6 +229,7 @@ a.admin-complaint-target:hover .admin-complaint-target-name {
 .admin-complaints-time {
   color: var(--color-text-secondary);
   line-height: 1.45;
+  text-align: center;
 }
 
 .admin-complaints-status-cell,
@@ -309,10 +313,6 @@ a.admin-complaint-target:hover .admin-complaint-target-name {
 
 @media (max-width: 1279px) {
   .admin-complaints-table-wrap {
-    overflow-x: auto;
-  }
-
-  .admin-complaints-table {
-    min-width: 1180px;
+    max-height: clamp(380px, calc(100dvh - 300px), 720px);
   }
 }

@@ -35,6 +35,7 @@ import {
 } from '../../utils/disputeItemOutcomes';
 import { disputeReasonLabels } from '../../utils/disputeErrors';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
+import { DashboardGrid, DashboardStatCard, type DashboardAccent } from './AdminDashboardCards';
 import './admin-complaints.css';
 
 const statusLabels: Record<ReportStatus, string> = {
@@ -84,8 +85,57 @@ const statusTones: Record<ReportStatus, string> = {
   OPEN: 'bg-warning-soft text-warning',
   AWAITING_RESPONSE: 'bg-info-soft text-info',
   RESOLVED: 'bg-success-soft text-success',
-  DISMISSED: 'bg-surface-container text-text-secondary',
+  DISMISSED: 'bg-error-soft text-error',
 };
+
+type ComplaintStatisticKey = 'total' | ReportStatus;
+type ComplaintStatisticValue = number | null | 'error';
+
+const emptyStatistics: Record<ComplaintStatisticKey, ComplaintStatisticValue> = {
+  total: null,
+  OPEN: null,
+  AWAITING_RESPONSE: null,
+  RESOLVED: null,
+  DISMISSED: null,
+};
+
+const statisticCards: Array<{
+  key: ComplaintStatisticKey;
+  label: string;
+  note: string;
+  icon: 'complaints' | 'expiring' | 'lookup' | 'completed' | 'banned';
+  accent?: DashboardAccent;
+}> = [
+  { key: 'total', label: 'Tổng hồ sơ', note: 'Tất cả hồ sơ trong hệ thống.', icon: 'complaints' },
+  {
+    key: 'OPEN',
+    label: 'Chờ xử lý',
+    note: 'Hồ sơ đang chờ xem xét.',
+    icon: 'expiring',
+    accent: 'gold',
+  },
+  {
+    key: 'AWAITING_RESPONSE',
+    label: 'Chờ giải trình',
+    note: 'Hồ sơ đang chờ bên liên quan phản hồi.',
+    icon: 'lookup',
+    accent: 'blue',
+  },
+  {
+    key: 'RESOLVED',
+    label: 'Đã chấp thuận',
+    note: 'Hồ sơ đã được xác định có cơ sở.',
+    icon: 'completed',
+    accent: 'green',
+  },
+  {
+    key: 'DISMISSED',
+    label: 'Đã bác bỏ',
+    note: 'Hồ sơ đã được xác định không có cơ sở.',
+    icon: 'banned',
+    accent: 'red',
+  },
+];
 
 // Cùng kiểu StatusBadge trong ui.tsx nhưng theo bộ trạng thái của hồ sơ khiếu nại.
 function ReportStatusBadge({ status }: { status: ReportStatus }) {
@@ -163,7 +213,13 @@ function EvidenceImage({ reportId, evidence }: { reportId: number; evidence: Rep
       {failed || !evidence.available || !evidence.url ? (
         <p className="p-3 text-xs text-text-muted">Ảnh bằng chứng không còn khả dụng.</p>
       ) : source ? (
-        <a href={source} target="_blank" rel="noreferrer" title="Mở ảnh kích thước đầy đủ" className="block cursor-zoom-in">
+        <a
+          href={source}
+          target="_blank"
+          rel="noreferrer"
+          title="Mở ảnh kích thước đầy đủ"
+          className="block cursor-zoom-in"
+        >
           <img
             src={source}
             alt="Ảnh bằng chứng"
@@ -227,15 +283,23 @@ function ComplaintItem({
   const detailTarget = target ?? `/admin/items/${item.id}`;
   return (
     <div className={`admin-complaint-item ${compact ? 'admin-complaint-item-compact' : ''}`}>
-      <Link to={detailTarget} aria-label={`Xem chi tiết ${item.title}`} className="admin-complaint-item-image">
+      <Link
+        to={detailTarget}
+        aria-label={`Xem chi tiết ${item.title}`}
+        className="admin-complaint-item-image"
+      >
         <ItemImage
           src={item.imageUrl ?? undefined}
           alt={item.title}
-          className={`${compact ? 'size-12' : 'size-14'} rounded-md object-cover`}
+          className="size-14 rounded-md object-cover"
         />
       </Link>
       <div className="min-w-0">
-        <Link to={detailTarget} title={item.title} className="admin-complaint-item-title font-semibold text-primary hover:underline">
+        <Link
+          to={detailTarget}
+          title={item.title}
+          className="admin-complaint-item-title font-semibold text-primary hover:underline"
+        >
           {item.title}
         </Link>
         {!compact ? (
@@ -248,7 +312,11 @@ function ComplaintItem({
   );
 }
 
-function itemFromSummary(item: AdminItemRow | null, fallbackId?: number | null, fallbackTitle?: string | null) {
+function itemFromSummary(
+  item: AdminItemRow | null,
+  fallbackId?: number | null,
+  fallbackTitle?: string | null,
+) {
   if (item) return { id: item.id, title: item.title, imageUrl: item.imageUrl };
   if (fallbackId !== null && fallbackId !== undefined && fallbackTitle) {
     return { id: fallbackId, title: fallbackTitle, imageUrl: null };
@@ -288,14 +356,20 @@ function ComplaintTarget({
     const name = listReportedUser(report, enrichment);
     const content = (
       <>
-        <Avatar user={{ name, avatarInitials: avatarInitials(name), avatarUrl: undefined }} size="md" />
+        <Avatar
+          user={{ name, avatarInitials: avatarInitials(name), avatarUrl: undefined }}
+          size="md"
+        />
         <span className="admin-complaint-target-name" title={name}>
           {name}
         </span>
       </>
     );
     return userId !== null ? (
-      <Link to={`/admin/users/${userId}`} className="admin-complaint-target admin-complaint-target-user">
+      <Link
+        to={`/admin/users/${userId}`}
+        className="admin-complaint-target admin-complaint-target-user"
+      >
         {content}
       </Link>
     ) : (
@@ -318,6 +392,7 @@ export function AdminComplaints() {
   const [page, setPage] = useState(0);
   const [reload, setReload] = useState(0);
   useRealtimeRefresh(['NOTIFICATION'], () => setReload((value) => value + 1));
+  const [statistics, setStatistics] = useState(emptyStatistics);
   const [list, setList] = useState<AdminReportPage | null>(null);
   const [listEnrichment, setListEnrichment] = useState<Record<number, ComplaintListEnrichment>>({});
   const [listLoading, setListLoading] = useState(true);
@@ -343,6 +418,34 @@ export function AdminComplaints() {
   const submittingRef = useRef(false);
   const [notice, setNotice] = useState('');
   const [noticeTone, setNoticeTone] = useState<'success' | 'warning'>('success');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setStatistics(emptyStatistics);
+
+    const loadStatistic = (key: ComplaintStatisticKey, statisticStatus?: ReportStatus) => {
+      reportApi
+        .list({ page: 0, size: 1, status: statisticStatus }, controller.signal)
+        .then((result) => {
+          if (!controller.signal.aborted) {
+            setStatistics((current) => ({ ...current, [key]: result.totalElements }));
+          }
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            setStatistics((current) => ({ ...current, [key]: 'error' }));
+          }
+        });
+    };
+
+    loadStatistic('total');
+    loadStatistic('OPEN', 'OPEN');
+    loadStatistic('AWAITING_RESPONSE', 'AWAITING_RESPONSE');
+    loadStatistic('RESOLVED', 'RESOLVED');
+    loadStatistic('DISMISSED', 'DISMISSED');
+
+    return () => controller.abort();
+  }, [reload]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -384,7 +487,9 @@ export function AdminComplaints() {
           if (controller.signal.aborted) return;
           setListEnrichment(
             Object.fromEntries(
-              entries.filter((entry): entry is readonly [number, ComplaintListEnrichment] => entry !== null),
+              entries.filter(
+                (entry): entry is readonly [number, ComplaintListEnrichment] => entry !== null,
+              ),
             ),
           );
         });
@@ -599,6 +704,38 @@ export function AdminComplaints() {
           <Alert tone={noticeTone}>{notice}</Alert>
         </div>
       )}
+      <section className="admin-dash-vars" aria-label="Thống kê hồ sơ">
+        <DashboardGrid columns={5}>
+          {statisticCards.map((card) => {
+            const value = statistics[card.key];
+            return (
+              <DashboardStatCard
+                key={card.key}
+                icon={card.icon}
+                label={card.label}
+                value={
+                  typeof value === 'number'
+                    ? value.toLocaleString('vi-VN')
+                    : value === 'error'
+                      ? '—'
+                      : '...'
+                }
+                loading={value === null}
+                variant="task"
+                accent={card.accent}
+                pending={typeof value === 'number' && value > 0}
+                note={
+                  value === 'error'
+                    ? 'Chưa tải được số liệu.'
+                    : value === null
+                      ? 'Đang tải số liệu.'
+                      : card.note
+                }
+              />
+            );
+          })}
+        </DashboardGrid>
+      </section>
       <div className="admin-complaints-filters">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
@@ -667,7 +804,7 @@ export function AdminComplaints() {
                   <th>Lý do báo cáo</th>
                   <th>Ngày gửi</th>
                   <th>Trạng thái xử lý</th>
-                  <th>Xem chi tiết</th>
+                  <th>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -676,22 +813,31 @@ export function AdminComplaints() {
                   const relatedItem = itemFromSummary(
                     enrichment?.item ?? null,
                     enrichment?.detail?.relatedItemId ?? report.itemId,
-                    enrichment?.detail?.relatedItemTitle ?? (report.targetType === 'USER' ? null : report.targetName),
+                    enrichment?.detail?.relatedItemTitle ??
+                      (report.targetType === 'USER' ? null : report.targetName),
                   );
                   return (
                     <tr key={report.id}>
                       <td className="admin-complaints-code">{reportCode(report.id)}</td>
                       <td>
-                        <ComplaintTarget report={report} enrichment={enrichment} item={relatedItem} />
+                        <ComplaintTarget
+                          report={report}
+                          enrichment={enrichment}
+                          item={relatedItem}
+                        />
                       </td>
                       <td>{targetLabels[report.targetType]}</td>
                       <td>
-                        <span className="admin-complaints-person">{report.reporterName || 'Người dùng đã xóa'}</span>
+                        <span className="admin-complaints-person">
+                          {report.reporterName || 'Người dùng đã xóa'}
+                        </span>
                         {report.newReporterAccount ? (
                           <span className="admin-complaints-new-account">Tài khoản mới</span>
                         ) : null}
                       </td>
-                      <td className="admin-complaints-person">{listReportedUser(report, enrichment)}</td>
+                      <td className="admin-complaints-person">
+                        {listReportedUser(report, enrichment)}
+                      </td>
                       <td className="admin-complaints-reason" title={reportReasonLabel(report)}>
                         {reportReasonLabel(report)}
                       </td>
@@ -812,7 +958,10 @@ export function AdminComplaints() {
                 <div className="min-w-0">
                   <dt className="label">Người gửi</dt>
                   <dd className="break-words font-semibold">
-                    <Link to={`/admin/users/${detail.reporter.id}`} className="text-primary hover:underline">
+                    <Link
+                      to={`/admin/users/${detail.reporter.id}`}
+                      className="text-primary hover:underline"
+                    >
                       {detail.reporter.fullName ?? 'Người dùng'}
                     </Link>
                     {detail.report.newReporterAccount ? (
@@ -826,7 +975,10 @@ export function AdminComplaints() {
                   <dt className="label">Người bị báo cáo</dt>
                   <dd className="break-words font-semibold">
                     {detail.reportedUser ? (
-                      <Link to={`/admin/users/${detail.reportedUser.id}`} className="text-primary hover:underline">
+                      <Link
+                        to={`/admin/users/${detail.reportedUser.id}`}
+                        className="text-primary hover:underline"
+                      >
                         {reportedUserName(detail)}
                       </Link>
                     ) : (
@@ -838,7 +990,10 @@ export function AdminComplaints() {
                   <div className="min-w-0">
                     <dt className="label">Bài đăng liên quan</dt>
                     <dd className="break-words">
-                      <Link to={`/admin/items/${detail.relatedItemId}`} className="font-semibold text-primary hover:underline">
+                      <Link
+                        to={`/admin/items/${detail.relatedItemId}`}
+                        className="font-semibold text-primary hover:underline"
+                      >
                         {detail.relatedItemTitle ?? 'Xem bài đăng liên quan'}
                       </Link>
                     </dd>
@@ -848,7 +1003,10 @@ export function AdminComplaints() {
                   <div className="min-w-0">
                     <dt className="label">Giao dịch liên quan</dt>
                     <dd>
-                      <Link to={`/admin/transactions/${detail.report.requestId}`} className="font-semibold text-primary hover:underline">
+                      <Link
+                        to={`/admin/transactions/${detail.report.requestId}`}
+                        className="font-semibold text-primary hover:underline"
+                      >
                         Xem chi tiết giao dịch
                       </Link>
                     </dd>
@@ -861,18 +1019,29 @@ export function AdminComplaints() {
                     <div>
                       <h3 className="font-semibold">Bài đăng liên quan</h3>
                       <p className="text-xs text-text-secondary">
-                        {relatedRequestDetail?.type === 'SWAP' ? 'Hai món đồ trong giao dịch trao đổi' : 'Món đồ được cho tặng hoặc bị báo cáo'}
+                        {relatedRequestDetail?.type === 'SWAP'
+                          ? 'Hai món đồ trong giao dịch trao đổi'
+                          : 'Món đồ được cho tặng hoặc bị báo cáo'}
                       </p>
                     </div>
                     {detail.report.requestId !== null ? (
-                      <Link to={`/admin/transactions/${detail.report.requestId}`} className="admin-complaints-related-link">
+                      <Link
+                        to={`/admin/transactions/${detail.report.requestId}`}
+                        className="admin-complaints-related-link"
+                      >
                         Xem giao dịch
                       </Link>
                     ) : null}
                   </div>
-                  <div className={`admin-complaints-related-grid ${modalOfferedItem ? 'sm:grid-cols-2' : ''}`}>
+                  <div
+                    className={`admin-complaints-related-grid ${modalOfferedItem ? 'sm:grid-cols-2' : ''}`}
+                  >
                     <div className="admin-complaints-related-card">
-                      <p className="label">{relatedRequestDetail?.type === 'SWAP' ? 'Món đồ chủ bài' : 'Món đồ liên quan'}</p>
+                      <p className="label">
+                        {relatedRequestDetail?.type === 'SWAP'
+                          ? 'Món đồ chủ bài'
+                          : 'Món đồ liên quan'}
+                      </p>
                       <ComplaintItem item={modalMainItem} />
                     </div>
                     {modalOfferedItem ? (

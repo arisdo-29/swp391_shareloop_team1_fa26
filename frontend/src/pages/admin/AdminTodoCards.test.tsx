@@ -67,7 +67,7 @@ describe('AdminTodoCards', () => {
     expect(reconcileCard.getAttribute('href')).toBe('/admin/finance/topup-orders?needsReconcile=true');
     // Thẻ có việc nổi bật hơn thẻ bằng 0, mỗi việc giữ màu nhấn riêng.
     expect(reconcileCard.getAttribute('data-state')).toBe('pending');
-    expect(reconcileCard.className).toContain('admin-dash-card--green');
+    expect(reconcileCard.className).toContain('admin-dash-card--red');
     expect(anomalyCard.getAttribute('data-state')).toBe('idle');
     expect(reviewCard.className).toContain('admin-dash-card--gold');
     // Bài đang hiển thị đã chuyển sang nhóm Thống kê hệ thống.

@@ -8,6 +8,7 @@ import {
   DashboardGrid,
   DashboardSection,
   DashboardStatCard,
+  type DashboardAccent,
 } from './AdminDashboardCards';
 import { formatDashboardCount, type DashboardCount } from './dashboardCount';
 
@@ -51,12 +52,22 @@ export function AdminSystemStats() {
           if (active) setCounts((current) => ({ ...current, [key]: 'error' }));
         });
     };
-    load('users', adminUserApi.list({ page: 0, size: 1 }).then((page) => page.totalElements));
+    load(
+      'users',
+      adminUserApi.list({ page: 0, size: 1 }).then((page) => page.totalElements),
+    );
     // Bài đang hiện cho mọi người: đã duyệt và chưa bị ẩn.
-    load('visibleItems', adminItemApi.list({ status: 'APPROVED', active: true, page: 0, size: 1 }).then((page) => page.totalElements));
+    load(
+      'visibleItems',
+      adminItemApi
+        .list({ status: 'APPROVED', active: true, page: 0, size: 1 })
+        .then((page) => page.totalElements),
+    );
     load(
       'runningRequests',
-      Promise.all(RUNNING_REQUEST_STATUSES.map(countRequests)).then((totals) => totals.reduce((sum, value) => sum + value, 0)),
+      Promise.all(RUNNING_REQUEST_STATUSES.map(countRequests)).then((totals) =>
+        totals.reduce((sum, value) => sum + value, 0),
+      ),
     );
     load('completedRequests', countRequests('COMPLETED'));
     return () => {
@@ -64,21 +75,61 @@ export function AdminSystemStats() {
     };
   }, []);
 
-  const cards: Array<{ to: string; icon: IconName; label: string; count: DashboardCount; note: string }> = [
-    { to: '/admin/users', icon: 'users', label: 'Tổng tài khoản', count: counts.users, note: 'Tài khoản người dùng và quản trị.' },
-    { to: '/admin/items', icon: 'manageItems', label: 'Bài đang hiển thị', count: counts.visibleItems, note: 'Bài đã duyệt và chưa bị ẩn.' },
-    { to: '/admin/transactions', icon: 'transactions', label: 'Giao dịch đang diễn ra', count: counts.runningRequests, note: 'Đã chọn người nhận, chưa kết thúc.' },
-    { to: '/admin/transactions?status=COMPLETED', icon: 'completed', label: 'Giao dịch hoàn tất', count: counts.completedRequests, note: 'Hai bên đã xác nhận giao nhận.' },
+  const cards: Array<{
+    to: string;
+    icon: IconName;
+    label: string;
+    count: DashboardCount;
+    note: string;
+    accent: DashboardAccent;
+  }> = [
+    {
+      to: '/admin/users',
+      icon: 'users',
+      label: 'Tổng tài khoản',
+      count: counts.users,
+      note: 'Tài khoản người dùng và quản trị.',
+      accent: 'green',
+    },
+    {
+      to: '/admin/items',
+      icon: 'manageItems',
+      label: 'Bài đang hiển thị',
+      count: counts.visibleItems,
+      note: 'Bài đã duyệt và chưa bị ẩn.',
+      accent: 'green',
+    },
+    {
+      to: '/admin/transactions',
+      icon: 'transactions',
+      label: 'Giao dịch đang diễn ra',
+      count: counts.runningRequests,
+      note: 'Đã chọn người nhận, chưa kết thúc.',
+      accent: 'blue',
+    },
+    {
+      to: '/admin/transactions?status=COMPLETED',
+      icon: 'completed',
+      label: 'Giao dịch hoàn tất',
+      count: counts.completedRequests,
+      note: 'Hai bên đã xác nhận giao nhận.',
+      accent: 'green',
+    },
   ];
 
   return (
-    <DashboardSection id="admin-system-stats" title="Thống kê hệ thống" description="Quy mô tài khoản, bài đăng và giao dịch hiện tại.">
+    <DashboardSection
+      id="admin-system-stats"
+      title="Thống kê hệ thống"
+      description="Quy mô tài khoản, bài đăng và giao dịch hiện tại."
+    >
       <DashboardGrid>
         {cards.map((card) => (
           <DashboardStatCard
             key={card.label}
             to={card.to}
             icon={card.icon}
+            accent={card.accent}
             label={card.label}
             value={formatDashboardCount(card.count)}
             loading={card.count === null}

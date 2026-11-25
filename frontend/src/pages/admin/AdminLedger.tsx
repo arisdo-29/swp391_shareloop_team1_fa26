@@ -2,7 +2,15 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom';
 import { Dialog } from '../../components/Dialog';
 import { Pagination } from '../../components/Pagination';
-import { Alert, Button, Field, Icon, PageHeader, SearchField, Select, SkeletonRows } from '../../components/ui';
+import {
+  Alert,
+  Button,
+  Field,
+  PageHeader,
+  SearchField,
+  Select,
+  SkeletonRows,
+} from '../../components/ui';
 import {
   adminFinanceApi,
   type AdminLedgerFilters,
@@ -16,6 +24,7 @@ import { adminErrorMessage } from './adminErrors';
 import { ledgerTypeLabels } from './adminItemDisplay';
 import { AdminUserPicker } from './AdminUserPicker';
 import type { AdminLedgerRouteState, AdminLedgerViewState } from './adminLedgerNavigation';
+import { DashboardGrid, DashboardStatCard } from './AdminDashboardCards';
 import './admin-ledger.css';
 
 const PAGE_SIZE = 20;
@@ -87,7 +96,13 @@ function transactionContent(row: AdminLedgerRow): TransactionContent {
   }
 }
 
-function TransactionContentCell({ row, returnState }: { row: AdminLedgerRow; returnState: AdminLedgerViewState }) {
+function TransactionContentCell({
+  row,
+  returnState,
+}: {
+  row: AdminLedgerRow;
+  returnState: AdminLedgerViewState;
+}) {
   const content = transactionContent(row);
   const fullText = `${content.prefix}${content.detail ? `${content.separator}${content.detail}` : ''}`;
   const detail = content.detail ? (
@@ -95,7 +110,10 @@ function TransactionContentCell({ row, returnState }: { row: AdminLedgerRow; ret
       <Link
         className={`${content.code ? 'font-mono' : ''} font-semibold text-primary hover:underline`}
         to={content.to}
-        state={{ ledgerReturn: returnState, ...(row.orderCode ? { openTopUpOrder: row.orderCode } : {}) }}
+        state={{
+          ledgerReturn: returnState,
+          ...(row.orderCode ? { openTopUpOrder: row.orderCode } : {}),
+        }}
       >
         {content.detail}
       </Link>
@@ -119,9 +137,23 @@ function TransactionContentCell({ row, returnState }: { row: AdminLedgerRow; ret
   );
 }
 
-function DetailItem({ label, children, wide = false }: { label: string; children: ReactNode; wide?: boolean }) {
+function DetailItem({
+  label,
+  children,
+  wide = false,
+}: {
+  label: string;
+  children: ReactNode;
+  wide?: boolean;
+}) {
   return (
-    <div className={wide ? 'admin-ledger-detail-item admin-ledger-detail-item--wide' : 'admin-ledger-detail-item'}>
+    <div
+      className={
+        wide
+          ? 'admin-ledger-detail-item admin-ledger-detail-item--wide'
+          : 'admin-ledger-detail-item'
+      }
+    >
       <dt>{label}</dt>
       <dd>{children}</dd>
     </div>
@@ -152,8 +184,12 @@ function LedgerDetailDialog({
         <DetailItem label="Thời gian giao dịch">{formatDateTime(row.createdAt)}</DetailItem>
         {hasUser ? (
           <DetailItem label="Thông tin người dùng">
-            {row.userName ? <p className="font-semibold text-text-primary">{row.userName}</p> : null}
-            {row.userEmail ? <p className="break-all text-xs text-text-muted">{row.userEmail}</p> : null}
+            {row.userName ? (
+              <p className="font-semibold text-text-primary">{row.userName}</p>
+            ) : null}
+            {row.userEmail ? (
+              <p className="break-all text-xs text-text-muted">{row.userEmail}</p>
+            ) : null}
           </DetailItem>
         ) : null}
         <DetailItem label="Loại giao dịch">
@@ -162,7 +198,9 @@ function LedgerDetailDialog({
           </span>
         </DetailItem>
         <DetailItem label="Số Credit cộng hoặc trừ">
-          <span className={`font-bold tabular-nums ${row.amount >= 0 ? 'text-success' : 'text-error'}`}>
+          <span
+            className={`font-bold tabular-nums ${row.amount >= 0 ? 'text-success' : 'text-error'}`}
+          >
             {signed(row.amount)} Credit
           </span>
         </DetailItem>
@@ -308,7 +346,9 @@ export function AdminLedger() {
       .catch((caught) => {
         if (!active) return;
         setResult(null);
-        setError(adminErrorMessage(caught, 'Không tải được lịch sử giao dịch Credit. Vui lòng thử lại.'));
+        setError(
+          adminErrorMessage(caught, 'Không tải được lịch sử giao dịch Credit. Vui lòng thử lại.'),
+        );
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -342,7 +382,11 @@ export function AdminLedger() {
               <Button variant="outline" disabled={exporting} onClick={() => void exportCsv()}>
                 {exporting ? 'Đang xuất...' : 'Xuất CSV'}
               </Button>
-              <Button variant="outline" disabled={loading} onClick={() => setReloadKey((current) => current + 1)}>
+              <Button
+                variant="outline"
+                disabled={loading}
+                onClick={() => setReloadKey((current) => current + 1)}
+              >
                 Tải lại
               </Button>
             </div>
@@ -397,31 +441,33 @@ export function AdminLedger() {
       </div>
 
       {result ? (
-        <div className="admin-ledger-stats">
-          <div className="admin-ledger-stat admin-ledger-stat--in">
-            <span className="admin-ledger-stat-icon"><Icon name="topup" className="size-4" weight="bold" /></span>
-            <div>
-              <p className="admin-ledger-stat-label">Tổng Credit vào</p>
-              <p className="admin-ledger-stat-value">{signed(result.totalIn)} Credit</p>
-              <p className="admin-ledger-stat-context">Trong khoảng lọc hiện tại</p>
-            </div>
-          </div>
-          <div className="admin-ledger-stat admin-ledger-stat--out">
-            <span className="admin-ledger-stat-icon"><Icon name="ledger" className="size-4" weight="bold" /></span>
-            <div>
-              <p className="admin-ledger-stat-label">Tổng Credit ra</p>
-              <p className="admin-ledger-stat-value">{signed(result.totalOut)} Credit</p>
-              <p className="admin-ledger-stat-context">Trong khoảng lọc hiện tại</p>
-            </div>
-          </div>
-          <div className="admin-ledger-stat admin-ledger-stat--total">
-            <span className="admin-ledger-stat-icon"><Icon name="transactions" className="size-4" weight="bold" /></span>
-            <div>
-              <p className="admin-ledger-stat-label">Tổng giao dịch</p>
-              <p className="admin-ledger-stat-value">{result.totalElements}</p>
-              <p className="admin-ledger-stat-context">Trong khoảng lọc hiện tại</p>
-            </div>
-          </div>
+        <div className="admin-dash-vars" aria-label="Thống kê sổ Credit">
+          <DashboardGrid columns={3}>
+            <DashboardStatCard
+              variant="finance"
+              icon="topup"
+              accent="green"
+              label="Tổng Credit vào"
+              value={`${signed(result.totalIn)} Credit`}
+              note="Trong khoảng lọc hiện tại"
+            />
+            <DashboardStatCard
+              variant="finance"
+              icon="ledger"
+              accent="red"
+              label="Tổng Credit ra"
+              value={`${signed(result.totalOut)} Credit`}
+              note="Trong khoảng lọc hiện tại"
+            />
+            <DashboardStatCard
+              variant="finance"
+              icon="transactions"
+              accent="green"
+              label="Tổng giao dịch"
+              value={result.totalElements.toLocaleString('vi-VN')}
+              note="Trong khoảng lọc hiện tại"
+            />
+          </DashboardGrid>
         </div>
       ) : null}
 
@@ -456,8 +502,12 @@ export function AdminLedger() {
                   <tr key={row.id} className="admin-ledger-row">
                     <td className="admin-ledger-time">{formatDateTime(row.createdAt)}</td>
                     <td>
-                      <p className="truncate font-semibold text-text-primary">{row.userName || 'Người dùng đã xóa'}</p>
-                      {row.userEmail ? <p className="truncate text-xs text-text-muted">{row.userEmail}</p> : null}
+                      <p className="truncate font-semibold text-text-primary">
+                        {row.userName || 'Người dùng đã xóa'}
+                      </p>
+                      {row.userEmail ? (
+                        <p className="truncate text-xs text-text-muted">{row.userEmail}</p>
+                      ) : null}
                     </td>
                     <td>
                       <span className={`admin-ledger-type ${ledgerTypeClass(row.type)}`}>
@@ -469,7 +519,9 @@ export function AdminLedger() {
                     >
                       {signed(row.amount)}
                     </td>
-                    <td className="admin-ledger-balance">{row.balanceAfter.toLocaleString('vi-VN')}</td>
+                    <td className="admin-ledger-balance">
+                      {row.balanceAfter.toLocaleString('vi-VN')}
+                    </td>
                     <TransactionContentCell row={row} returnState={ledgerViewState} />
                     <td className="admin-ledger-note">
                       <div className="admin-ledger-note-content">

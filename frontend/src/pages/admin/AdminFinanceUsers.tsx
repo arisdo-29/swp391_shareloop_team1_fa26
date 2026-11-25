@@ -21,6 +21,7 @@ import {
 } from '../../utils/creditHistory';
 import { useDebouncedValue } from '../../utils/useDebouncedValue';
 import { adminErrorMessage } from './adminErrors';
+import { DashboardGrid, DashboardStatCard, type DashboardAccent } from './AdminDashboardCards';
 
 const USER_PAGE_SIZE = 20;
 // Admin không có danh sách bài của người dùng nên lịch sử không hiện tên món.
@@ -144,13 +145,28 @@ export function AdminFinanceUsers() {
   );
 }
 
-function BalanceCard({ label, value, hint }: { label: string; value: number; hint?: string }) {
+function BalanceCard({
+  label,
+  value,
+  hint,
+  icon,
+  accent,
+}: {
+  label: string;
+  value: number;
+  hint?: string;
+  icon: 'money' | 'expiring' | 'creditIn';
+  accent: DashboardAccent;
+}) {
   return (
-    <div className="rounded-lg bg-white p-4 ring-1 ring-border/80">
-      <p className="text-xs font-medium text-text-muted">{label}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums text-text-primary">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-text-muted">{hint}</p> : null}
-    </div>
+    <DashboardStatCard
+      variant="finance"
+      icon={icon}
+      accent={accent}
+      label={label}
+      value={value.toLocaleString('vi-VN')}
+      note={hint ?? ''}
+    />
   );
 }
 
@@ -258,11 +274,24 @@ export function AdminFinanceUserDetail() {
         </div>
       ) : null}
       {summary ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <BalanceCard label="Khả dụng" value={summary.availableCredit} />
-          <BalanceCard label="Đang giữ" value={summary.heldCredit} hint="Phí các bài chưa được duyệt" />
-          <BalanceCard label="Tổng Credit" value={summary.totalCredit} />
-          <BalanceCard label="Tổng đã nạp" value={summary.totalToppedUpCredit} />
+        <div className="admin-dash-vars">
+          <DashboardGrid>
+            <BalanceCard label="Khả dụng" value={summary.availableCredit} icon="money" accent="green" />
+            <BalanceCard
+              label="Đang giữ"
+              value={summary.heldCredit}
+              hint="Phí các bài chưa được duyệt"
+              icon="expiring"
+              accent="blue"
+            />
+            <BalanceCard label="Tổng Credit" value={summary.totalCredit} icon="money" accent="green" />
+            <BalanceCard
+              label="Tổng đã nạp"
+              value={summary.totalToppedUpCredit}
+              icon="creditIn"
+              accent="green"
+            />
+          </DashboardGrid>
         </div>
       ) : null}
       {historyError ? (

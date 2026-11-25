@@ -7,7 +7,8 @@ import './admin-dashboard.css';
 export type DashboardCardVariant = 'task' | 'system' | 'finance';
 
 /** Màu nhấn của thẻ. Thẻ việc dùng gold, blue, red, green; thẻ tài chính dùng cash, credit-in, credit-out. */
-export type DashboardAccent = 'gold' | 'blue' | 'red' | 'green' | 'cash' | 'credit-in' | 'credit-out';
+export type DashboardAccent =
+  'gold' | 'blue' | 'red' | 'green' | 'cash' | 'credit-in' | 'credit-out';
 
 /** Khung chung của một nhóm thẻ trên trang Tổng quan Admin. */
 export function DashboardSection({
@@ -27,7 +28,10 @@ export function DashboardSection({
   children: ReactNode;
 }) {
   return (
-    <section aria-labelledby={id} className={`admin-dash-section${panel ? ' admin-dash-panel' : ''}`}>
+    <section
+      aria-labelledby={id}
+      className={`admin-dash-section${panel ? ' admin-dash-panel' : ''}`}
+    >
       <div className="admin-dash-section-head">
         <div className="min-w-0">
           <h2 id={id}>{title}</h2>
@@ -41,7 +45,13 @@ export function DashboardSection({
 }
 
 /** Lưới thẻ: các thẻ cùng nhóm luôn bằng nhau và phủ kín chiều ngang. */
-export function DashboardGrid({ columns = 4, children }: { columns?: 3 | 4; children: ReactNode }) {
+export function DashboardGrid({
+  columns = 4,
+  children,
+}: {
+  columns?: 3 | 4 | 5 | 6;
+  children: ReactNode;
+}) {
   return <div className={`admin-dash-grid admin-dash-grid--${columns}`}>{children}</div>;
 }
 
@@ -60,6 +70,9 @@ export function DashboardStatCard({
   accent,
   pending = false,
   loading = false,
+  active = false,
+  onClick,
+  className = '',
 }: {
   /** Trang quản lý tương ứng. Bỏ trống thì thẻ chỉ hiển thị số, không bấm được. */
   to?: string;
@@ -72,6 +85,9 @@ export function DashboardStatCard({
   accent?: DashboardAccent;
   pending?: boolean;
   loading?: boolean;
+  active?: boolean;
+  onClick?: () => void;
+  className?: string;
 }) {
   const iconNode = (
     <span className="admin-dash-icon">
@@ -79,37 +95,39 @@ export function DashboardStatCard({
     </span>
   );
   const valueNode = (
-    <p className="admin-dash-value">
+    <strong className="admin-dash-value">
       {value}
       {unit ? <span className="admin-dash-unit">{unit}</span> : null}
-    </p>
+    </strong>
   );
   const cardProps = {
     'aria-busy': loading || undefined,
-    'data-state': variant === 'task' ? (pending ? 'pending' : 'idle') : undefined,
-    className: `admin-dash-card admin-dash-card--${variant}${accent ? ` admin-dash-card--${accent}` : ''}${to ? '' : ' admin-dash-card--static'}`,
+    'data-state': pending ? 'pending' : 'idle',
+    'data-active': active || undefined,
+    className: `admin-dash-card admin-dash-card--${variant}${accent ? ` admin-dash-card--${accent}` : ''}${to || onClick ? '' : ' admin-dash-card--static'}${className ? ` ${className}` : ''}`,
   };
   const content = (
     <>
-      {variant === 'task' ? (
-        <>
-          <div className="admin-dash-top">
-            {iconNode}
-            {valueNode}
-          </div>
-          <span className="admin-dash-label">{label}</span>
-        </>
-      ) : (
-        <>
-          <div className="admin-dash-top">
-            {iconNode}
-            <span className="admin-dash-label">{label}</span>
-          </div>
-          {valueNode}
-        </>
-      )}
+      <div className="admin-dash-top">
+        {iconNode}
+        {valueNode}
+      </div>
+      <p className="admin-dash-label">{label}</p>
       <p className="admin-dash-note">{note}</p>
     </>
   );
-  return to ? <Link to={to} {...cardProps}>{content}</Link> : <div {...cardProps}>{content}</div>;
+  if (to)
+    return (
+      <Link to={to} {...cardProps}>
+        {content}
+      </Link>
+    );
+  if (onClick) {
+    return (
+      <button type="button" aria-pressed={active} onClick={onClick} {...cardProps}>
+        {content}
+      </button>
+    );
+  }
+  return <div {...cardProps}>{content}</div>;
 }

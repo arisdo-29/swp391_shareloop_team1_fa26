@@ -24,6 +24,7 @@ import type { PageResponse } from '../../services/itemApi';
 import { userApi, type PublicProfileResponse } from '../../services/userApi';
 import { useDebouncedValue } from '../../utils/useDebouncedValue';
 import { adminErrorMessage } from './adminErrors';
+import { DashboardGrid, DashboardStatCard } from './AdminDashboardCards';
 import './admin-accounts.css';
 
 const PAGE_SIZE = 20;
@@ -190,10 +191,36 @@ export function AdminAccounts() {
         />
       </div>
 
-      <div className="admin-accounts-stats">
-        <AccountStat label="Tổng tài khoản" value={stats?.total} modifier="total" />
-        <AccountStat label="Đang hoạt động" value={stats?.active} modifier="active" />
-        <AccountStat label="Đã khóa" value={stats?.locked} modifier="locked" />
+      <div className="admin-dash-vars" aria-label="Thống kê tài khoản">
+        <DashboardGrid columns={3}>
+          <DashboardStatCard
+            variant="system"
+            icon="users"
+            label="Tổng tài khoản"
+            value={stats ? stats.total.toLocaleString('vi-VN') : '—'}
+            note="Toàn hệ thống"
+            loading={!stats}
+            accent="green"
+          />
+          <DashboardStatCard
+            variant="system"
+            icon="completed"
+            label="Đang hoạt động"
+            value={stats ? stats.active.toLocaleString('vi-VN') : '—'}
+            note="Toàn hệ thống"
+            loading={!stats}
+            accent="green"
+          />
+          <DashboardStatCard
+            variant="system"
+            icon="banned"
+            label="Đã khóa"
+            value={stats ? stats.locked.toLocaleString('vi-VN') : '—'}
+            note="Toàn hệ thống"
+            loading={!stats}
+            accent="red"
+          />
+        </DashboardGrid>
       </div>
 
       <div className="admin-accounts-filters">
@@ -386,24 +413,6 @@ export function AdminAccounts() {
         />
       ) : null}
     </section>
-  );
-}
-
-function AccountStat({
-  label,
-  value,
-  modifier,
-}: {
-  label: string;
-  value: number | undefined;
-  modifier: 'total' | 'active' | 'locked';
-}) {
-  return (
-    <div className={`admin-accounts-stat admin-accounts-stat--${modifier}`}>
-      <p>{label}</p>
-      <strong>{value === undefined ? '—' : value.toLocaleString('vi-VN')}</strong>
-      <span>Toàn hệ thống</span>
-    </div>
   );
 }
 

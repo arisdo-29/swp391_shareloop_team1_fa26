@@ -1,73 +1,125 @@
-/* Thẻ thống kê trang Danh mục (/admin/categories). Chỉ dùng các lớp admin-category-stat* nên không ảnh hưởng trang khác. */
-.admin-category-stats {
+[aria-label='Thống kê danh mục'] .admin-dash-card:nth-child(1) {
+  --accent: #527f9d;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, white);
+}
+
+[aria-label='Thống kê danh mục'] .admin-dash-card:nth-child(2) {
+  --accent: #176b4b;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, white);
+}
+
+[aria-label='Thống kê danh mục'] .admin-dash-card:nth-child(3) {
+  --accent: #bc4b4b;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, white);
+}
+
+[aria-label='Thống kê tiêu chí'] .admin-dash-card:nth-child(1) {
+  --accent: #527f9d;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, white);
+}
+
+[aria-label='Thống kê tiêu chí'] .admin-dash-card:nth-child(2) {
+  --accent: #176b4b;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, white);
+}
+
+[aria-label='Thống kê tiêu chí'] .admin-dash-card:nth-child(3) {
+  --accent: #bc4b4b;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, white);
+}
+
+[aria-label='Thống kê từ khóa'] .admin-dash-card:nth-child(1),
+[aria-label='Thống kê khu vực'] .admin-dash-card:nth-child(1) {
+  --accent: #527f9d;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, white);
+}
+
+[aria-label='Thống kê từ khóa'] .admin-dash-card:nth-child(2),
+[aria-label='Thống kê khu vực'] .admin-dash-card:nth-child(2) {
+  --accent: #176b4b;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, white);
+}
+
+[aria-label='Thống kê từ khóa'] .admin-dash-card:nth-child(3),
+[aria-label='Thống kê khu vực'] .admin-dash-card:nth-child(3) {
+  --accent: #bc4b4b;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, white);
+}
+
+.admin-keywords-page {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.admin-category-stat {
-  --stat-color: var(--color-primary);
-  display: flex;
   min-width: 0;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: white;
+  gap: 16px;
 }
 
-.admin-category-stat--total {
-  --stat-color: var(--color-primary);
+.admin-keywords-page > :first-child,
+.admin-keywords-page > .mb-4,
+.admin-keywords-page > .admin-keywords-test,
+.admin-keywords-page > .admin-keywords-filters,
+.admin-keywords-page > [aria-label='Thống kê từ khóa'] {
+  margin-bottom: 0;
 }
 
-.admin-category-stat--active {
-  --stat-color: var(--color-success);
+.admin-keywords-page [aria-label='Thống kê từ khóa'] .admin-dash-card {
+  min-height: 136px;
+  height: 136px;
 }
 
-.admin-category-stat--hidden {
-  --stat-color: var(--color-error);
+.admin-keywords-test textarea {
+  min-height: 76px !important;
+  height: 76px !important;
 }
 
-.admin-category-stat-icon {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--stat-color) 12%, white);
-  color: var(--stat-color);
+.admin-keywords-test button {
+  min-height: 36px;
+  padding: 6px 12px;
+  white-space: nowrap;
 }
 
-.admin-category-stat-icon svg {
-  width: 18px;
-  height: 18px;
+.admin-keywords-filters .input {
+  min-height: 40px;
+  height: 40px;
+  border-radius: 8px;
 }
 
-.admin-category-stat-label {
-  color: var(--color-text-muted);
+.admin-keywords-table {
+  min-width: 760px;
+}
+
+.admin-keywords-table tbody tr {
+  height: 60px;
+}
+
+.admin-keywords-table th,
+.admin-keywords-table td {
+  padding-block: 8px;
+  text-align: left;
+}
+
+.admin-keywords-table th:nth-child(3),
+.admin-keywords-table th:nth-child(5),
+.admin-keywords-table th:nth-child(6),
+.admin-keywords-table td:nth-child(3),
+.admin-keywords-table td:nth-child(5),
+.admin-keywords-table td:nth-child(6) {
+  text-align: center;
+}
+
+.admin-keywords-table td:nth-child(6) button {
+  min-height: 36px;
+  padding: 6px 10px;
   font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1.35;
+  white-space: nowrap;
 }
 
-.admin-category-stat-value {
-  display: block;
-  margin-top: 2px;
-  color: var(--stat-color);
-  font-size: 1.375rem;
-  font-weight: 800;
-  line-height: 1.2;
-  font-variant-numeric: tabular-nums;
+.admin-keywords-table tbody tr:hover .bg-success-soft {
+  background: var(--color-success-soft);
+  color: var(--color-success);
 }
 
-@media (min-width: 640px) {
-  .admin-category-stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+.admin-keywords-table tbody tr:hover .bg-surface-low {
+  background: var(--color-surface-low);
+  color: var(--color-text-muted);
 }
 
 /* Bảng Khu vực: dòng thấp hơn bảng mặc định, chỉ áp dụng cho bảng này. */

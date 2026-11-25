@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Alert, Button, EmptyState, ItemImage, PageHeader, SearchField, Select, SkeletonRows } from '../../components/ui';
+import {
+  Alert,
+  Button,
+  EmptyState,
+  ItemImage,
+  PageHeader,
+  SearchField,
+  Select,
+  SkeletonRows,
+} from '../../components/ui';
 import { StarRating } from '../../components/StarRating';
 import { Pagination } from '../../components/Pagination';
 import {
@@ -15,6 +24,7 @@ import { adminErrorMessage } from './adminErrors';
 import { displayModerationNote, displayRuleFlag, offerTypeLabels } from './moderationDisplay';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 import { useDebouncedValue } from '../../utils/useDebouncedValue';
+import { DashboardGrid, DashboardStatCard } from './AdminDashboardCards';
 import './admin-moderation.css';
 
 const QUEUE_SIZE = 20;
@@ -30,7 +40,11 @@ const riskSignalLabels: Record<ReviewRiskSignal, string> = {
 const RISK_SIGNALS = Object.keys(riskSignalLabels) as ReviewRiskSignal[];
 
 type StatValue = number | null | 'error';
-interface QueueStats { total: StatValue; give: StatValue; swap: StatValue }
+interface QueueStats {
+  total: StatValue;
+  give: StatValue;
+  swap: StatValue;
+}
 const EMPTY_STATS: QueueStats = { total: null, give: null, swap: null };
 
 /** Thông tin phụ của một bài lấy từ trang Quản lý bài đăng: hàng chờ duyệt không trả các trường này. */
@@ -105,12 +119,17 @@ export function AdminModerationList() {
 
   useEffect(() => {
     let active = true;
-    catalogApi.categories().then((result) => {
-      if (active) setCategories(result);
-    }).catch(() => {
-      if (active) setCategories([]);
-    });
-    return () => { active = false; };
+    catalogApi
+      .categories()
+      .then((result) => {
+        if (active) setCategories(result);
+      })
+      .catch(() => {
+        if (active) setCategories([]);
+      });
+    return () => {
+      active = false;
+    };
   }, [reloadKey]);
 
   useEffect(() => {
@@ -196,7 +215,11 @@ export function AdminModerationList() {
         if (!active) return;
         const next: Record<number, ItemExtra> = {};
         found.forEach((row, id) => {
-          next[id] = { categoryName: row.categoryName, ownerEmail: row.ownerEmail, offerType: row.offerType };
+          next[id] = {
+            categoryName: row.categoryName,
+            ownerEmail: row.ownerEmail,
+            offerType: row.offerType,
+          };
         });
         setExtras(next);
       })
@@ -220,7 +243,12 @@ export function AdminModerationList() {
           wanted,
           (lookupPage) =>
             adminModerationApi
-              .pendingReviews({ ...itemsFilters, risk: signal, page: lookupPage, size: LOOKUP_SIZE })
+              .pendingReviews({
+                ...itemsFilters,
+                risk: signal,
+                page: lookupPage,
+                size: LOOKUP_SIZE,
+              })
               .then((response) => ({ rows: response.items, total: response.totalElements })),
           (row) => row.id,
         ).then((found) => ({ signal, ids: [...found.keys()] })),
@@ -247,15 +275,23 @@ export function AdminModerationList() {
   return (
     <section className="admin-moderation-page">
       <div className="admin-moderation-header">
-        <PageHeader title="Duyệt bài" description="Danh sách bài đăng đang chờ kiểm duyệt."
-          action={<Link to="/admin/items" className="text-sm font-semibold text-primary hover:underline">Quản lý bài đăng</Link>}
+        <PageHeader
+          title="Duyệt bài"
+          description="Danh sách bài đăng đang chờ kiểm duyệt."
+          action={
+            <Link to="/admin/items" className="text-sm font-semibold text-primary hover:underline">
+              Quản lý bài đăng
+            </Link>
+          }
         />
       </div>
 
-      <div className="admin-moderation-stats" aria-label="Thống kê bài chờ duyệt">
-        <QueueStat modifier="total" label="Tổng bài chờ duyệt" value={stats.total} />
-        <QueueStat modifier="give" label="Bài cho tặng" value={stats.give} />
-        <QueueStat modifier="swap" label="Bài trao đổi" value={stats.swap} />
+      <div className="admin-dash-vars" aria-label="Thống kê bài chờ duyệt">
+        <DashboardGrid columns={3}>
+          <QueueStat modifier="total" label="Tổng bài chờ duyệt" value={stats.total} />
+          <QueueStat modifier="give" label="Bài cho tặng" value={stats.give} />
+          <QueueStat modifier="swap" label="Bài trao đổi" value={stats.swap} />
+        </DashboardGrid>
       </div>
 
       <div className="admin-moderation-filters">
@@ -271,22 +307,36 @@ export function AdminModerationList() {
             }}
           />
         </div>
-        <Select className="admin-moderation-filter-category" label="Danh mục" value={categoryId} onChange={(event) => {
-          setCategoryId(event.target.value);
-          setPage(0);
-        }}>
+        <Select
+          className="admin-moderation-filter-category"
+          label="Danh mục"
+          value={categoryId}
+          onChange={(event) => {
+            setCategoryId(event.target.value);
+            setPage(0);
+          }}
+        >
           <option value="">Tất cả danh mục</option>
           {categories.map((category) => (
-            <option key={category.id} value={category.id}>{category.name}</option>
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
           ))}
         </Select>
-        <Select className="admin-moderation-filter-risk" label="Dấu hiệu rủi ro" value={risk} onChange={(event) => {
-          setRisk(event.target.value as ReviewRiskSignal | '');
-          setPage(0);
-        }}>
+        <Select
+          className="admin-moderation-filter-risk"
+          label="Dấu hiệu rủi ro"
+          value={risk}
+          onChange={(event) => {
+            setRisk(event.target.value as ReviewRiskSignal | '');
+            setPage(0);
+          }}
+        >
           <option value="">Tất cả dấu hiệu</option>
           {RISK_SIGNALS.map((signal) => (
-            <option key={signal} value={signal}>{riskSignalLabels[signal]}</option>
+            <option key={signal} value={signal}>
+              {riskSignalLabels[signal]}
+            </option>
           ))}
         </Select>
         <Select
@@ -322,7 +372,9 @@ export function AdminModerationList() {
         <SkeletonRows label="Đang tải bài chờ duyệt" />
       ) : items.length ? (
         <div className="admin-moderation-table-section">
-          <p className="admin-moderation-count">{totalElements.toLocaleString('vi-VN')} bài đăng khớp bộ lọc</p>
+          <p className="admin-moderation-count">
+            {totalElements.toLocaleString('vi-VN')} bài đăng khớp bộ lọc
+          </p>
           <div className="table-wrap admin-moderation-table-wrap">
             <table className="data-table admin-moderation-table">
               <thead>
@@ -342,7 +394,7 @@ export function AdminModerationList() {
                     key={item.id}
                     item={item}
                     extra={extras[item.id]}
-                    signals={signals ? signals[item.id] ?? [] : null}
+                    signals={signals ? (signals[item.id] ?? []) : null}
                   />
                 ))}
               </tbody>
@@ -360,19 +412,38 @@ export function AdminModerationList() {
         />
       )}
       {totalElements > QUEUE_SIZE ? (
-        <Pagination page={page} size={QUEUE_SIZE} totalElements={totalElements} disabled={loading} onPageChange={setPage} />
+        <Pagination
+          page={page}
+          size={QUEUE_SIZE}
+          totalElements={totalElements}
+          disabled={loading}
+          onPageChange={setPage}
+        />
       ) : null}
     </section>
   );
 }
 
-function QueueStat({ label, value, modifier }: { label: string; value: StatValue; modifier: 'total' | 'give' | 'swap' }) {
+function QueueStat({
+  label,
+  value,
+  modifier,
+}: {
+  label: string;
+  value: StatValue;
+  modifier: 'total' | 'give' | 'swap';
+}) {
+  const icons = { total: 'moderation', give: 'manageItems', swap: 'transactions' } as const;
   return (
-    <div className={`admin-moderation-stat admin-moderation-stat--${modifier}`} aria-busy={value === null || undefined}>
-      <p>{label}</p>
-      <strong>{value === null ? '...' : value === 'error' ? '—' : value.toLocaleString('vi-VN')}</strong>
-      <span>{value === 'error' ? 'Chưa tải được số liệu' : 'Toàn hệ thống'}</span>
-    </div>
+    <DashboardStatCard
+      variant="system"
+      icon={icons[modifier]}
+      accent="gold"
+      label={label}
+      value={value === null ? '...' : value === 'error' ? '—' : value.toLocaleString('vi-VN')}
+      note={value === 'error' ? 'Chưa tải được số liệu' : 'Toàn hệ thống'}
+      loading={value === null}
+    />
   );
 }
 
@@ -399,9 +470,13 @@ function QueueRow({
             className="size-12 shrink-0 rounded-sm object-cover"
           />
           <div className="min-w-0">
-            <p className="admin-moderation-title" title={item.title}>{item.title}</p>
+            <p className="admin-moderation-title" title={item.title}>
+              {item.title}
+            </p>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-              {extra?.categoryName ? <span className="text-xs text-text-muted">{extra.categoryName}</span> : null}
+              {extra?.categoryName ? (
+                <span className="text-xs text-text-muted">{extra.categoryName}</span>
+              ) : null}
               {item.isEdited || (item.editCount != null && item.editCount > 0) ? (
                 <span className="rounded-sm bg-warning-soft px-1.5 py-0.5 text-2xs font-semibold text-warning">
                   {item.editCount ? `Đã chỉnh sửa (lần ${item.editCount})` : 'Đã chỉnh sửa'}
@@ -413,24 +488,44 @@ function QueueRow({
       </td>
       <td className="min-w-0">
         <p className="admin-moderation-owner-name">{item.donorName || 'Tài khoản đã xóa'}</p>
-        {extra?.ownerEmail ? <p className="admin-moderation-owner-email">{extra.ownerEmail}</p> : null}
+        {extra?.ownerEmail ? (
+          <p className="admin-moderation-owner-email">{extra.ownerEmail}</p>
+        ) : null}
       </td>
-      <td className="whitespace-nowrap text-center">{extra ? offerTypeLabels[extra.offerType] : '—'}</td>
       <td className="whitespace-nowrap text-center">
-        {item.donorTrustStars == null ? 'Chưa có dữ liệu' : <StarRating value={item.donorTrustStars} />}
+        {extra ? offerTypeLabels[extra.offerType] : '—'}
+      </td>
+      <td className="whitespace-nowrap text-center">
+        {item.donorTrustStars == null ? (
+          'Chưa có dữ liệu'
+        ) : (
+          <StarRating value={item.donorTrustStars} />
+        )}
       </td>
       <td>
         <div className="admin-moderation-risks">
-          {flag ? <span className="admin-moderation-risk admin-moderation-risk--flag">{flag}</span> : null}
+          {flag ? (
+            <span className="admin-moderation-risk admin-moderation-risk--flag">{flag}</span>
+          ) : null}
           {signals?.map((signal) => (
-            <span key={signal} className="admin-moderation-risk admin-moderation-risk--signal">{riskSignalLabels[signal]}</span>
+            <span key={signal} className="admin-moderation-risk admin-moderation-risk--signal">
+              {riskSignalLabels[signal]}
+            </span>
           ))}
-          {note && note !== flag ? <span className="admin-moderation-risk-note">{note}</span> : null}
-          {signals === null && !flag ? <span className="admin-moderation-risk-note">Đang kiểm tra...</span> : null}
-          {signals !== null && !hasRisk ? <span className="admin-moderation-risk-note">Không có</span> : null}
+          {note && note !== flag ? (
+            <span className="admin-moderation-risk-note">{note}</span>
+          ) : null}
+          {signals === null && !flag ? (
+            <span className="admin-moderation-risk-note">Đang kiểm tra...</span>
+          ) : null}
+          {signals !== null && !hasRisk ? (
+            <span className="admin-moderation-risk-note">Không có</span>
+          ) : null}
         </div>
       </td>
-      <td className="admin-moderation-time">{new Date(item.queuedAt ?? item.createdAt).toLocaleString('vi-VN')}</td>
+      <td className="admin-moderation-time">
+        {new Date(item.queuedAt ?? item.createdAt).toLocaleString('vi-VN')}
+      </td>
       <td>
         <div className="admin-moderation-actions">
           <Link to={`/admin/moderation/${item.id}`} className="admin-moderation-action">

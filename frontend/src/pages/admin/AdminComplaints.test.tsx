@@ -140,6 +140,36 @@ function rowValue(container: HTMLElement, label: string) {
 }
 
 describe('AdminComplaints', () => {
+  it('hiển thị thống kê từ tổng số hồ sơ của API, không đếm riêng trang hiện tại', async () => {
+    const totals = {
+      all: 41,
+      OPEN: 9,
+      AWAITING_RESPONSE: 7,
+      RESOLVED: 20,
+      DISMISSED: 5,
+    } as const;
+    vi.mocked(reportApi.list).mockImplementation(async (params = {}) => ({
+      items: [],
+      page: params.page ?? 0,
+      size: params.size ?? 20,
+      totalElements: totals[params.status ?? 'all'],
+      totalPages: 0,
+    }));
+
+    renderPage();
+
+    const statistics = screen.getByRole('region', { name: 'Thống kê hồ sơ' });
+    expect(await within(statistics).findByText('41')).toBeTruthy();
+    expect(within(statistics).getByText('9')).toBeTruthy();
+    expect(within(statistics).getByText('7')).toBeTruthy();
+    expect(within(statistics).getByText('20')).toBeTruthy();
+    expect(within(statistics).getByText('5')).toBeTruthy();
+    expect(reportApi.list).toHaveBeenCalledWith(
+      { page: 0, size: 1, status: 'DISMISSED' },
+      expect.any(AbortSignal),
+    );
+  });
+
   it('hiện danh sách dạng bảng với đúng bài liên quan và các cột quản trị', async () => {
     const value = detail({ status: 'OPEN' }, { ...pending });
     vi.mocked(reportApi.list).mockResolvedValue({
@@ -156,12 +186,15 @@ describe('AdminComplaints', () => {
     const table = await screen.findByRole('table', { name: 'Danh sách hồ sơ' });
     expect(within(table).getByRole('columnheader', { name: 'Mã hồ sơ' })).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Đối tượng báo cáo' })).toBeTruthy();
-    expect(within(table).getByRole('columnheader', { name: 'Loại khiếu nại/báo cáo' })).toBeTruthy();
+    expect(
+      within(table).getByRole('columnheader', { name: 'Loại khiếu nại/báo cáo' }),
+    ).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Người gửi báo cáo' })).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Lý do báo cáo' })).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Ngày gửi' })).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Trạng thái xử lý' })).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Người bị báo cáo' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Thao tác' })).toBeTruthy();
     expect(within(table).getByText('Báo cáo bài đăng')).toBeTruthy();
     expect(within(table).getByText('HS-7')).toBeTruthy();
     expect(await within(table).findByRole('img', { name: 'Bàn học gỗ' })).toBeTruthy();
@@ -454,13 +487,21 @@ describe('AdminComplaints kết luận từng món của giao dịch', () => {
     const { dialog } = await openPendingDetail(requestReport);
 
     expect(within(dialog).getByText(/Chi tiết hồ sơ HS-7/)).toBeTruthy();
-    expect(within(dialog).getByRole('link', { name: 'Nguyễn Văn An' }).getAttribute('href')).toBe('/admin/users/2');
-    expect(within(dialog).getByRole('link', { name: 'Trần Thị Bình' }).getAttribute('href')).toBe('/admin/users/3');
-    expect(within(dialog).getByRole('link', { name: 'Xem chi tiết giao dịch' }).getAttribute('href')).toBe(
-      '/admin/transactions/90',
+    expect(within(dialog).getByRole('link', { name: 'Nguyễn Văn An' }).getAttribute('href')).toBe(
+      '/admin/users/2',
     );
-    expect((await within(dialog).findByRole('link', { name: 'Máy ảnh' })).getAttribute('href')).toBe('/admin/items/5');
-    expect(within(dialog).getByRole('link', { name: 'Mũ bảo hiểm' }).getAttribute('href')).toBe('/admin/items/6');
+    expect(within(dialog).getByRole('link', { name: 'Trần Thị Bình' }).getAttribute('href')).toBe(
+      '/admin/users/3',
+    );
+    expect(
+      within(dialog).getByRole('link', { name: 'Xem chi tiết giao dịch' }).getAttribute('href'),
+    ).toBe('/admin/transactions/90');
+    expect(
+      (await within(dialog).findByRole('link', { name: 'Máy ảnh' })).getAttribute('href'),
+    ).toBe('/admin/items/5');
+    expect(within(dialog).getByRole('link', { name: 'Mũ bảo hiểm' }).getAttribute('href')).toBe(
+      '/admin/items/6',
+    );
   });
 
   it('mặc định món của bên vi phạm là Ẩn, món bên kia là Mở lại, và gửi đủ mọi món khi chấp thuận', async () => {
