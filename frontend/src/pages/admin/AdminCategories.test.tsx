@@ -120,4 +120,30 @@ describe('ApiAdminCategories', () => {
     );
     await waitFor(() => expect(names()).toEqual(['Đồ điện tử', 'Quần áo', '10', 'Nội thất']));
   });
+
+  it('ba thẻ thống kê đếm từ dữ liệu API và tự cập nhật sau khi kích hoạt hoặc thêm danh mục', async () => {
+    const user = userEvent.setup();
+    const hidden = { ...category(3, 'Sách', 3), active: false };
+    vi.mocked(adminCategoryApi.list).mockResolvedValue([...unsorted, hidden]);
+    vi.mocked(adminCategoryApi.setActive).mockResolvedValue({ ...hidden, active: true });
+    vi.mocked(adminCategoryApi.create).mockResolvedValue(category(9, 'Nội thất', 27));
+    render(<ApiAdminCategories />);
+    await screen.findByText('Đồ điện tử');
+
+    const stats = screen.getByLabelText('Thống kê danh mục');
+    const value = (label: string) => within(stats).getByText(label).parentElement?.querySelector('strong')?.textContent;
+    expect(value('Tổng danh mục')).toBe('4');
+    expect(value('Đang sử dụng')).toBe('3');
+    expect(value('Đã tạm ẩn')).toBe('1');
+
+    await user.click(screen.getByRole('button', { name: 'Kích hoạt' }));
+    await waitFor(() => expect(value('Đã tạm ẩn')).toBe('0'));
+    expect(value('Đang sử dụng')).toBe('4');
+
+    await user.click(screen.getByRole('button', { name: 'Thêm danh mục' }));
+    await user.type(screen.getByRole('textbox', { name: 'Tên danh mục' }), 'Nội thất');
+    await user.click(screen.getByRole('button', { name: 'Lưu' }));
+    await waitFor(() => expect(value('Tổng danh mục')).toBe('5'));
+    expect(value('Đang sử dụng')).toBe('5');
+  });
 });

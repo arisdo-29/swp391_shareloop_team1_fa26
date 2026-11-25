@@ -52,6 +52,8 @@ import { ArrowCircleUp } from '@phosphor-icons/react/dist/csr/ArrowCircleUp';
 import { ArrowCircleDown } from '@phosphor-icons/react/dist/csr/ArrowCircleDown';
 import { CheckCircle } from '@phosphor-icons/react/dist/csr/CheckCircle';
 import { Scales } from '@phosphor-icons/react/dist/csr/Scales';
+import { ArrowUp } from '@phosphor-icons/react/dist/csr/ArrowUp';
+import { ArrowDown } from '@phosphor-icons/react/dist/csr/ArrowDown';
 import { Link } from 'react-router-dom';
 import type {
   Item,
@@ -115,6 +117,9 @@ const iconMap = {
   creditOut: ArrowCircleDown,
   completed: CheckCircle,
   reconcile: Scales,
+  // Nút chỉ có icon để đổi thứ tự (luôn kèm aria-label và tooltip).
+  arrowUp: ArrowUp,
+  arrowDown: ArrowDown,
 } as const;
 
 export type IconName = keyof typeof iconMap;
