@@ -120,6 +120,26 @@ describe('AdminAccounts', () => {
     expect(within(rowOf('Chi Bị Cấm')).queryByRole('button', { name: /khóa/i })).toBeNull();
   });
 
+  it('quản trị viên hiện "Không sử dụng Credit" và "Không đánh giá" thay dấu gạch, người dùng giữ số liệu', async () => {
+    renderPage();
+    await screen.findByText('Quản trị Minh');
+
+    const adminRow = rowOf('Quản trị Minh');
+    const credit = within(adminRow).getByText('Không sử dụng Credit');
+    const reputation = within(adminRow).getByText('Không đánh giá');
+    expect(credit.className).toContain('admin-accounts-not-applicable');
+    expect(reputation.className).toContain('admin-accounts-not-applicable');
+    expect(credit.closest('td')!.className).toContain('admin-accounts-credit');
+    expect(reputation.closest('td')!.className).toContain('admin-accounts-reputation');
+    expect(within(adminRow).queryByText('—')).toBeNull();
+
+    // Người dùng thông thường vẫn hiện số dư thật, không bị gắn nhãn của quản trị viên.
+    const userRow = rowOf('Lan An');
+    expect(await within(userRow).findByText('25 Credit')).toBeTruthy();
+    expect(within(userRow).queryByText('Không sử dụng Credit')).toBeNull();
+    expect(within(userRow).queryByText('Không đánh giá')).toBeNull();
+  });
+
   it('khóa tài khoản phải nhập lý do rồi gọi API và tải lại danh sách', async () => {
     const user = userEvent.setup();
     vi.mocked(adminFinanceApi.setLocked).mockResolvedValue(undefined);

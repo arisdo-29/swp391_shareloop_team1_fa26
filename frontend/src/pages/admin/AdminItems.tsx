@@ -54,6 +54,17 @@ const EMPTY_STATS: ItemStats = {
   hidden: null,
 };
 
+
+/**
+ * Phí đăng của bài lấy đúng trường postFeePaid của API: tổng phí POST_FEE đã ghi sổ cái, theo mức phí lúc đăng nên
+ * đổi cấu hình phí không làm đổi phí của bài cũ. Giá trị 0 là dữ liệu thật và hiện "0 Credit"; chỉ khi API không
+ * trả trường này (null hoặc thiếu) mới là chưa có thông tin. Không suy phí từ loại bài hay từ cấu hình hiện tại.
+ */
+function formatPostFee(fee: number | null | undefined) {
+  if (fee === null || fee === undefined || !Number.isFinite(fee)) return 'Chưa có thông tin';
+  return `${fee.toLocaleString('vi-VN')} Credit`;
+}
+
 function statusClass(status: ItemStatus) {
   if (status === 'PENDING_REVIEW') return 'bg-warning-soft text-warning';
   if (status === 'APPROVED') return 'bg-success-soft text-success';
@@ -352,7 +363,7 @@ export function AdminItems() {
                   <th>Chủ bài</th>
                   <th className="text-center">Hình thức</th>
                   <th>Trạng thái</th>
-                  <th className="text-right">Phí đăng</th>
+                  <th className="text-center">Phí đăng</th>
                   <th className="text-center">Yêu cầu chờ</th>
                   <th>Thời gian</th>
                   <th className="text-center">Thao tác</th>
@@ -511,8 +522,12 @@ function ItemRow({
           ) : null}
         </div>
       </td>
-      <td className="whitespace-nowrap text-right tabular-nums">
-        {row.postFeePaid > 0 ? `${row.postFeePaid} Credit` : '—'}
+      <td className="admin-items-fee">
+        <span className="admin-items-fee-value">{formatPostFee(row.postFeePaid)}</span>
+        {/* Chỉ bài đang chờ duyệt mà có phí lớn hơn 0 mới kèm ghi chú; phí 0 và bài đã duyệt chỉ hiện số. */}
+        {row.status === 'PENDING_REVIEW' && typeof row.postFeePaid === 'number' && row.postFeePaid > 0 ? (
+          <span className="admin-items-fee-note">Thu khi bài được duyệt</span>
+        ) : null}
       </td>
       <td className="text-center tabular-nums">{row.pendingRequestCount}</td>
       <td className="admin-items-time">

@@ -69,6 +69,46 @@ afterEach(() => {
 });
 
 describe('AdminItems', () => {
+  it('cột Phí đăng hiện đúng phí từ API: 0 là "0 Credit" kể cả bài chờ duyệt, chỉ thiếu dữ liệu mới là chưa có thông tin', async () => {
+    vi.mocked(adminItemApi.list).mockResolvedValue({
+      items: [
+        ...items,
+        row({ id: 7, title: 'Máy ảnh cũ', offerType: 'SWAP', postFeePaid: 1200 }),
+        row({ id: 8, title: 'Áo khoác', offerType: 'SWAP', postFeePaid: 0 }),
+        // Cùng là bài Cho tặng: phí lịch sử 3 Credit vẫn giữ nguyên, không bị ghi đè bằng mức phí khác.
+        row({ id: 9, title: 'Nồi cơm cũ', offerType: 'GIVE', postFeePaid: 3 }),
+        row({ id: 10, title: 'Bút bi', postFeePaid: null as unknown as number }),
+        row({ id: 11, title: 'Loa cũ', offerType: 'SWAP', status: 'PENDING_REVIEW', postFeePaid: 15 }),
+      ],
+      page: 0,
+      size: 20,
+      totalElements: items.length + 5,
+    });
+    renderPage();
+
+    const rowOf = async (title: string) => (await screen.findByText(title)).closest('tr')!;
+    // Phí do API trả theo từng bài, không suy ra từ loại Cho tặng hay Trao đổi.
+    expect(within(await rowOf('Xe đạp cũ')).getByText('0 Credit')).toBeTruthy();
+    expect(within(await rowOf('Áo khoác')).getByText('0 Credit')).toBeTruthy();
+    expect(within(await rowOf('Sách giáo khoa')).getByText('5 Credit')).toBeTruthy();
+    expect(within(await rowOf('Máy ảnh cũ')).getByText('1.200 Credit')).toBeTruthy();
+    expect(within(await rowOf('Nồi cơm cũ')).getByText('3 Credit')).toBeTruthy();
+    // Bài chờ duyệt có phí 0: chỉ hiện "0 Credit", không kèm ghi chú, không thành "Chưa có thông tin".
+    const pendingFree = await rowOf('Ghế gỗ');
+    expect(within(pendingFree).getByText('0 Credit')).toBeTruthy();
+    expect(within(pendingFree).queryByText('Chưa có thông tin')).toBeNull();
+    expect(within(pendingFree).queryByText('Thu khi bài được duyệt')).toBeNull();
+    // Bài chờ duyệt có phí lớn hơn 0: số Credit kèm ghi chú.
+    const pendingPaid = await rowOf('Loa cũ');
+    expect(within(pendingPaid).getByText('15 Credit')).toBeTruthy();
+    expect(within(pendingPaid).getByText('Thu khi bài được duyệt')).toBeTruthy();
+    // Bài đã duyệt: chỉ hiện phí đã áp dụng.
+    expect(within(await rowOf('Sách giáo khoa')).queryByText('Thu khi bài được duyệt')).toBeNull();
+    expect(screen.getAllByText('Thu khi bài được duyệt')).toHaveLength(1);
+    expect(within(await rowOf('Bút bi')).getByText('Chưa có thông tin')).toBeTruthy();
+    expect(within(await rowOf('Xe đạp cũ')).queryByText('—')).toBeNull();
+  });
+
   it('mở trang là tải mọi bài ở mọi trạng thái', async () => {
     renderPage();
 

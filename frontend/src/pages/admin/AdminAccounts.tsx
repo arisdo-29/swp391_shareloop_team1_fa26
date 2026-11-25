@@ -327,15 +327,24 @@ export function AdminAccounts() {
                       </td>
                       <td>{account.phone || '—'}</td>
                       <td>{roleLabels[account.role]}</td>
+                      {/* Quản trị viên không có ví Credit và không được đánh giá uy tín: ghi rõ thay cho dấu gạch. */}
                       <td className="admin-accounts-credit">
-                        {data?.wallet
-                          ? `${data.wallet.totalCredit.toLocaleString('vi-VN')} Credit`
-                          : '—'}
+                        {account.role === 'ADMIN' ? (
+                          <span className="admin-accounts-not-applicable">Không sử dụng Credit</span>
+                        ) : data?.wallet ? (
+                          `${data.wallet.totalCredit.toLocaleString('vi-VN')} Credit`
+                        ) : (
+                          '—'
+                        )}
                       </td>
                       <td className="admin-accounts-reputation">
-                        {data?.profile
-                          ? `${data.profile.trustStars.toLocaleString('vi-VN')} sao`
-                          : '—'}
+                        {account.role === 'ADMIN' ? (
+                          <span className="admin-accounts-not-applicable">Không đánh giá</span>
+                        ) : data?.profile ? (
+                          `${data.profile.trustStars.toLocaleString('vi-VN')} sao`
+                        ) : (
+                          '—'
+                        )}
                       </td>
                       <td>
                         <span className={`admin-accounts-state ${stateBadgeClass(account.status)}`}>
