@@ -39,7 +39,14 @@ public enum ActivityType {
     AUTH_REJECT("Từ chối nhãn chính hãng"),
     AUTH_REVOKE("Thu hồi nhãn chính hãng"),
     GRACE_STAR("Cấp sao ân hạn"),
-    STAR_RESTORED("Tự hồi sao");
+    STAR_RESTORED("Tự hồi sao"),
+    ADMIN_TOPUP_RECONCILED("Đối soát đơn nạp tiền"),
+    ADMIN_ITEM_HIDDEN("Admin ẩn bài đăng"),
+    ADMIN_ITEM_UNHIDDEN("Admin hiện lại bài đăng"),
+    ITEM_EDIT_SUBMITTED("Gửi bản sửa để duyệt"),
+    ADMIN_VIEWED_CHAT("Admin xem tin nhắn giao dịch"),
+    ITEM_DISPLAY_COMPENSATED("Cộng bù thời gian hiển thị"),
+    POINTS_REVOKED("Thu hồi điểm");
 
     private final String label;
 

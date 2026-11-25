@@ -94,6 +94,21 @@ class RequestCancelTransactionTest {
     }
 
     @Test
+    @DisplayName("Lý do huỷ dài 500 ký tự vẫn được lưu đủ, không bị cắt (E2)")
+    void cancelTransaction_whenReasonIs500Chars_storesWholeReason() {
+        // given
+        Request request = requestInStatus(RequestStatus.AWAITING_LOGISTICS, null);
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+        String reason = "b".repeat(500);
+
+        // when
+        requestService.cancelTransaction(REQUEST_ID, DONOR_ID, new CancelTransactionRequest(reason));
+
+        // then
+        assertThat(request.getCancelReason()).isEqualTo("[Chủ bài] " + reason);
+    }
+
+    @Test
     @DisplayName("Chủ bài huỷ giao dịch: Request CANCELLED, lý do có tiền tố, thông báo người nhận, ghi activity log")
     void cancelTransaction_whenDonorCancels_cancelsNotifiesAndLogs() {
         // given
@@ -107,7 +122,7 @@ class RequestCancelTransactionTest {
         // then
         assertThat(response.status()).isEqualTo("CANCELLED");
         assertThat(request.getCancelReason()).isEqualTo("[Chủ bài] Tôi bận việc đột xuất");
-        verify(itemService).release(ITEM_ID);
+        verify(itemService).releaseAfterCancel(eq(ITEM_ID), any());
         verify(notificationService)
                 .notify(eq(RECEIVER_ID), eq("TRANSACTION_CANCELLED"), anyString(), contains("Tôi bận"), anyString());
         verify(activityLogService)
@@ -124,7 +139,7 @@ class RequestCancelTransactionTest {
     @DisplayName("Người nhận huỷ giao dịch: lý do có tiền tố người nhận, thông báo chủ bài")
     void cancelTransaction_whenReceiverCancels_prefixesReasonAndNotifiesDonor() {
         // given
-        Request request = requestInStatus(RequestStatus.LOGISTICS_CONFIRMED, null);
+        Request request = requestInStatus(RequestStatus.AWAITING_LOGISTICS, null);
         when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
 
         // when
@@ -137,10 +152,10 @@ class RequestCancelTransactionTest {
     }
 
     @Test
-    @DisplayName("Huỷ giao dịch SWAP đang AWAITING_HANDOVER: nhả cả bài chính và món mang đổi")
-    void cancelTransaction_whenSwapAwaitingHandover_releasesBothItems() {
+    @DisplayName("Huỷ giao dịch SWAP đang AWAITING_LOGISTICS: nhả cả bài chính và món mang đổi")
+    void cancelTransaction_whenSwapAwaitingLogistics_releasesBothItems() {
         // given
-        Request request = requestInStatus(RequestStatus.AWAITING_HANDOVER, OFFERED_ITEM_ID);
+        Request request = requestInStatus(RequestStatus.AWAITING_LOGISTICS, OFFERED_ITEM_ID);
         when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
 
         // when
@@ -148,8 +163,8 @@ class RequestCancelTransactionTest {
 
         // then
         assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
-        verify(itemService).release(ITEM_ID);
-        verify(itemService).releaseIfReserved(OFFERED_ITEM_ID);
+        verify(itemService).releaseAfterCancel(eq(ITEM_ID), any());
+        verify(itemService).releaseIfReservedAfterCancel(eq(OFFERED_ITEM_ID), any());
     }
 
     @Test
@@ -164,7 +179,7 @@ class RequestCancelTransactionTest {
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_FORBIDDEN));
-        verify(itemService, never()).release(ITEM_ID);
+        verify(itemService, never()).releaseAfterCancel(eq(ITEM_ID), any());
     }
 
     @Test
@@ -190,6 +205,6 @@ class RequestCancelTransactionTest {
                             ex -> assertThat(ex.getErrorCode())
                                     .isEqualTo(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION));
         }
-        verify(itemService, never()).release(ITEM_ID);
+        verify(itemService, never()).releaseAfterCancel(eq(ITEM_ID), any());
     }
 }

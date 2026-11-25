@@ -1,21 +1,27 @@
 package com.shareloop.request.controller;
 
 import com.shareloop.common.security.CurrentUserId;
+import com.shareloop.request.dto.CancelRequestRequest;
 import com.shareloop.request.dto.CancelTransactionRequest;
 import com.shareloop.request.dto.ChangeOfferedItemRequest;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.HandoverConfirmRequest;
-import com.shareloop.request.dto.HandoverIssueRequest;
+import com.shareloop.request.dto.HandoverFailedRequest;
+import com.shareloop.request.dto.RefuseHandoverRequest;
+import com.shareloop.request.dto.RejectCancelRequest;
 import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestResponse;
+import com.shareloop.request.dto.RescheduleRequest;
 import com.shareloop.request.dto.ScheduleRequest;
+import com.shareloop.request.dto.ShipmentRequest;
 import com.shareloop.request.service.RequestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -65,6 +71,18 @@ public class RequestController {
     @GetMapping("/api/v1/me/requests")
     public List<RequestResponse> listMyRequests(@CurrentUserId Long currentUserId) {
         return requestService.listMyRequests(currentUserId);
+    }
+
+    /**
+     * Mọi yêu cầu tới các bài của người gọi trong một lần (G2), có lọc theo trạng thái.
+     */
+    @Operation(summary = "Xem mọi yêu cầu gửi tới các bài của mình trong một lần, lọc theo trạng thái")
+    @GetMapping("/api/v1/me/received-requests")
+    public List<RequestResponse> listReceivedRequests(
+            @CurrentUserId Long currentUserId,
+            @org.springframework.web.bind.annotation.RequestParam(required = false)
+                    java.util.Set<com.shareloop.request.entity.RequestStatus> status) {
+        return requestService.listReceivedRequests(currentUserId, status);
     }
 
     /**
@@ -147,9 +165,9 @@ public class RequestController {
     }
 
     /**
-     * Xác nhận đã giao / đã nhận đồ và trả lời đúng mô tả (GN-06, GN-08, GN-07, UC-27).
+     * Hoàn tất giao nhận từ phía người đang đăng nhập (GN-06, GN-08, UC-27).
      */
-    @Operation(summary = "Xác nhận đã giao hoặc đã nhận đồ và trả lời đúng mô tả")
+    @Operation(summary = "Hoàn tất giao nhận")
     @PostMapping("/api/v1/requests/{id}/confirm-handover")
     public RequestResponse confirmHandover(
             @PathVariable long id,
@@ -159,15 +177,91 @@ public class RequestController {
     }
 
     /**
-     * Báo "chưa nhận được" / "chưa giao được" khi bên kia đã xác nhận bàn giao còn mình thì chưa.
+     * Giao nhận không thành công: huỷ giao dịch nếu bên kia chưa bấm hoàn tất, mở tranh chấp nếu đã bấm (GN-06, GN-07).
      */
-    @Operation(summary = "Báo chưa nhận được hoặc chưa giao được đồ, mở khiếu nại")
-    @PostMapping("/api/v1/requests/{id}/handover-issue")
-    public RequestResponse reportHandoverIssue(
+    @Operation(summary = "Báo giao nhận không thành công")
+    @PostMapping("/api/v1/requests/{id}/handover-failed")
+    public RequestResponse handoverFailed(
             @PathVariable long id,
             @CurrentUserId Long currentUserId,
-            @Valid @RequestBody HandoverIssueRequest request) {
-        return requestService.reportHandoverIssue(id, currentUserId, request);
+            @Valid @RequestBody HandoverFailedRequest request) {
+        return requestService.handoverFailed(id, currentUserId, request);
+    }
+
+    /**
+     * Đề nghị huỷ giao dịch đã chốt lịch trước giờ hẹn; giao dịch chưa huỷ cho tới khi bên kia phản hồi (GN-06).
+     */
+    @Operation(summary = "Đề nghị huỷ giao dịch trước giờ hẹn")
+    @PostMapping("/api/v1/requests/{id}/cancel-request")
+    public RequestResponse requestCancel(
+            @PathVariable long id,
+            @CurrentUserId Long currentUserId,
+            @Valid @RequestBody CancelRequestRequest request) {
+        return requestService.requestCancel(id, currentUserId, request);
+    }
+
+    /** Bên kia đồng ý đề nghị huỷ: giao dịch huỷ, không phạt ai (GN-06). */
+    @Operation(summary = "Đồng ý đề nghị huỷ")
+    @PostMapping("/api/v1/requests/{id}/cancel-request/accept")
+    public RequestResponse acceptCancelRequest(@PathVariable long id, @CurrentUserId Long currentUserId) {
+        return requestService.acceptCancelRequest(id, currentUserId);
+    }
+
+    /** Bên kia không đồng ý đề nghị huỷ: giao dịch sang sự cố giao nhận, giải trình bắt buộc (GN-06). */
+    @Operation(summary = "Không đồng ý đề nghị huỷ")
+    @PostMapping("/api/v1/requests/{id}/cancel-request/reject")
+    public RequestResponse rejectCancelRequest(
+            @PathVariable long id, @CurrentUserId Long currentUserId, @Valid @RequestBody RejectCancelRequest request) {
+        return requestService.rejectCancelRequest(id, currentUserId, request);
+    }
+
+    /** Người đề nghị rút lại đề nghị huỷ trước khi bên kia phản hồi (GN-06). */
+    @Operation(summary = "Rút lại đề nghị huỷ")
+    @DeleteMapping("/api/v1/requests/{id}/cancel-request")
+    public RequestResponse withdrawCancelRequest(@PathVariable long id, @CurrentUserId Long currentUserId) {
+        return requestService.withdrawCancelRequest(id, currentUserId);
+    }
+
+    /** Người gửi báo đã gửi hàng cho chiều của mình, kèm mã vận đơn (GN-12). */
+    @Operation(summary = "Báo đã gửi hàng")
+    @PostMapping("/api/v1/requests/{id}/shipment")
+    public RequestResponse markShipped(
+            @PathVariable long id, @CurrentUserId Long currentUserId, @Valid @RequestBody ShipmentRequest request) {
+        return requestService.markShipped(id, currentUserId, request);
+    }
+
+    /** Đề nghị dời lịch sau khi chốt, trước giờ hẹn (GN-11). Lịch cũ giữ nguyên cho tới khi bên kia đồng ý. */
+    @Operation(summary = "Đề nghị dời lịch")
+    @PostMapping("/api/v1/requests/{id}/reschedule")
+    public RequestResponse proposeReschedule(
+            @PathVariable long id, @CurrentUserId Long currentUserId, @Valid @RequestBody RescheduleRequest request) {
+        return requestService.proposeReschedule(id, currentUserId, request);
+    }
+
+    /** Bên kia đồng ý dời lịch: đổi lịch, liên hệ vẫn mở (GN-11). */
+    @Operation(summary = "Đồng ý dời lịch")
+    @PostMapping("/api/v1/requests/{id}/reschedule/accept")
+    public RequestResponse acceptReschedule(@PathVariable long id, @CurrentUserId Long currentUserId) {
+        return requestService.acceptReschedule(id, currentUserId);
+    }
+
+    /** Bên kia từ chối dời lịch: giữ lịch cũ (GN-11). */
+    @Operation(summary = "Từ chối dời lịch")
+    @PostMapping("/api/v1/requests/{id}/reschedule/reject")
+    public RequestResponse rejectReschedule(@PathVariable long id, @CurrentUserId Long currentUserId) {
+        return requestService.rejectReschedule(id, currentUserId);
+    }
+
+    /**
+     * Từ chối nhận món đồ, mở khiếu nại "Không đúng mô tả" (GN-07, BC-09).
+     */
+    @Operation(summary = "Từ chối giao nhận")
+    @PostMapping("/api/v1/requests/{id}/refuse-handover")
+    public RequestResponse refuseHandover(
+            @PathVariable long id,
+            @CurrentUserId Long currentUserId,
+            @Valid @RequestBody RefuseHandoverRequest request) {
+        return requestService.refuseHandover(id, currentUserId, request);
     }
 
     /**
@@ -180,6 +274,20 @@ public class RequestController {
             @CurrentUserId Long currentUserId,
             @Valid @RequestBody com.shareloop.request.dto.AttachMediaRequest request) {
         return requestService.attachMedia(id, currentUserId, request.mediaIds(), request.stage());
+    }
+
+    /**
+     * Đọc nội dung một ảnh chat hoặc ảnh giao nhận của giao dịch (D2). Chỉ hai bên và Admin; người khác nhận 404.
+     */
+    @Operation(summary = "Xem ảnh chat hoặc ảnh giao nhận của giao dịch (chỉ hai bên và Admin)")
+    @GetMapping("/api/v1/requests/{id}/media/{mediaId}")
+    public org.springframework.http.ResponseEntity<byte[]> readMedia(
+            @PathVariable long id, @PathVariable long mediaId, @CurrentUserId Long currentUserId) {
+        var content = requestService.readMedia(id, mediaId, currentUserId);
+        return org.springframework.http.ResponseEntity.ok()
+                .cacheControl(org.springframework.http.CacheControl.noStore())
+                .contentType(org.springframework.http.MediaType.parseMediaType(content.mimeType()))
+                .body(content.bytes());
     }
 
     /**

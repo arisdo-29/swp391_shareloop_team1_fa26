@@ -5,12 +5,15 @@ import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.catalog.AreaErrorCode;
 import com.shareloop.catalog.dto.AdminAreaRequest;
 import com.shareloop.catalog.dto.AdminAreaResponse;
+import com.shareloop.catalog.dto.VisibleItemCountResponse;
 import com.shareloop.catalog.entity.Area;
 import com.shareloop.catalog.repository.AreaRepository;
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.item.service.ItemService;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,9 +25,19 @@ public class AdminAreaService {
     private final AreaRepository repository;
     private final ActivityLogService activityLogService;
 
-    public AdminAreaService(AreaRepository repository, ActivityLogService activityLogService) {
+    private final ItemService itemService;
+
+    public AdminAreaService(
+            AreaRepository repository, ActivityLogService activityLogService, @Lazy ItemService itemService) {
         this.repository = repository;
         this.activityLogService = activityLogService;
+        this.itemService = itemService;
+    }
+
+    /** Số bài đang hiển thị công khai sẽ bị ẩn khỏi Tìm đồ nếu tắt khu vực này (gồm khu vực con). */
+    public VisibleItemCountResponse countVisibleItems(long id) {
+        requireArea(id);
+        return new VisibleItemCountResponse(itemService.countVisibleInArea(id));
     }
 
     public List<AdminAreaResponse> listAll() {

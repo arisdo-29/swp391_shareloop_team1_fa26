@@ -24,7 +24,7 @@ public class MeReputationController {
     }
 
     @Operation(
-            summary = "Xem điểm, hạng và lịch sử uy tín của mình",
+            summary = "Xem điểm, hạng và lịch sử điểm tích luỹ của mình",
             description =
                     "Cần đăng nhập. Trả về tổng điểm, hạng, TrustStars, tỉ lệ đúng mô tả và lịch sử biến động điểm (mới nhất trước, có phân trang).")
     @ApiResponse(responseCode = "200", description = "Lấy thông tin uy tín thành công")

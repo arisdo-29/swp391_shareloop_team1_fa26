@@ -158,7 +158,7 @@ describe('gỡ bài đang được đẩy', () => {
     renderActivities([myItem({ boostedUntil })]);
 
     // when
-    fireEvent.click(await screen.findByRole('button', { name: 'Gỡ bài' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Gỡ bài đăng' }));
 
     // then
     expect(
@@ -173,11 +173,37 @@ describe('gỡ bài đang được đẩy', () => {
     renderActivities([myItem({ boostedUntil: hoursFromNow(-5) })]);
 
     // when
-    fireEvent.click(await screen.findByRole('button', { name: 'Gỡ bài' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Gỡ bài đăng' }));
 
     // then
     expect(screen.getByRole('heading', { name: 'Gỡ bài đăng?' })).toBeTruthy();
     expect(screen.queryByText(/Gỡ bài sẽ mất thời gian đẩy còn lại/)).toBeNull();
+  });
+});
+
+describe('thu hồi yêu cầu đăng bài đang chờ duyệt', () => {
+  it('hiển thị đúng trạng thái, xác nhận hệ quả nghiệp vụ và đồng bộ Toast với banner', async () => {
+    vi.mocked(itemApi.remove).mockResolvedValue(undefined);
+    const warningToast = vi.spyOn(toast, 'warning');
+    renderActivities([myItem({ status: 'PENDING_REVIEW' })]);
+
+    expect(
+      await screen.findByText('Yêu cầu đăng bài đang chờ quản trị viên xét duyệt.'),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Thu hồi yêu cầu đăng bài' }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('heading', { name: 'Thu hồi yêu cầu đăng bài?' })).toBeTruthy();
+    expect(
+      within(dialog).getByText(
+        'Yêu cầu sẽ được thu hồi và bài bị gỡ khỏi hệ thống. Phí đang giữ sẽ được nhả. Các yêu cầu đang chờ (nếu có) sẽ bị hủy.',
+      ),
+    ).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận thu hồi' }));
+
+    await vi.waitFor(() => expect(itemApi.remove).toHaveBeenCalledWith(31));
+    expect(await screen.findByText('Đã thu hồi yêu cầu đăng bài.')).toBeTruthy();
+    expect(warningToast).toHaveBeenCalledWith('Đã thu hồi yêu cầu đăng bài.');
   });
 });
 
@@ -261,8 +287,10 @@ describe('mở hộp Đẩy bài từ thông báo (B24)', () => {
     // then
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Xác nhận đẩy bài')).toBeTruthy();
-    expect(itemApi.getBoostQuote).toHaveBeenCalledWith(31);
-    expect(itemApi.getBoostQuote).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(itemApi.getBoostQuote).toHaveBeenCalledWith(31);
+      expect(itemApi.getBoostQuote).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('bài trong thông báo không còn trong danh sách thì báo, không mở hộp', async () => {

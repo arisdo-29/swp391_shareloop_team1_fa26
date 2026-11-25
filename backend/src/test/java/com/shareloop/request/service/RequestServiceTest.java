@@ -20,6 +20,7 @@ import com.shareloop.item.dto.ItemCardDto;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.service.ItemQueryService;
+import com.shareloop.item.service.ItemQueryService.OfferedItemDetails;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
 import com.shareloop.report.service.ReportService;
@@ -103,6 +104,9 @@ class RequestServiceTest {
     @Mock
     CreditService creditService;
 
+    @Mock
+    ItemReopenedNotifier itemReopenedNotifier;
+
     @Spy
     @InjectMocks
     RequestService requestService;
@@ -110,6 +114,8 @@ class RequestServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(configService.getInt(ConfigKey.MAX_PENDING_REQUESTS)).thenReturn(5);
+        lenient().when(configService.getInt(ConfigKey.MAX_ACTIVE_TRANSACTIONS)).thenReturn(5);
+        lenient().when(configService.getInt(ConfigKey.MEETING_MAX_DAYS_AHEAD)).thenReturn(7);
         lenient().when(configService.getInt(ConfigKey.POST_FEE)).thenReturn(5);
         lenient().when(reputationService.canRequest(anyLong())).thenReturn(true);
         lenient().when(userService.isLocked(anyLong())).thenReturn(false);
@@ -162,6 +168,45 @@ class RequestServiceTest {
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_ALREADY_EXISTS);
                 });
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi người nhận đã có đủ giao dịch đang chạy (C4)")
+    void createRequest_whenReceiverHasTooManyRunningTransactions_throwsTooManyActiveTransactions() {
+        // given
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.countByReceiverIdAndStatusIn(eq(10L), anySet())).thenReturn(5L);
+
+        // when, then
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_TOO_MANY_ACTIVE_TRANSACTIONS);
+                    assertThat(ex.getMessage()).contains("5 giao dịch chưa xong");
+                });
+        org.mockito.Mockito.verify(requestRepository, org.mockito.Mockito.never())
+                .save(any(Request.class));
+    }
+
+    @Test
+    @DisplayName("Chủ bài không chọn được người nhận đang có quá nhiều giao dịch chưa xong (C4)")
+    void selectReceiver_whenReceiverHasTooManyRunningTransactions_throwsReceiverTooBusy() {
+        // given
+        Request selectedRequest = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+        when(requestRepository.countByReceiverIdAndStatusIn(eq(10L), anySet())).thenReturn(5L);
+
+        // when, then
+        assertThatThrownBy(() -> requestService.selectReceiver(101L, 20L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_RECEIVER_TOO_BUSY));
+        assertThat(selectedRequest.getStatus()).isEqualTo(RequestStatus.PENDING);
+        org.mockito.Mockito.verify(itemService, org.mockito.Mockito.never()).reserve(anyLong());
     }
 
     @Test
@@ -431,6 +476,114 @@ class RequestServiceTest {
     }
 
     @Test
+    @DisplayName(
+            "Huỷ trong vài phút đầu sau khi gửi thì không báo chủ bài và đánh dấu đã đọc thông báo yêu cầu mới (C5)")
+    void cancelRequest_whenCancelledWithinQuietMinutes_doesNotNotifyDonorAndMarksNewRequestRead() {
+        // given: yêu cầu vừa gửi 1 phút trước, ngưỡng yên lặng 5 phút
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 55L);
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                request, "createdAt", java.time.Instant.now().minusSeconds(60));
+        when(configService.getInt(ConfigKey.REQUEST_QUIET_CANCEL_MINUTES)).thenReturn(5);
+        when(requestRepository.findById(55L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // when
+        requestService.cancelRequest(55L, 10L);
+
+        // then
+        verify(notificationService, never()).notify(eq(20L), eq("REQUEST_CANCELLED"), any(), any(), any());
+        verify(notificationService).markAsReadByTypeAndLink(20L, "NEW_REQUEST", "/requests/55");
+    }
+
+    @Test
+    @DisplayName("Huỷ sau thời gian yên lặng thì vẫn báo chủ bài (C5)")
+    void cancelRequest_whenCancelledAfterQuietMinutes_notifiesDonor() {
+        // given: yêu cầu gửi cách đây 10 phút
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                request, "createdAt", java.time.Instant.now().minusSeconds(600));
+        when(configService.getInt(ConfigKey.REQUEST_QUIET_CANCEL_MINUTES)).thenReturn(5);
+        when(requestRepository.findById(55L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // when
+        requestService.cancelRequest(55L, 10L);
+
+        // then
+        verify(notificationService).notify(eq(20L), eq("REQUEST_CANCELLED"), any(), any(), eq("/items/1"));
+    }
+
+    @Test
+    @DisplayName("Vừa tự huỷ yêu cầu cho bài này thì chưa gửi lại được, báo giờ được gửi lại (C5)")
+    void createRequest_whenSelfCancelledRecently_throwsResendCooldownWithTime() {
+        // given: tự huỷ cách đây 2 giờ, thời gian chờ 24 giờ
+        Request cancelled = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                cancelled, "updatedAt", java.time.Instant.now().minusSeconds(2 * 3600));
+        when(configService.getInt(ConfigKey.REQUEST_RESEND_COOLDOWN_HOURS)).thenReturn(24);
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.findFirstByItemIdAndReceiverIdAndStatusAndCancelReasonOrderByUpdatedAtDesc(
+                        eq(1L), eq(10L), eq(RequestStatus.CANCELLED), any()))
+                .thenReturn(Optional.of(cancelled));
+
+        // when, then
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_RESEND_COOLDOWN);
+                    assertThat(ex.getMessage()).startsWith("Bạn vừa huỷ yêu cầu cho bài này. Có thể gửi lại sau ");
+                });
+    }
+
+    @Test
+    @DisplayName("Tự huỷ đã quá thời gian chờ thì gửi lại được (C5)")
+    void createRequest_whenCooldownPassed_doesNotThrowCooldown() {
+        // given: tự huỷ cách đây 30 giờ
+        Request cancelled = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                cancelled, "updatedAt", java.time.Instant.now().minusSeconds(30 * 3600));
+        when(configService.getInt(ConfigKey.REQUEST_RESEND_COOLDOWN_HOURS)).thenReturn(24);
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.findFirstByItemIdAndReceiverIdAndStatusAndCancelReasonOrderByUpdatedAtDesc(
+                        eq(1L), eq(10L), eq(RequestStatus.CANCELLED), any()))
+                .thenReturn(Optional.of(cancelled));
+
+        doReturn(Optional.empty()).when(requestService).findItemSnapshot(1L);
+        // vượt qua kiểm tra chờ, lỗi kế tiếp là do không có bài, không phải thời gian chờ
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isNotEqualTo(RequestErrorCode.REQUEST_RESEND_COOLDOWN));
+    }
+
+    @Test
+    @DisplayName("Chưa từng tự huỷ (hoặc chỉ bị huỷ do hệ thống) thì không có thời gian chờ (C5)")
+    void createRequest_whenNoSelfCancelBefore_doesNotThrowCooldown() {
+        // given: truy vấn chỉ khớp lần tự huỷ của người nhận nên huỷ do hệ thống không xuất hiện
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.findFirstByItemIdAndReceiverIdAndStatusAndCancelReasonOrderByUpdatedAtDesc(
+                        eq(1L), eq(10L), eq(RequestStatus.CANCELLED), any()))
+                .thenReturn(Optional.empty());
+
+        doReturn(Optional.empty()).when(requestService).findItemSnapshot(1L);
+
+        // when, then
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isNotEqualTo(RequestErrorCode.REQUEST_RESEND_COOLDOWN));
+    }
+
+    @Test
     @DisplayName("Ném lỗi FORBIDDEN khi người khác cố tình huỷ yêu cầu không phải của mình")
     void cancelRequest_whenNotReceiver_throwsForbidden() {
         Request request = new Request(1L, 10L, null, "GIVE");
@@ -533,7 +686,7 @@ class RequestServiceTest {
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now());
         request.proposeSchedule(
-                "IN_PERSON", "Điểm hẹn", Instant.now().plus(2, ChronoUnit.DAYS), true, false, Instant.now());
+                "IN_PERSON", "Điểm hẹn", Instant.now().plus(2, ChronoUnit.DAYS), true, true, Instant.now());
         assertThat(request.getDonorScheduleOkAt()).isNotNull();
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "APPROVED")))
@@ -572,6 +725,8 @@ class RequestServiceTest {
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
+        doReturn(Optional.empty()).when(requestService).findItemSnapshot(2L);
+        givenOfferedItemAvailable(50L, 10L);
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
         when(requestRepository.findByItemIdAndStatus(1L, RequestStatus.PENDING)).thenReturn(List.of(selectedRequest));
@@ -589,6 +744,41 @@ class RequestServiceTest {
     }
 
     @Test
+    void selectReceiver_whenOtherRequestSharesOfferedItem_notifiesTargetDonorWithSenderNameAndTitle() {
+        // given: yêu cầu 103 của người gửi 11 tới bài 2 (chủ 30) dùng chung món đổi 50 với yêu cầu được chọn
+        Request selectedRequest = new Request(1L, 11L, 50L, "SWAP");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+        Request otherSwapRequest = new Request(2L, 11L, 50L, "SWAP");
+        org.springframework.test.util.ReflectionTestUtils.setField(otherSwapRequest, "id", 103L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(30L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(2L);
+        givenOfferedItemAvailable(50L, 11L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+        when(requestRepository.findByOfferedItemIdAndStatus(50L, RequestStatus.PENDING))
+                .thenReturn(List.of(selectedRequest, otherSwapRequest));
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+        when(userService.findContact(11L)).thenReturn(new ContactInfo(11L, "Lan Anh", "c@example.com", "0903"));
+        when(itemQueryService.findTitles(List.of(2L))).thenReturn(Map.of(2L, "Xe đạp"));
+
+        // when
+        requestService.selectReceiver(101L, 20L);
+
+        // then
+        verify(notificationService)
+                .notify(
+                        30L,
+                        "REQUEST_CANCELLED",
+                        "Một yêu cầu đã tự huỷ",
+                        "Yêu cầu của Lan Anh cho bài «Xe đạp» đã tự huỷ vì món đề nghị đổi đã được chọn ở một"
+                                + " giao dịch khác.",
+                        "/requests/103");
+    }
+
+    @Test
     @DisplayName("Chọn yêu cầu SWAP thì giữ chỗ cả bài chính lẫn món mang đổi")
     void selectReceiver_whenSwapRequest_reservesBothItems() {
         // given
@@ -597,6 +787,7 @@ class RequestServiceTest {
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
+        givenOfferedItemAvailable(50L, 10L);
         when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
         when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -606,6 +797,121 @@ class RequestServiceTest {
         // then
         org.mockito.Mockito.verify(itemService).reserve(1L);
         org.mockito.Mockito.verify(itemService).reserve(50L);
+    }
+
+    // Món đem đổi offeredItemId của người gửi receiverId vẫn APPROVED và đang hiển thị.
+    private void givenOfferedItemAvailable(long offeredItemId, long receiverId) {
+        doReturn(Optional.of(new RequestService.ItemSnapshot(receiverId, "SWAP", "APPROVED", true)))
+                .when(requestService)
+                .findItemSnapshot(offeredItemId);
+    }
+
+    @Test
+    void selectReceiver_whenOfferedItemReservedElsewhere_throwsOfferedItemInOtherTransactionWithoutCharging() {
+        // given: bài Cho, món đổi 50 đã bị giữ chỗ ở giao dịch khác
+        Request selectedRequest = new Request(1L, 10L, 50L, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "RESERVED", true)))
+                .when(requestService)
+                .findItemSnapshot(50L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+
+        // when, then
+        assertThatThrownBy(() -> requestService.selectReceiver(101L, 20L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode())
+                                .isEqualTo(RequestErrorCode.REQUEST_OFFERED_ITEM_IN_OTHER_TRANSACTION));
+        verify(creditService, never()).spend(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any(), any());
+        verify(itemService, never()).convertOfferType(anyLong(), any());
+        verify(itemService, never()).reserve(anyLong());
+        assertThat(selectedRequest.getStatus()).isEqualTo(RequestStatus.PENDING);
+    }
+
+    @Test
+    void selectReceiver_whenOfferedItemHiddenOrDeleted_throwsOfferedItemUnavailable() {
+        // given: món đổi 50 bị ẩn, món đổi 60 đã xoá
+        Request hiddenOffer = new Request(1L, 10L, 50L, "SWAP");
+        Request deletedOffer = new Request(1L, 11L, 60L, "SWAP");
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "APPROVED", false)))
+                .when(requestService)
+                .findItemSnapshot(50L);
+        doReturn(Optional.empty()).when(requestService).findItemSnapshot(60L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(hiddenOffer));
+        when(requestRepository.findById(102L)).thenReturn(Optional.of(deletedOffer));
+
+        // when, then
+        assertThatThrownBy(() -> requestService.selectReceiver(101L, 20L))
+                .hasFieldOrPropertyWithValue("errorCode", RequestErrorCode.REQUEST_OFFERED_ITEM_UNAVAILABLE);
+        assertThatThrownBy(() -> requestService.selectReceiver(102L, 20L))
+                .hasFieldOrPropertyWithValue("errorCode", RequestErrorCode.REQUEST_OFFERED_ITEM_UNAVAILABLE);
+        verify(itemService, never()).reserve(anyLong());
+    }
+
+    @Test
+    void selectReceiver_whenItemUnderReviewAfterEdit_throwsItemUnderReview() {
+        // given: bài vừa sửa nên đang PENDING_REVIEW
+        Request selectedRequest = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "PENDING_REVIEW")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+
+        // when, then
+        assertThatThrownBy(() -> requestService.selectReceiver(101L, 20L))
+                .hasFieldOrPropertyWithValue("errorCode", RequestErrorCode.REQUEST_ITEM_UNDER_REVIEW);
+        verify(itemService, never()).reserve(anyLong());
+        assertThat(selectedRequest.getStatus()).isEqualTo(RequestStatus.PENDING);
+    }
+
+    @Test
+    void cancelPendingRequestsOfferingItem_cancelsPendingRequestsAndNotifiesSenderAndTargetDonor() {
+        // given: yêu cầu 103 tới bài 2 (chủ 30) đang đem món 50 đi đổi
+        Request pendingSwap = new Request(2L, 10L, 50L, "SWAP");
+        org.springframework.test.util.ReflectionTestUtils.setField(pendingSwap, "id", 103L);
+        when(requestRepository.findByOfferedItemIdAndStatus(50L, RequestStatus.PENDING))
+                .thenReturn(List.of(pendingSwap));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(30L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(2L);
+
+        // when
+        int cancelled = requestService.cancelPendingRequestsOfferingItem(50L);
+
+        // then
+        assertThat(cancelled).isEqualTo(1);
+        assertThat(pendingSwap.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        assertThat(pendingSwap.getCancelReason()).contains("Món bạn đề nghị đổi không còn khả dụng");
+        verify(notificationService).notify(eq(10L), eq("REQUEST_CANCELLED"), any(), any(), eq("/requests/103"));
+        verify(notificationService).notify(eq(30L), eq("REQUEST_CANCELLED"), any(), any(), eq("/requests/103"));
+    }
+
+    @Test
+    void notifyPendingRequestersItemEdited_notifiesEachPendingRequesterWithoutCancelling() {
+        // given
+        Request pending = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(pending, "id", 101L);
+        when(requestRepository.findByItemIdAndStatus(1L, RequestStatus.PENDING)).thenReturn(List.of(pending));
+
+        // when
+        requestService.notifyPendingRequestersItemEdited(1L);
+
+        // then
+        assertThat(pending.getStatus()).isEqualTo(RequestStatus.PENDING);
+        verify(notificationService)
+                .notify(
+                        eq(10L),
+                        eq("REQUEST_ITEM_EDITED"),
+                        any(),
+                        eq("Chủ bài vừa sửa bài, bài đang chờ duyệt lại."),
+                        eq("/requests/101"));
     }
 
     @Test
@@ -623,7 +929,8 @@ class RequestServiceTest {
         // when
         requestService.selectReceiver(101L, 20L);
 
-        // then
+        org.mockito.Mockito.verify(itemService).lockForSelection(1L, null);
+        org.mockito.Mockito.verify(itemService).reserve(1L);
         org.mockito.Mockito.verify(itemService).reserve(1L);
         org.mockito.Mockito.verifyNoMoreInteractions(itemService);
     }
@@ -638,6 +945,7 @@ class RequestServiceTest {
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
+        givenOfferedItemAvailable(50L, 10L);
         when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
         when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -663,6 +971,7 @@ class RequestServiceTest {
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
+        givenOfferedItemAvailable(50L, 10L);
         when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
 
         org.mockito.Mockito.doThrow(new BusinessException(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE))
@@ -930,7 +1239,8 @@ class RequestServiceTest {
         when(itemQueryService.getItemCard(1L))
                 .thenReturn(new ItemCardDto(
                         1L, "Xe đạp mini", OfferType.SWAP, ItemStatus.RESERVED, "/api/v1/media/5", 20L));
-        when(itemQueryService.findTitles(List.of(2L))).thenReturn(Map.of(2L, "Giày thể thao"));
+        when(itemQueryService.findOfferedItemDetails(2L))
+                .thenReturn(Optional.of(new OfferedItemDetails("Giày thể thao", 280000L, 9L)));
         when(userService.findContact(10L)).thenReturn(new ContactInfo(10L, "Người xin", "b@example.com", "0901"));
         when(userService.findContact(20L)).thenReturn(new ContactInfo(20L, "Chủ bài", "a@example.com", "0902"));
 
@@ -943,6 +1253,8 @@ class RequestServiceTest {
         assertThat(response.donorId()).isEqualTo(20L);
         assertThat(response.donorName()).isEqualTo("Chủ bài");
         assertThat(response.offeredItemTitle()).isEqualTo("Giày thể thao");
+        assertThat(response.offeredItemReferencePrice()).isEqualTo(280000L);
+        assertThat(response.offeredItemAreaId()).isEqualTo(9L);
         assertThat(response.receiverName()).isEqualTo("Người xin");
     }
 
@@ -1050,14 +1362,14 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, null, "GIVE");
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now()); // RESERVED
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
         Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
-        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Cổng trường FPT", meetingTime, null);
+        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Cổng trường FPT", meetingTime, true);
 
         RequestResponse response = requestService.updateSchedule(101L, 20L, dto); // donor đề xuất
 
@@ -1076,14 +1388,14 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, null, "GIVE");
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now()); // RESERVED
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
         Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
-        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Cổng trường FPT", meetingTime, null);
+        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Cổng trường FPT", meetingTime, true);
 
         RequestResponse response = requestService.updateSchedule(101L, 10L, dto); // receiver đề xuất
 
@@ -1098,13 +1410,13 @@ class RequestServiceTest {
     void updateSchedule_whenPastTime_throwsPastTime() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
         Instant pastTime = Instant.now().minus(1, ChronoUnit.HOURS);
-        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Cổng trường", pastTime, null);
+        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Cổng trường", pastTime, true);
 
         assertThatThrownBy(() -> requestService.updateSchedule(101L, 20L, dto))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
@@ -1118,16 +1430,16 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
         request.proposeSchedule(
-                "IN_PERSON", "Cổng trường", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now()); // sang LOGISTICS_CONFIRMED
+                "IN_PERSON", "Cổng trường", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now()); // sang LOGISTICS_CONFIRMED
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
         Instant futureTime = Instant.now().plus(2, ChronoUnit.DAYS);
-        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Địa điểm mới", futureTime, null);
+        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Địa điểm mới", futureTime, true);
 
         assertThatThrownBy(() -> requestService.updateSchedule(101L, 20L, dto))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
@@ -1142,16 +1454,16 @@ class RequestServiceTest {
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now());
         Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
-        request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, true, false, Instant.now());
+        request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, true, true, Instant.now());
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
         // Receiver gọi xác nhận lịch
-        RequestResponse response = requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(null));
+        RequestResponse response = requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true));
 
         assertThat(response.status()).isEqualTo("LOGISTICS_CONFIRMED");
         assertThat(response.receiverScheduleOkAt()).isNotNull();
@@ -1168,15 +1480,15 @@ class RequestServiceTest {
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now());
         Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
-        request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, true, false, Instant.now());
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, true, true, Instant.now());
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
         // when
-        requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(null));
+        requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true));
 
         // then
         verify(eventPublisher).publishEvent(new RequestNegotiationEndedEvent(101L));
@@ -1203,6 +1515,48 @@ class RequestServiceTest {
     }
 
     @Test
+    @DisplayName("cancelTransaction: bài mở lại thì báo những người từng bị từ chối, trừ người nhận vừa huỷ")
+    void cancelTransaction_whenItemReopened_notifiesRejectedRequesters() {
+        // given
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now());
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "RESERVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // when
+        requestService.cancelTransaction(101L, 20L, new CancelTransactionRequest("Bận đột xuất"));
+
+        // then
+        verify(itemService).releaseAfterCancel(eq(1L), any());
+        verify(itemReopenedNotifier).notifyRejectedRequesters(1L, 10L);
+    }
+
+    @Test
+    @DisplayName("cancelByAdmin: Admin huỷ giao dịch thì cũng báo những người từng bị từ chối")
+    void cancelByAdmin_whenItemReopened_notifiesRejectedRequesters() {
+        // given
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now());
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient()
+                .doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "RESERVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // when
+        requestService.cancelByAdmin(101L, 1L, new CancelTransactionRequest("Giao dịch bị kẹt"));
+
+        // then
+        verify(itemReopenedNotifier).notifyRejectedRequesters(1L, 10L);
+    }
+
+    @Test
     @DisplayName(
             "confirmLogistics: Khi mới 1 bên xác nhận (chưa LOGISTICS_CONFIRMED) -> không bắn thông báo LOGISTICS_CONFIRMED")
     void confirmLogistics_whenOnlyOneSideConfirms_doesNotNotifyLogisticsConfirmed() {
@@ -1210,10 +1564,10 @@ class RequestServiceTest {
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now());
         Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
-        // Receiver đề xuất lịch nhưng chưa xác nhận (cả 2 null)
-        request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, false, false, Instant.now());
+        // Chỉ người nhận đã đồng ý lịch và cam kết.
+        request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, false, true, Instant.now());
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
@@ -1234,7 +1588,7 @@ class RequestServiceTest {
         Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
         request.proposeSchedule("SHIPPING", "123 Đường XYZ", meetingTime, true, true, Instant.now());
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
@@ -1255,14 +1609,16 @@ class RequestServiceTest {
         // Donor đề xuất và agreeToWaiver = true
         request.proposeSchedule("SHIPPING", "123 Đường XYZ", meetingTime, true, true, Instant.now());
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
         // Receiver gọi confirm kèm agreeToWaiver = true
-        RequestResponse response = requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true));
+        // Luật mới (GN-12): người nhận phải có địa chỉ nhận hàng mới chốt được lịch giao hàng
+        RequestResponse response =
+                requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true, "12 Lê Lợi"));
 
         assertThat(response.status()).isEqualTo("LOGISTICS_CONFIRMED");
         assertThat(response.donorWaiverAt()).isNotNull();
@@ -1276,8 +1632,8 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
         request.proposeSchedule(
-                "IN_PERSON", "Cổng trường", Instant.now().plus(2, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now()); // sang LOGISTICS_CONFIRMED, contactRevealedAt != null
+                "IN_PERSON", "Cổng trường", Instant.now().plus(2, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now()); // sang LOGISTICS_CONFIRMED, contactRevealedAt != null
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
@@ -1301,8 +1657,8 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
         request.proposeSchedule(
-                "IN_PERSON", "Cổng trường", Instant.now().plus(2, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now()); // sang LOGISTICS_CONFIRMED
+                "IN_PERSON", "Cổng trường", Instant.now().plus(2, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now()); // sang LOGISTICS_CONFIRMED
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
@@ -1370,17 +1726,17 @@ class RequestServiceTest {
     void confirmHandover_whenDonorFirst_transitionsToAwaitingHandover() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
         assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        RequestResponse response = requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null, null));
+        RequestResponse response = requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null));
 
         assertThat(response.status()).isEqualTo("AWAITING_HANDOVER");
         assertThat(request.getDonorHandoverAt()).isNotNull();
@@ -1394,17 +1750,17 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, null, "GIVE");
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
         assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(true, null));
+        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(null));
 
         assertThat(response.status()).isEqualTo("AWAITING_HANDOVER");
         assertThat(request.getReceiverHandoverAt()).isNotNull();
@@ -1413,27 +1769,25 @@ class RequestServiceTest {
     }
 
     @Test
-    @DisplayName(
-            "confirmHandover: Receiver xác nhận sau Donor với đúng mô tả -> COMPLETED, gọi ItemService và ReputationService")
+    @DisplayName("confirmHandover: Receiver xác nhận sau Donor -> COMPLETED, gọi ItemService và ReputationService")
     void confirmHandover_whenReceiverConfirmsAfterDonor_transitionsToCompleted() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
-        request.confirmHandover(true, null, Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
+        request.confirmHandover(true, Instant.now());
         assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(true, null));
+        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(null));
 
         assertThat(response.status()).isEqualTo("COMPLETED");
         assertThat(request.getReceiverHandoverAt()).isNotNull();
-        assertThat(request.getAsDescribed()).isTrue();
         assertThat(request.getCompletedAt()).isNotNull();
         verify(itemService).markTraded(1L);
         verify(reputationService).onCompleted(101L);
@@ -1446,17 +1800,17 @@ class RequestServiceTest {
     void confirmHandover_whenCompleted_returnsComplaintDeadlineAndNotifiesItWithTime() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
-        request.confirmHandover(true, null, Instant.now());
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
+        request.confirmHandover(true, Instant.now());
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS)).thenReturn(24);
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(true, null));
+        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(null));
 
         assertThat(response.complaintDeadline())
                 .isEqualTo(request.getCompletedAt().plus(24, ChronoUnit.HOURS));
@@ -1474,62 +1828,12 @@ class RequestServiceTest {
     }
 
     @Test
-    @DisplayName(
-            "confirmHandover: Người nhận chọn không đúng mô tả -> chuyển DISPUTED, không markTraded, phát report event")
-    void confirmHandover_whenReceiverSaysNotAsDescribed_publishesReportEvent() {
+    void confirmHandover_whenReceiverConfirms_publishesNoReportEvent() {
         // given
         stubLogisticsConfirmedRequest();
 
         // when
-        RequestResponse response =
-                requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(false, "  Máy không bật được  "));
-
-        // then
-        assertThat(response.status()).isEqualTo("DISPUTED");
-        verify(itemService, never()).markTraded(anyLong());
-        verify(eventPublisher).publishEvent(new NotAsDescribedReportedEvent(101L, 10L, "Máy không bật được"));
-    }
-
-    @Test
-    @DisplayName(
-            "confirmHandover: Người nhận xác nhận sau donor nhưng chọn không đúng mô tả -> chuyển DISPUTED, không COMPLETED")
-    void confirmHandover_whenReceiverConfirmsAfterDonorNotAsDescribed_transitionsToDisputed() {
-        // given: donor đã xác nhận trước -> status là AWAITING_HANDOVER
-        Request request = new Request(1L, 10L, null, "GIVE");
-        request.select(Instant.now());
-        request.proposeSchedule(
-                "IN_PERSON",
-                "FPT",
-                Instant.now().plus(1, java.time.temporal.ChronoUnit.DAYS),
-                true,
-                false,
-                Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
-        request.confirmHandover(true, null, Instant.now());
-
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
-        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
-                .when(requestService)
-                .findItemSnapshot(1L);
-
-        // when
-        RequestResponse response =
-                requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(false, "Món đồ bị vỡ màn hình"));
-
-        // then
-        assertThat(response.status()).isEqualTo("DISPUTED");
-        verify(itemService, never()).markTraded(anyLong());
-        verify(eventPublisher).publishEvent(new NotAsDescribedReportedEvent(101L, 10L, "Món đồ bị vỡ màn hình"));
-    }
-
-    @Test
-    void confirmHandover_whenReceiverSaysAsDescribed_publishesNoReportEvent() {
-        // given
-        stubLogisticsConfirmedRequest();
-
-        // when
-        requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(true, null));
+        requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(null));
 
         // then
         verify(eventPublisher, never()).publishEvent(any(NotAsDescribedReportedEvent.class));
@@ -1541,7 +1845,7 @@ class RequestServiceTest {
         stubLogisticsConfirmedRequest();
 
         // when
-        requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null, null));
+        requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null));
 
         // then
         verify(eventPublisher, never()).publishEvent(any(NotAsDescribedReportedEvent.class));
@@ -1551,9 +1855,9 @@ class RequestServiceTest {
     private void stubLogisticsConfirmedRequest() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
@@ -1565,17 +1869,17 @@ class RequestServiceTest {
     void confirmHandover_whenSwapCompleted_marksBothItemsTraded() {
         Request request = new Request(1L, 10L, 2L, "SWAP");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
-        request.confirmHandover(true, null, Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
+        request.confirmHandover(true, Instant.now());
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(true, null));
+        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(null));
 
         assertThat(response.status()).isEqualTo("COMPLETED");
         verify(itemService).markTraded(1L);
@@ -1584,54 +1888,15 @@ class RequestServiceTest {
     }
 
     @Test
-    @DisplayName(
-            "confirmHandover: Receiver chọn không đúng mô tả mà không có lý do -> ném lỗi REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED")
-    void confirmHandover_whenReceiverSelectsNotAsDescribedWithoutReason_throwsError() {
-        Request request = new Request(1L, 10L, null, "GIVE");
-        request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
-
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
-        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
-                .when(requestService)
-                .findItemSnapshot(1L);
-
-        assertThatThrownBy(() -> requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(false, "   ")))
-                .isInstanceOfSatisfying(BusinessException.class, ex -> {
-                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED);
-                });
-    }
-
-    @Test
-    @DisplayName("confirmHandover: Receiver không trả lời câu hỏi đúng mô tả -> ném lỗi REQUEST_AS_DESCRIBED_REQUIRED")
-    void confirmHandover_whenReceiverMissingAsDescribed_throwsError() {
-        Request request = new Request(1L, 10L, null, "GIVE");
-        request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
-
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
-        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
-                .when(requestService)
-                .findItemSnapshot(1L);
-
-        assertThatThrownBy(() -> requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(null, null)))
-                .isInstanceOfSatisfying(BusinessException.class, ex -> {
-                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_AS_DESCRIBED_REQUIRED);
-                });
-    }
-
-    @Test
     @DisplayName("confirmHandover: Người ngoài gọi handover -> ném lỗi REQUEST_FORBIDDEN")
     void confirmHandover_whenOutsider_throwsForbidden() {
         Request request = new Request(1L, 10L, null, "GIVE");
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        assertThatThrownBy(() -> requestService.confirmHandover(101L, 999L, new HandoverConfirmRequest(true, null)))
+        assertThatThrownBy(() -> requestService.confirmHandover(101L, 999L, new HandoverConfirmRequest(null)))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_FORBIDDEN);
                 });
@@ -1642,16 +1907,16 @@ class RequestServiceTest {
     void confirmHandover_whenAlreadyConfirmed_throwsError() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
-        request.confirmHandover(true, null, Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
+        request.confirmHandover(true, Instant.now());
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        assertThatThrownBy(() -> requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null, null)))
+        assertThatThrownBy(() -> requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null)))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_HANDOVER_ALREADY_CONFIRMED);
                 });
@@ -1664,12 +1929,12 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now()); // RESERVED
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        assertThatThrownBy(() -> requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null, null)))
+        assertThatThrownBy(() -> requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null)))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
                 });
@@ -1707,7 +1972,7 @@ class RequestServiceTest {
         when(requestRepository.findByItemIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(request));
         when(userService.findContact(10L))
                 .thenReturn(new ContactInfo(10L, "Nguyễn Văn B", "receiver@example.com", "0901234567"));
-        when(reputationService.getReputationSummary(10L)).thenReturn(new ReputationSummary(10L, 5, Rank.SILVER, 95.5));
+        when(reputationService.getReputationSummary(10L)).thenReturn(new ReputationSummary(10L, 5, Rank.SILVER));
 
         // when
         List<RequestResponse> responses = requestService.listByItem(1L, 20L); // donor gọi
@@ -1720,8 +1985,6 @@ class RequestServiceTest {
         assertThat(resp.trustStars()).isEqualTo(5);
         assertThat(resp.receiverRank()).isEqualTo("SILVER");
         assertThat(resp.rank()).isEqualTo("SILVER");
-        assertThat(resp.receiverAsDescribedRate()).isEqualTo(95.5);
-        assertThat(resp.asDescribedRate()).isEqualTo(95.5);
     }
 
     @Test
@@ -1747,7 +2010,6 @@ class RequestServiceTest {
         assertThat(resp.receiverName()).isEqualTo("Nguyễn Văn B");
         assertThat(resp.receiverTrustStars()).isEqualTo(5);
         assertThat(resp.receiverRank()).isEqualTo("BRONZE");
-        assertThat(resp.receiverAsDescribedRate()).isNull();
     }
 
     @Test
@@ -1761,7 +2023,7 @@ class RequestServiceTest {
                 .findItemSnapshot(1L);
         when(userService.findContact(10L))
                 .thenReturn(new ContactInfo(10L, "Nguyễn Văn B", "receiver@example.com", "0901234567"));
-        when(reputationService.getReputationSummary(10L)).thenReturn(new ReputationSummary(10L, 4, Rank.GOLD, 100.0));
+        when(reputationService.getReputationSummary(10L)).thenReturn(new ReputationSummary(10L, 4, Rank.GOLD));
 
         // when
         RequestResponse resp = requestService.getDetail(101L, 20L); // donor xem
@@ -1770,7 +2032,6 @@ class RequestServiceTest {
         assertThat(resp.receiverName()).isEqualTo("Nguyễn Văn B");
         assertThat(resp.receiverTrustStars()).isEqualTo(4);
         assertThat(resp.receiverRank()).isEqualTo("GOLD");
-        assertThat(resp.receiverAsDescribedRate()).isEqualTo(100.0);
     }
 
     @Test

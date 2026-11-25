@@ -11,11 +11,14 @@ public enum WalletErrorCode implements ErrorCode {
     WALLET_HELD_INSUFFICIENT(HttpStatus.CONFLICT, "Số Credit đang giữ không đủ để nhả hoặc trừ."),
     WALLET_PAYMENT_ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy đơn nạp."),
     WALLET_PAYMENT_ORDER_NOT_PAYABLE(HttpStatus.CONFLICT, "Đơn nạp đã thất bại hoặc hết hạn, không thể cộng Credit."),
+    // Mỗi người chỉ một đơn nạp đang chờ thanh toán; details kèm đơn đó để FE hỏi tiếp tục hay hủy rồi tạo mới.
+    WALLET_TOPUP_PENDING_EXISTS(HttpStatus.CONFLICT, "Bạn còn một đơn nạp đang chờ thanh toán."),
     WALLET_TOPUP_AMOUNT_INVALID(
             HttpStatus.UNPROCESSABLE_ENTITY, "Số tiền nạp phải đạt mức tối thiểu và là bội số của giá một Credit."),
     WALLET_INVALID_DATE_RANGE(HttpStatus.UNPROCESSABLE_ENTITY, "Thời điểm bắt đầu phải trước thời điểm kết thúc."),
     WALLET_AI_FEE_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy giao dịch phí AI cần hoàn."),
-    WALLET_AI_FEE_ALREADY_REFUNDED(HttpStatus.CONFLICT, "Giao dịch phí AI này đã được hoàn.");
+    WALLET_AI_FEE_ALREADY_REFUNDED(HttpStatus.CONFLICT, "Giao dịch phí AI này đã được hoàn."),
+    WALLET_TOPUP_NOT_RECONCILABLE(HttpStatus.CONFLICT, "Đơn nạp này không cần đối soát hoặc đã được xử lý.");
 
     private final HttpStatus status;
     private final String defaultMessage;

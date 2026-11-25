@@ -51,8 +51,9 @@ public class RequestJobService {
     private final TransactionTemplate transactionTemplate;
     private final ReportService reportService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ItemReopenedNotifier itemReopenedNotifier;
 
-    // Dạng 9 tham số (chưa có ApplicationEventPublisher) để test đang gọi vẫn compile.
+    // Dạng 9 tham số (chưa có ApplicationEventPublisher, ItemReopenedNotifier) để test đang gọi vẫn compile.
     public RequestJobService(
             RequestRepository requestRepository,
             ItemService itemService,
@@ -73,6 +74,7 @@ public class RequestJobService {
                 jdbcClient,
                 transactionTemplate,
                 reportService,
+                null,
                 null);
     }
 
@@ -87,7 +89,8 @@ public class RequestJobService {
             @Autowired(required = false) JdbcClient jdbcClient,
             TransactionTemplate transactionTemplate,
             @Autowired(required = false) ReportService reportService,
-            @Autowired(required = false) ApplicationEventPublisher eventPublisher) {
+            @Autowired(required = false) ApplicationEventPublisher eventPublisher,
+            @Autowired(required = false) ItemReopenedNotifier itemReopenedNotifier) {
         this.requestRepository = requestRepository;
         this.itemService = itemService;
         this.notificationService = notificationService;
@@ -98,6 +101,7 @@ public class RequestJobService {
         this.transactionTemplate = transactionTemplate;
         this.reportService = reportService;
         this.eventPublisher = eventPublisher;
+        this.itemReopenedNotifier = itemReopenedNotifier;
     }
 
     /**
@@ -129,7 +133,7 @@ public class RequestJobService {
     }
 
     /**
-     * Tự động huỷ các yêu cầu RESERVED hoặc AWAITING_LOGISTICS quá 10 ngày chưa chốt lịch (GN-05, TD-02, CH-01).
+     * Tự động huỷ các yêu cầu RESERVED hoặc AWAITING_LOGISTICS quá chat_open_days ngày chưa chốt lịch (GN-05, TD-02, CH-01).
      * Đóng khung chat (do Request sang CANCELLED) và nhả bài đăng về APPROVED qua ItemService.release.
      *
      * @param now thời điểm hiện tại
@@ -156,27 +160,31 @@ public class RequestJobService {
     }
 
     /**
-     * Tự động xác nhận hoàn tất giao dịch (COMPLETED) khi một bên đã xác nhận mà bên kia im lặng quá 3 ngày (GN-09).
+     * Tự động xác nhận hoàn tất giao dịch (COMPLETED) khi một bên đã xác nhận mà bên kia im lặng quá hạn (GN-09).
+     * Gặp trực tiếp dùng auto_confirm_days (3 ngày), Giao hàng dùng auto_confirm_days_shipping (7 ngày) vì người gửi
+     * bấm hoàn tất ngay lúc gửi hàng, còn hàng cần thời gian vận chuyển.
      *
      * @param now thời điểm hiện tại
      * @return số lượng yêu cầu đã tự động hoàn tất
      */
     public int autoConfirmHandoverRequests(Instant now) {
-        int autoConfirmDays = configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS);
-        Instant cutoff = now.minus(autoConfirmDays, ChronoUnit.DAYS);
+        // Chỉ Gặp trực tiếp: Giao hàng tự hoàn tất theo từng chiều ở RequestDeadlineJobService (GN-12)
+        int inPersonDays = configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS);
+        Instant inPersonCutoff = now.minus(inPersonDays, ChronoUnit.DAYS);
 
         int count = 0;
         long lastSeenId = 0;
         Pageable pageable = PageRequest.of(0, BATCH_SIZE);
-        List<Request> batch = requestRepository.findOverdueHandoverRequests(cutoff, lastSeenId, pageable);
+        List<Request> batch = requestRepository.findOverdueHandoverRequests(inPersonCutoff, lastSeenId, pageable);
         while (!batch.isEmpty()) {
             for (Request request : batch) {
-                if (processInOwnTransaction(() -> autoConfirmInTransaction(request.getId(), cutoff, now))) {
+                if (processInOwnTransaction(
+                        () -> autoConfirmInTransaction(request.getId(), inPersonCutoff, inPersonDays, now))) {
                     count++;
                 }
             }
             lastSeenId = batch.get(batch.size() - 1).getId();
-            batch = requestRepository.findOverdueHandoverRequests(cutoff, lastSeenId, pageable);
+            batch = requestRepository.findOverdueHandoverRequests(inPersonCutoff, lastSeenId, pageable);
         }
         return count;
     }
@@ -194,12 +202,14 @@ public class RequestJobService {
 
         request.cancel(Request.CANCEL_BY_SYSTEM + "Hết hạn do chủ bài chưa chọn");
         requestRepository.save(request);
+        int pendingDays = configService.getInt(ConfigKey.REQUEST_PENDING_DAYS);
 
         notificationService.notify(
                 request.getReceiverId(),
                 "REQUEST_EXPIRED",
                 "Yêu cầu hết hạn",
-                "Yêu cầu giao dịch của bạn đã tự động hết hạn do chủ bài không phản hồi trong 3 ngày.",
+                "Yêu cầu giao dịch của bạn đã tự động hết hạn do chủ bài không phản hồi trong " + pendingDays
+                        + " ngày.",
                 "/items/" + request.getItemId());
 
         return true;
@@ -219,7 +229,8 @@ public class RequestJobService {
             return false;
         }
 
-        request.cancel(Request.CANCEL_BY_SYSTEM + "Huỷ tự động do quá hạn 10 ngày không chốt lịch");
+        int chatDays = configService.getInt(ConfigKey.CHAT_OPEN_DAYS);
+        request.cancel(Request.CANCEL_BY_SYSTEM + "Huỷ tự động do quá hạn " + chatDays + " ngày không chốt lịch");
         requestRepository.save(request);
 
         // Module chat tự huỷ đề nghị đổi món còn PENDING, chạy trong cùng transaction của lần huỷ này.
@@ -228,9 +239,13 @@ public class RequestJobService {
         }
 
         // Nhả giữ chỗ bài đăng về APPROVED (GN-05, TD-02)
-        itemService.release(request.getItemId());
+        itemService.releaseAfterCancel(request.getItemId(), request.getReservedAt());
         if (request.getOfferedItemId() != null) {
-            itemService.releaseIfReserved(request.getOfferedItemId());
+            itemService.releaseIfReservedAfterCancel(request.getOfferedItemId(), request.getReservedAt());
+        }
+        // Bài mở lại: báo những người từng bị từ chối ở bài này (cùng hàm với các đường huỷ ở RequestService).
+        if (itemReopenedNotifier != null) {
+            itemReopenedNotifier.notifyRejectedRequesters(request.getItemId(), request.getReceiverId());
         }
 
         Long donorId = findDonorId(request.getItemId());
@@ -239,26 +254,27 @@ public class RequestJobService {
                     donorId,
                     "REQUEST_CANCELLED",
                     "Giao dịch bị huỷ tự động",
-                    "Giao dịch đã tự động huỷ do quá 10 ngày không chốt lịch hẹn. Bài đăng đã mở lại.",
+                    "Giao dịch đã tự động huỷ do quá " + chatDays + " ngày không chốt lịch hẹn. Bài đăng đã mở lại.",
                     "/items/" + request.getItemId());
         }
         notificationService.notify(
                 request.getReceiverId(),
                 "REQUEST_CANCELLED",
                 "Giao dịch bị huỷ tự động",
-                "Giao dịch đã tự động huỷ do quá 10 ngày không chốt lịch hẹn.",
+                "Giao dịch đã tự động huỷ do quá " + chatDays + " ngày không chốt lịch hẹn.",
                 "/items/" + request.getItemId());
 
         return true;
     }
 
-    private boolean autoConfirmInTransaction(long requestId, Instant cutoff, Instant now) {
+    private boolean autoConfirmInTransaction(long requestId, Instant cutoff, int autoConfirmDays, Instant now) {
         Request request = requestRepository.findById(requestId).orElse(null);
         if (request == null) {
             return false;
         }
 
-        if (request.getStatus() != RequestStatus.AWAITING_HANDOVER) {
+        // Giao hàng tự hoàn tất theo từng chiều ở RequestDeadlineJobService (GN-12), việc này chỉ cho Gặp trực tiếp
+        if (request.getStatus() != RequestStatus.AWAITING_HANDOVER || request.isShipping()) {
             return false;
         }
 
@@ -273,7 +289,7 @@ public class RequestJobService {
             return false;
         }
 
-        // Chỉ tự hoàn tất khi giao dịch không có report (GN-09), ví dụ bên nhận đã báo không đúng mô tả
+        // Chỉ tự hoàn tất khi giao dịch không có report (GN-09)
         if (reportService != null && reportService.hasReportForRequest(request.getId())) {
             return false;
         }
@@ -287,31 +303,40 @@ public class RequestJobService {
             itemService.markTraded(request.getOfferedItemId());
         }
 
-        // Tích luỹ điểm uy tín nếu có module Reputation (BC-12, UT-02, UT-05)
+        // Cộng điểm tích luỹ nếu có module Reputation (BC-12, UT-02, UT-05)
         if (reputationService != null) {
             reputationService.onCompleted(request.getId());
         }
 
-        // Ghi rõ hạn khiếu nại tính từ lúc hệ thống hoàn tất (U08)
+        // Hai câu khác nhau (GN-13): bên đã bấm biết vì sao hoàn tất, bên im lặng biết mình còn quyền khiếu nại tới lúc
+        // nào
         int complaintHours = configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS);
         Instant completedAt = request.getCompletedAt() != null ? request.getCompletedAt() : now;
-        String body = "Giao dịch đã được hệ thống tự động hoàn tất do đối phương không phản hồi sau 3 ngày. "
-                + ComplaintWindow.sentence(complaintHours, ComplaintWindow.deadline(completedAt, complaintHours));
+        Instant complaintDeadline = ComplaintWindow.deadline(completedAt, complaintHours);
         Long donorId = findDonorId(request.getItemId());
-        if (donorId != null) {
+        boolean receiverSilent = request.getDonorHandoverAt() != null;
+        Long silentUserId = receiverSilent ? Long.valueOf(request.getReceiverId()) : donorId;
+        Long confirmedUserId = receiverSilent ? donorId : Long.valueOf(request.getReceiverId());
+        String link = "/requests/" + request.getId();
+        if (silentUserId != null) {
             notificationService.notify(
-                    donorId,
+                    silentUserId,
                     "TRANSACTION_COMPLETED",
                     "Giao dịch đã tự động hoàn tất",
-                    body,
-                    "/requests/" + request.getId());
+                    "Giao dịch đã tự hoàn tất vì bạn không phản hồi trong " + autoConfirmDays
+                            + " ngày. Bạn có thể khiếu nại tới " + VietnamTime.format(complaintDeadline) + ".",
+                    link);
         }
-        notificationService.notify(
-                request.getReceiverId(),
-                "TRANSACTION_COMPLETED",
-                "Giao dịch đã tự động hoàn tất",
-                body,
-                "/requests/" + request.getId());
+        if (confirmedUserId != null) {
+            notificationService.notify(
+                    confirmedUserId,
+                    "TRANSACTION_COMPLETED",
+                    "Giao dịch đã hoàn tất",
+                    "Giao dịch đã hoàn tất vì " + findUserName(silentUserId) + " không phản hồi trong "
+                            + autoConfirmDays + " ngày. "
+                            + ComplaintWindow.sentence(complaintHours, complaintDeadline),
+                    link);
+        }
 
         return true;
     }
@@ -327,6 +352,19 @@ public class RequestJobService {
                     exception);
             return false;
         }
+    }
+
+    // Tên người dùng cho câu thông báo; không tra được thì nói "Đối phương".
+    private String findUserName(Long userId) {
+        if (jdbcClient == null || userId == null) {
+            return "Đối phương";
+        }
+        return jdbcClient
+                .sql("SELECT full_name FROM users WHERE id = :id")
+                .param("id", userId)
+                .query(String.class)
+                .optional()
+                .orElse("Đối phương");
     }
 
     private Long findDonorId(long itemId) {

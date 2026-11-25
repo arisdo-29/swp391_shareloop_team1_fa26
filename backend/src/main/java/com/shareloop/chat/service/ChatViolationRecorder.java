@@ -95,6 +95,22 @@ public class ChatViolationRecorder {
         return violationCount;
     }
 
+    /**
+     * Tin nhắn chứa đường dẫn hoặc tên mạng xã hội (D3): tin vẫn được gửi, chỉ báo Admin xem xét. Không tính vào số tin
+     * bị chặn nên không kích hoạt cảnh báo vi phạm của CH-05.
+     */
+    @Transactional
+    public void flagForAdminReview(long requestId, long senderId, String keyword) {
+        String senderName = resolveSenderName(senderId);
+        String itemTitle = resolveItemTitle(requestId);
+        notificationService.notifyAdmins(
+                "CHAT_FLAGGED",
+                "Tin nhắn có đường dẫn mạng xã hội: " + senderName,
+                senderName + " nhắc tới \"" + keyword + "\" trong giao dịch món \"" + itemTitle
+                        + "\" khi chưa chốt lịch. Vui lòng xem xét.",
+                "/admin/users/" + senderId);
+    }
+
     private String resolveSenderName(long senderId) {
         if (userService != null) {
             try {

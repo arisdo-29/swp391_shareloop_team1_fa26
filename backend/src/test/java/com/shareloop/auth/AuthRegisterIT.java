@@ -119,6 +119,29 @@ class AuthRegisterIT extends IntegrationTest {
         captureLatestOtp(2);
     }
 
+    @Test
+    void register_whenEmailStillPendingWithOtherPassword_keepsFirstPassword() throws Exception {
+        // given: lần đầu đăng ký bằng PASSWORD, lần hai (sau cooldown) gửi mật khẩu khác
+        postRegister().andExpect(status().isCreated());
+        jdbc.update("UPDATE users SET otp_expires_at = otp_expires_at - interval '2 minutes' WHERE email = ?", EMAIL);
+        postRegister("Khac@98765").andExpect(status().isCreated());
+        String otp = captureLatestOtp(2);
+        mockMvc.perform(post("/api/v1/auth/verify-otp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + EMAIL + "\",\"otp\":\"" + otp + "\"}"))
+                .andExpect(status().isOk());
+
+        // when, then: mật khẩu lần một vào được, mật khẩu lần hai thì không
+        postLogin(PASSWORD).andExpect(status().isOk());
+        postLogin("Khac@98765").andExpect(status().isUnauthorized());
+    }
+
+    private ResultActions postLogin(String password) throws Exception {
+        return mockMvc.perform(post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"" + EMAIL + "\",\"password\":\"" + password + "\"}"));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"MatKhau123", "MatKhau@abc", "12345678!", "Mat Khau1"})
     void register_rejectsWeakPasswords(String password) throws Exception {

@@ -6,14 +6,17 @@ import com.shareloop.catalog.CatalogErrorCode;
 import com.shareloop.catalog.dto.AdminCategoryReorderRequest;
 import com.shareloop.catalog.dto.AdminCategoryRequest;
 import com.shareloop.catalog.dto.AdminCategoryResponse;
+import com.shareloop.catalog.dto.VisibleItemCountResponse;
 import com.shareloop.catalog.entity.ItemCategory;
 import com.shareloop.catalog.repository.ItemCategoryRepository;
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.item.service.ItemService;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,9 +28,19 @@ public class AdminCategoryService {
     private final ItemCategoryRepository repository;
     private final ActivityLogService activityLogService;
 
-    public AdminCategoryService(ItemCategoryRepository repository, ActivityLogService activityLogService) {
+    private final ItemService itemService;
+
+    public AdminCategoryService(
+            ItemCategoryRepository repository, ActivityLogService activityLogService, @Lazy ItemService itemService) {
         this.repository = repository;
         this.activityLogService = activityLogService;
+        this.itemService = itemService;
+    }
+
+    /** Số bài đang hiển thị công khai sẽ bị ẩn khỏi Tìm đồ nếu tắt danh mục này (gồm danh mục con). */
+    public VisibleItemCountResponse countVisibleItems(long id) {
+        requireCategory(id);
+        return new VisibleItemCountResponse(itemService.countVisibleInCategory(id));
     }
 
     public List<AdminCategoryResponse> listAll() {

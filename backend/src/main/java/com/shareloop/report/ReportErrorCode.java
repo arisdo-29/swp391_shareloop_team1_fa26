@@ -11,18 +11,26 @@ public enum ReportErrorCode implements ErrorCode {
     REPORT_ALREADY_REPORTED(HttpStatus.CONFLICT, "Bạn đã báo cáo đối tượng này trước đó."),
     // BC-01: Giới hạn tối đa báo cáo bài của cùng một chủ bài trong khoảng thời gian cửa sổ.
     REPORT_OWNER_LIMIT_REACHED(
-            HttpStatus.CONFLICT, "Bạn đã báo cáo 3 bài của người này trong 30 ngày qua. Vui lòng thử lại sau."),
+            HttpStatus.CONFLICT,
+            "Bạn đã báo cáo quá nhiều bài của người này trong thời gian gần đây. Vui lòng thử lại sau."),
     REPORT_TARGET_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy đối tượng cần báo cáo."),
+    REPORT_REASON_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "Lý do không phù hợp với loại báo cáo."),
+    REPORT_CONTACT_REASON_NOT_ALLOWED(
+            HttpStatus.BAD_REQUEST, "Chỉ báo sai thông tin liên lạc khi hai bên đã từng chốt lịch giao dịch."),
     REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy báo cáo vi phạm."),
+    SYSTEM_REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy báo cáo hệ thống."),
+    SYSTEM_REPORT_ALREADY_RESOLVED(HttpStatus.CONFLICT, "Báo cáo hệ thống đã được xử lý."),
     DISPUTE_NOT_A_PARTY(HttpStatus.FORBIDDEN, "Bạn không phải là một bên trong giao dịch này."),
     DISPUTE_REQUEST_NOT_COMPLETED(HttpStatus.CONFLICT, "Chỉ có thể khiếu nại giao dịch đã hoàn thành."),
-    DISPUTE_WINDOW_EXPIRED(HttpStatus.UNPROCESSABLE_ENTITY, "Đã quá thời hạn 24 giờ để khiếu nại giao dịch."),
+    DISPUTE_WINDOW_EXPIRED(HttpStatus.UNPROCESSABLE_ENTITY, "Đã quá thời hạn để khiếu nại giao dịch."),
     DISPUTE_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy khiếu nại giao dịch."),
     DISPUTE_NOT_RESPONDENT(HttpStatus.FORBIDDEN, "Chỉ bên bị khiếu nại mới có quyền giải trình."),
     DISPUTE_ALREADY_CONCLUDED(HttpStatus.CONFLICT, "Khiếu nại này đã được kết luận, không thể giải trình thêm."),
     DISPUTE_ALREADY_RESPONDED(HttpStatus.CONFLICT, "Bạn đã gửi bản giải trình cho khiếu nại này rồi."),
-    DISPUTE_RESPONSE_WINDOW_EXPIRED(HttpStatus.UNPROCESSABLE_ENTITY, "Đã quá thời hạn 48 giờ để gửi giải trình."),
+    DISPUTE_RESPONSE_WINDOW_EXPIRED(HttpStatus.UNPROCESSABLE_ENTITY, "Đã quá thời hạn để gửi giải trình."),
     DISPUTE_INVALID_EVIDENCE(HttpStatus.BAD_REQUEST, "Bằng chứng không hợp lệ hoặc không thuộc quyền sở hữu của bạn."),
+    REPORT_PENALIZED_USER_INVALID(
+            HttpStatus.BAD_REQUEST, "Người bị trừ sao phải là chủ bài hoặc người nhận của giao dịch này."),
     REPORT_ALREADY_CONCLUDED(HttpStatus.CONFLICT, "Báo cáo này đã được kết luận trước đó."),
     // D-15, BC-10: chỉ kết luận khi bên bị báo cáo đã giải trình hoặc đã hết hạn giải trình.
     REPORT_RESPONSE_WINDOW_OPEN(

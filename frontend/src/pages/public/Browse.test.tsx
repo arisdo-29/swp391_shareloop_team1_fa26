@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
 import { StrictMode, type ReactNode } from 'react';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { aiApi } from '../../services/aiApi';
 import { catalogApi, type CategoryResponse } from '../../services/catalogApi';
 import { itemApi, type ItemResponse } from '../../services/itemApi';
 import { categoryBrowsePath } from '../../utils/browseFilters';
@@ -22,6 +23,8 @@ vi.mock('../../app/hooks', () => ({
 vi.mock('../../app/store', () => ({
   selectCurrentUser: vi.fn(),
 }));
+
+vi.mock('../../services/aiApi', () => ({ aiApi: { quota: vi.fn() } }));
 
 vi.mock('./HomeMotion', () => ({
   HomeMotion: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -139,6 +142,7 @@ function renderBrowseInStrictMode() {
 
 beforeEach(() => {
   authState.currentUser = null;
+  vi.mocked(aiApi.quota).mockResolvedValue({ freeUsesRemaining: 3, feeCredits: 2, hasToppedUp: true });
   vi.mocked(catalogApi.categories).mockResolvedValue(categories);
   vi.mocked(catalogApi.categoriesWithCounts).mockResolvedValue(categories);
   vi.mocked(catalogApi.areas).mockResolvedValue([]);
@@ -148,6 +152,56 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+describe('lọc khoảng giá trên trang Tìm đồ', () => {
+  it('lọc giá ngay ở Tất cả và giữ khoảng giá khi đổi hình thức', async () => {
+    const user = userEvent.setup();
+    renderBrowse();
+    await user.type(screen.getByRole('textbox', { name: 'Giá từ (đồng)' }), '240000');
+    await user.type(screen.getByRole('textbox', { name: 'Giá đến (đồng)' }), '360000');
+    await user.click(screen.getByRole('button', { name: 'Áp dụng giá' }));
+    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
+      offerType: undefined, minPrice: 240000, maxPrice: 360000,
+    })));
+    await user.click(screen.getByRole('button', { name: 'Cho tặng' }));
+    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
+      offerType: 'GIVE', minPrice: 240000, maxPrice: 360000,
+    })));
+    await user.click(screen.getByRole('button', { name: 'Trao đổi' }));
+    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
+      offerType: 'SWAP', minPrice: 240000, maxPrice: 360000,
+    })));
+    expect((screen.getByRole('textbox', { name: 'Giá từ (đồng)' }) as HTMLInputElement).value).toBe('240000');
+  });
+});
+
+describe('giới thiệu Trợ lý AI trên trang Tìm đồ', () => {
+  it('dẫn khách tới đăng nhập với đích quay về /ai và không gọi API hạn mức', async () => {
+    renderBrowse();
+
+    expect(await screen.findByText(book.title)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Thử Trợ lý AI' }).getAttribute('href')).toBe('/login?next=%2Fai');
+    expect(aiApi.quota).not.toHaveBeenCalled();
+  });
+
+  it('hiện lượt còn lại từ API và dẫn thành viên tới /ai', async () => {
+    authState.currentUser = { id: 12 };
+    renderBrowse();
+
+    expect(await screen.findByText('Còn 3 lượt miễn phí')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Thử Trợ lý AI' }).getAttribute('href')).toBe('/ai');
+  });
+
+  it('vẫn hiện danh sách và liên kết nếu không tải được hạn mức', async () => {
+    authState.currentUser = { id: 12 };
+    vi.mocked(aiApi.quota).mockRejectedValueOnce(new Error('Không tải được hạn mức'));
+    renderBrowse();
+
+    expect(await screen.findByText(book.title)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Thử Trợ lý AI' })).toBeTruthy();
+    expect(screen.queryByText(/Còn .* lượt miễn phí/)).toBeNull();
+  });
 });
 
 describe('lọc danh mục trên trang Tìm đồ', () => {
@@ -968,4 +1022,25 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
       expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ categoryId: 7 })),
     );
   });
+});
+
+it('hiện giá tham khảo của bài Cho tặng, Trao đổi và bài cũ ngay trên thẻ Tìm đồ', async () => {
+  vi.mocked(itemApi.list).mockResolvedValue({
+    items: [
+      { ...book, referencePrice: 120000 },
+      { ...book, id: 503, title: 'Bàn phím', offerType: 'SWAP', referencePrice: 280000 },
+      { ...book, id: 504, title: 'Sách cũ', referencePrice: null },
+    ],
+    page: 0,
+    size: 20,
+    totalElements: 3,
+  });
+  renderBrowse();
+
+  const give = await screen.findByRole('link', { name: /Bộ giáo trình đại học/ });
+  const swap = screen.getByRole('link', { name: /Bàn phím/ });
+  const legacy = screen.getByRole('link', { name: /Sách cũ/ });
+  expect(within(give).getByText(/Giá tham khảo 120\.000\s*₫/)).toBeTruthy();
+  expect(within(swap).getByText(/Giá tham khảo 280\.000\s*₫/)).toBeTruthy();
+  expect(within(legacy).getByText('Chưa có giá tham khảo')).toBeTruthy();
 });

@@ -19,12 +19,11 @@ import com.shareloop.wallet.mapper.WalletMapper;
 import com.shareloop.wallet.repository.PaymentOrderRepository;
 import com.shareloop.wallet.repository.PaymentOrderSnapshot;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.HashSet;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -42,11 +41,23 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class PaymentService {
 
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
+
+    /** Lý do ghi vào đơn khi người dùng tự hủy trên trang Ví. */
+    static final String USER_CANCELLED_REASON = "Bạn đã hủy đơn nạp.";
+
+    /** Lý do ghi vào đơn cũ khi người dùng chọn "Hủy đơn cũ & tạo đơn mới". */
+    static final String REPLACED_REASON = "Bạn đã hủy đơn này để tạo đơn nạp mới.";
+
+    /** vnp_ResponseCode 24: khách hủy giao dịch trên trang VNPay. */
+    static final String VNPAY_CUSTOMER_CANCELLED = "24";
+
     private final PaymentOrderRepository paymentOrderRepository;
     private final CreditService creditService;
     private final ConfigService configService;
     private final PaymentGatewayClient paymentGatewayClient;
     private final WalletMapper walletMapper;
+    private final PaymentDeadline paymentDeadline;
     private final UserService userService;
 
     @Autowired
@@ -56,12 +67,14 @@ public class PaymentService {
             ConfigService configService,
             PaymentGatewayClient paymentGatewayClient,
             WalletMapper walletMapper,
+            PaymentDeadline paymentDeadline,
             UserService userService) {
         this.paymentOrderRepository = paymentOrderRepository;
         this.creditService = creditService;
         this.configService = configService;
         this.paymentGatewayClient = paymentGatewayClient;
         this.walletMapper = walletMapper;
+        this.paymentDeadline = paymentDeadline;
         this.userService = userService;
     }
 
@@ -70,8 +83,16 @@ public class PaymentService {
             CreditService creditService,
             ConfigService configService,
             PaymentGatewayClient paymentGatewayClient,
-            WalletMapper walletMapper) {
-        this(paymentOrderRepository, creditService, configService, paymentGatewayClient, walletMapper, null);
+            WalletMapper walletMapper,
+            PaymentDeadline paymentDeadline) {
+        this(
+                paymentOrderRepository,
+                creditService,
+                configService,
+                paymentGatewayClient,
+                walletMapper,
+                paymentDeadline,
+                null);
     }
 
     /**
@@ -84,28 +105,108 @@ public class PaymentService {
      * @param amountVnd số tiền nạp (VNĐ), đã được DTO kiểm là số dương
      * @return đơn vừa tạo kèm redirectUrl
      * @throws com.shareloop.common.exception.BusinessException WALLET_TOPUP_AMOUNT_INVALID khi dưới mức tối thiểu
-     *     hoặc không phải bội số
+     *     hoặc không phải bội số; WALLET_TOPUP_PENDING_EXISTS khi còn đơn đang chờ thanh toán
      */
     public TopUpOrderResponse createTopUpOrder(long userId, long amountVnd) {
+        return createTopUpOrder(userId, amountVnd, false);
+    }
+
+    /**
+     * Tạo đơn nạp với quy tắc mỗi người một đơn đang chờ thanh toán (PENDING còn hạn).
+     *
+     * <p>Còn đơn đang chờ: replacePending = false thì ném WALLET_TOPUP_PENDING_EXISTS (409) kèm details của đơn đó để FE
+     * hỏi người dùng; replacePending = true thì hủy đơn cũ (CANCELLED, UPDATE có điều kiện status = PENDING) rồi tạo đơn
+     * mới trong cùng transaction. Khoá dòng users trước (cùng thứ tự với IPN) nên hai lần tạo đơn cùng lúc, hay tạo đơn
+     * trong lúc IPN của đơn cũ đang chạy, đều chạy lần lượt. Đơn PENDING đã quá hạn cộng dung sai được chuyển EXPIRED
+     * trước khi kiểm.
+     *
+     * <p>URL thanh toán được lưu vào đơn để "Tiếp tục thanh toán" dùng lại đúng URL đó (cùng vnp_TxnRef,
+     * vnp_ExpireDate), không tạo mã giao dịch mới.
+     */
+    public TopUpOrderResponse createTopUpOrder(long userId, long amountVnd, boolean replacePending) {
         int vndPerCredit = configService.getInt(ConfigKey.VND_PER_CREDIT);
         int minCredits = configService.getInt(ConfigKey.TOPUP_MIN_CREDITS);
         requireValidTopUpAmount(amountVnd, vndPerCredit, minCredits);
+
+        creditService.lockWalletRow(userId);
+        expireStalePending(userId);
+        PaymentOrder activePending = findActivePending(userId);
+        if (activePending != null) {
+            if (!replacePending) {
+                throw pendingExists(activePending);
+            }
+            int cancelled = paymentOrderRepository.cancelAllPendingOfUser(userId, REPLACED_REASON);
+            log.info("User {} replaced {} pending top-up order(s) with a new one", userId, cancelled);
+        }
 
         int credits = Math.toIntExact(amountVnd / vndPerCredit);
         PaymentOrder order = new PaymentOrder(
                 userId, newOrderCode(), amountVnd, credits, vndPerCredit, paymentGatewayClient.provider());
         paymentOrderRepository.save(order);
 
-        String redirectUrl = paymentGatewayClient.buildRedirectUrl(order.getOrderCode(), amountVnd);
-        return walletMapper.toTopUpOrderResponse(order, redirectUrl, expiresAt(order));
+        // Cùng một mốc expiresAt cho URL VNPay (vnp_ExpireDate) và cho FE đếm ngược.
+        Instant expiresAt = expiresAt(order);
+        String redirectUrl =
+                paymentGatewayClient.buildRedirectUrl(order.getOrderCode(), amountVnd, order.getCreatedAt(), expiresAt);
+        order.attachPaymentUrl(redirectUrl);
+        return walletMapper.toTopUpOrderResponse(order, redirectUrl, expiresAt, paymentDeadline.now());
+    }
+
+    /**
+     * Đơn nạp của chính mình, mới nhất trước (GET /api/v1/wallet/topup-orders). status = PENDING chỉ trả đơn còn trong
+     * hạn thanh toán (mục "Đơn đang chờ thanh toán"); không truyền status là toàn bộ lịch sử. Đơn PENDING đã quá hạn
+     * cộng dung sai được chuyển EXPIRED trước khi đọc. Chỉ trả đơn của userId, không bao giờ của người khác.
+     */
+    public PageResponse<TopUpOrderDetailResponse> listOwnOrders(
+            long userId, PaymentOrderStatus status, int page, int size) {
+        expireStalePending(userId);
+        Sort newestFirst = Sort.by(Sort.Direction.DESC, "createdAt", "id");
+        PageRequest pageRequest = PageRequest.of(page, size, newestFirst);
+        Page<PaymentOrder> orderPage = status == PaymentOrderStatus.PENDING
+                ? paymentOrderRepository.findActivePendingOrders(
+                        userId, paymentDeadline.activeCreatedAfter(), pageRequest)
+                : paymentOrderRepository.findOwnOrders(userId, status, pageRequest);
+        return PageResponse.from(orderPage.map(order -> detail(order, Map.of(), true)));
+    }
+
+    private void expireStalePending(long userId) {
+        int expired = paymentOrderRepository.expireStalePendingOfUser(userId, paymentDeadline.closedCreatedBefore());
+        if (expired > 0) {
+            log.info("Expired {} stale pending top-up order(s) of user {}", expired, userId);
+        }
+    }
+
+    private PaymentOrder findActivePending(long userId) {
+        Sort newestFirst = Sort.by(Sort.Direction.DESC, "createdAt", "id");
+        return paymentOrderRepository
+                .findActivePendingOrders(
+                        userId, paymentDeadline.activeCreatedAfter(), PageRequest.of(0, 1, newestFirst))
+                .stream()
+                .findFirst()
+                .orElse(null);
+    }
+
+    private BusinessException pendingExists(PaymentOrder order) {
+        Map<String, Object> details = new HashMap<>();
+        details.put("orderCode", order.getOrderCode());
+        details.put("amountVnd", order.getAmountVnd());
+        details.put("credits", order.getCredits());
+        details.put("expiresAt", String.valueOf(expiresAt(order)));
+        return new BusinessException(
+                WalletErrorCode.WALLET_TOPUP_PENDING_EXISTS,
+                WalletErrorCode.WALLET_TOPUP_PENDING_EXISTS.defaultMessage(),
+                null,
+                details);
     }
 
     /**
      * Xem một đơn nạp của chính mình (GET /api/v1/wallet/topup-orders/{orderCode}). FE gọi khi người dùng quay về từ
      * cổng thanh toán hoặc tải lại trang Ví để biết đơn đã được cộng chưa và còn hạn thanh toán tới lúc nào.
      *
-     * <p>Chỉ đọc, không đổi trạng thái: đơn quá expiresAt mà job chưa chạy vẫn trả PENDING, FE tự hiện "Hết hạn" theo
-     * expiresAt; PaymentExpiryJob mới là nơi đổi sang EXPIRED (VI-06). Không trả tên người dùng và Admin duyệt.
+     * <p>Đơn PENDING đã qua mốc đóng hẳn (expiresAt + dung sai lệch giờ với VNPay, xem PaymentDeadline) thì chuyển
+     * EXPIRED ngay khi xem, không chờ PaymentExpiryJob (5 phút một lần). Trong khoảng dung sai đơn vẫn PENDING để IPN
+     * hợp lệ tới muộn còn được cộng; FE tự hiện "Đơn đã hết hạn" theo expiresAt và hỏi lại tới khi có kết quả cuối.
+     * Không trả tên người dùng và Admin duyệt.
      *
      * @param userId người gọi, lấy từ token
      * @param orderCode mã đơn
@@ -113,13 +214,43 @@ public class PaymentService {
      * @throws BusinessException WALLET_PAYMENT_ORDER_NOT_FOUND khi không có đơn hoặc đơn của người khác (không để lộ
      *     đơn đó có tồn tại)
      */
-    @Transactional(readOnly = true)
     public TopUpOrderDetailResponse getOwnOrder(long userId, String orderCode) {
-        PaymentOrder order = paymentOrderRepository
+        PaymentOrder order = findOwnOrder(userId, orderCode);
+        if (order.getStatus() == PaymentOrderStatus.PENDING
+                && order.getCreatedAt() != null
+                && paymentDeadline.isClosed(order.getCreatedAt())
+                && paymentOrderRepository.expireIfPending(order.getId()) == 1) {
+            log.info("Top-up order {} expired on read", orderCode);
+            order = findOwnOrder(userId, orderCode);
+        }
+        return detail(order, Map.of(), true);
+    }
+
+    private PaymentOrder findOwnOrder(long userId, String orderCode) {
+        return paymentOrderRepository
                 .findByOrderCode(orderCode)
                 .filter(found -> found.getUserId() == userId)
                 .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_FOUND));
-        return detail(order, Map.of());
+    }
+
+    /**
+     * Người dùng tự hủy đơn nạp đang chờ thanh toán (POST /api/v1/wallet/topup-orders/{orderCode}/cancel). Đơn chuyển
+     * FAILED ngay, lý do "Bạn đã hủy đơn nạp." Không đụng ví: đơn PENDING chưa giữ hay cộng Credit nào.
+     *
+     * <p>Idempotent: đổi bằng một câu UPDATE có điều kiện status = PENDING. Gọi lại khi đơn đã FAILED, hoặc đơn đã
+     * SUCCESS/EXPIRED, thì không đổi gì và trả trạng thái hiện tại của đơn.
+     *
+     * @param userId người gọi, lấy từ token
+     * @param orderCode mã đơn
+     * @return chi tiết đơn sau khi hủy (hoặc trạng thái hiện tại nếu đơn không còn PENDING)
+     * @throws BusinessException WALLET_PAYMENT_ORDER_NOT_FOUND khi không có đơn hoặc đơn của người khác
+     */
+    public TopUpOrderDetailResponse cancelOwnOrder(long userId, String orderCode) {
+        int cancelled = paymentOrderRepository.cancelPending(orderCode, userId, USER_CANCELLED_REASON);
+        if (cancelled == 0) {
+            log.info("Top-up order {} not cancelled: not PENDING or not owned by user {}", orderCode, userId);
+        }
+        return getOwnOrder(userId, orderCode);
     }
 
     /**
@@ -150,47 +281,19 @@ public class PaymentService {
         return new TopUpConfirmResponse(orderCode, PaymentOrderStatus.SUCCESS, snapshot.getCredits(), wallet);
     }
 
-    /**
-     * Danh sách đơn nạp cho Admin, đơn mới tạo nằm trên cùng. provider null nghĩa là mọi cổng thanh toán (VNPAY, MOCK,
-     * MANUAL), nên Admin xem được cả đơn VNPay; status null nghĩa là mọi trạng thái.
-     * Kèm tên chủ đơn và tên Admin duyệt (nếu có).
-     */
-    @Transactional(readOnly = true)
-    public PageResponse<TopUpOrderDetailResponse> listOrders(
-            PaymentProvider provider, PaymentOrderStatus status, boolean submittedOnly, int page, int size) {
-        Sort newestFirst = Sort.by(Sort.Direction.DESC, "createdAt", "id");
-        Page<PaymentOrder> orderPage = paymentOrderRepository.findOrders(
-                provider, status, submittedOnly, PageRequest.of(page, size, newestFirst));
-        Map<Long, UserBrief> briefs = findBriefs(orderPage.getContent());
-        return PageResponse.from(orderPage.map(order -> detail(order, briefs)));
-    }
-
-    // Hạn thanh toán, cùng công thức với PaymentExpiryService (B29: trả sẵn để FE đếm ngược, không tự tính). created_at
-    // do
-    // JPA Auditing gán lúc persist nên luôn có sau save; chỉ null khi repository bị mock trong unit test.
+    // Hạn thanh toán lấy từ PaymentDeadline (một chỗ tính duy nhất). created_at do JPA Auditing gán lúc persist nên
+    // luôn
+    // có sau save; chỉ null khi repository bị mock trong unit test.
     private Instant expiresAt(PaymentOrder order) {
         if (order.getCreatedAt() == null) {
             return null;
         }
-        return order.getCreatedAt()
-                .plus(configService.getInt(ConfigKey.PAYMENT_ORDER_EXPIRE_MINUTES), ChronoUnit.MINUTES);
+        return paymentDeadline.expiresAt(order.getCreatedAt());
     }
 
-    private Map<Long, UserBrief> findBriefs(List<PaymentOrder> orderList) {
-        if (userService == null) {
-            return Map.of();
-        }
-        Set<Long> userIds = new HashSet<>();
-        for (PaymentOrder order : orderList) {
-            userIds.add(order.getUserId());
-            if (order.getReviewedBy() != null) {
-                userIds.add(order.getReviewedBy());
-            }
-        }
-        return userService.findBriefs(userIds);
-    }
-
-    private TopUpOrderDetailResponse detail(PaymentOrder order, Map<Long, UserBrief> briefs) {
+    // includePaymentUrl: chỉ API của chủ đơn trả URL thanh toán, và chỉ khi đơn còn PENDING trong hạn.
+    private TopUpOrderDetailResponse detail(
+            PaymentOrder order, Map<Long, UserBrief> briefs, boolean includePaymentUrl) {
         UserBrief owner = briefs.get(order.getUserId());
         UserBrief reviewer = order.getReviewedBy() == null ? null : briefs.get(order.getReviewedBy());
         return new TopUpOrderDetailResponse(
@@ -209,7 +312,52 @@ public class PaymentService {
                 order.getReviewNote(),
                 owner == null ? null : owner.fullName(),
                 owner == null ? null : owner.email(),
-                reviewer == null ? null : reviewer.fullName());
+                reviewer == null ? null : reviewer.fullName(),
+                failureReason(order),
+                paymentDeadline.now(),
+                includePaymentUrl ? payableUrl(order) : null);
+    }
+
+    private String payableUrl(PaymentOrder order) {
+        boolean payable = order.getStatus() == PaymentOrderStatus.PENDING
+                && order.getCreatedAt() != null
+                && !paymentDeadline.isPastExpiresAt(order.getCreatedAt());
+        return payable ? order.getPaymentUrl() : null;
+    }
+
+    /**
+     * Lý do đơn FAILED / CANCELLED cho người dùng đọc. Ghi chú xử lý (tự hủy, hủy để tạo đơn mới, cần hoàn tiền) ưu
+     * tiên trước; không có thì suy từ vnp_ResponseCode trong callback_data. Trạng thái khác trả null.
+     */
+    private static final String PAID_AFTER_CLOSED_MESSAGE =
+            "VNPay đã báo thu tiền sau khi đơn hết hạn. Admin sẽ kiểm tra và cộng Credit hoặc hoàn tiền cho bạn.";
+
+    static String failureReason(PaymentOrder order) {
+        // Đơn đã đóng nhưng VNPay báo đã thu tiền và Admin chưa đối soát: người dùng đọc câu cố định, không đọc ghi chú
+        // nội bộ
+        if (order.getPaidAt() != null
+                && order.getReviewedAt() == null
+                && order.getStatus() != PaymentOrderStatus.PENDING
+                && order.getStatus() != PaymentOrderStatus.SUCCESS) {
+            return PAID_AFTER_CLOSED_MESSAGE;
+        }
+        if (order.getStatus() != PaymentOrderStatus.FAILED && order.getStatus() != PaymentOrderStatus.CANCELLED) {
+            return null;
+        }
+        if (order.getReviewNote() != null && !order.getReviewNote().isBlank()) {
+            return order.getReviewNote();
+        }
+        Map<String, String> callback = order.getCallbackData();
+        String responseCode = callback == null ? null : callback.get("vnp_ResponseCode");
+        if (responseCode == null) {
+            return order.getStatus() == PaymentOrderStatus.CANCELLED
+                    ? "Đơn nạp đã bị hủy."
+                    : "Thanh toán không thành công.";
+        }
+        if (VNPAY_CUSTOMER_CANCELLED.equals(responseCode)) {
+            return "Bạn đã hủy giao dịch tại VNPay.";
+        }
+        return "VNPay báo thanh toán không thành công (mã " + responseCode + ").";
     }
 
     private void requireValidTopUpAmount(long amountVnd, int vndPerCredit, int minCredits) {

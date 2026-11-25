@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { StarRating } from '../../components/StarRating';
 import { Alert, EmptyState, PageHeader, SkeletonRows } from '../../components/ui';
 import {
   adminAnomalyApi,
@@ -69,6 +70,7 @@ export function AdminAnomalies() {
   }, []);
 
   const sharedIpGroups = report?.sharedIpGroups ?? [];
+  const repeatedCancelers = report?.repeatedCancelers ?? [];
 
   return (
     <section className="space-y-6">
@@ -110,6 +112,50 @@ export function AdminAnomalies() {
                         </td>
                         <td className="font-semibold">{pair.completedCount}</td>
                         <td>{formatDateTime(pair.lastCompletedAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Khối huỷ nhiều lần sau khi thấy liên hệ (GN-06), chỉ để Admin xem xét, không tự phạt */}
+          <div className="space-y-3">
+            <div>
+              <h2 className="text-base font-bold text-text-primary">Huỷ nhiều lần sau khi thấy liên hệ</h2>
+              <p className="mt-1 text-sm text-text-secondary">
+                Người đề nghị huỷ nhiều giao dịch sau khi đã thấy thông tin liên hệ của bên kia. Hệ thống chỉ báo để
+                Admin xem xét, không tự phạt.
+              </p>
+              {report.cancelThreshold !== undefined && report.cancelWindowDays !== undefined ? (
+                <p className="mt-1 text-xs text-text-muted">
+                  Đang cảnh báo từ {report.cancelThreshold} lần trong {report.cancelWindowDays} ngày
+                </p>
+              ) : null}
+            </div>
+            {repeatedCancelers.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border bg-surface-low p-6 text-center text-sm text-text-muted">
+                Không có cảnh báo
+              </div>
+            ) : (
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Người dùng</th>
+                      <th>Số lần huỷ</th>
+                      <th>Lần gần nhất</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {repeatedCancelers.map((item) => (
+                      <tr key={item.user.id}>
+                        <td>
+                          <UserCell user={item.user} />
+                        </td>
+                        <td className="font-semibold">{item.cancelCount}</td>
+                        <td>{formatDateTime(item.lastCancelRequestedAt)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -181,7 +227,7 @@ export function AdminAnomalies() {
                                 </span>
                               </td>
                               <td className="whitespace-nowrap text-xs">{formatDateTime(acc.registeredAt)}</td>
-                              <td className="whitespace-nowrap text-xs font-medium">{acc.trustStars} ⭐</td>
+                              <td className="whitespace-nowrap text-xs font-medium"><StarRating value={acc.trustStars} /></td>
                               <td>{accountStatusBadge(acc)}</td>
                             </tr>
                           ))}

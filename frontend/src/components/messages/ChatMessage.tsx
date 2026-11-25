@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
 import { Button, ItemImage, StatusBadge, TypeBadge } from '../ui';
 import type { MessageResponse } from '../../services/chatApi';
-import { resolveMediaUrl } from '../../services/mediaUrl';
+import { PrivateImage } from '../PrivateImage';
 import { messageOfferStatusLabel } from '../../utils/chatMessages';
+import type { ChatMessageSide } from './conversation';
 
 /**
  * Một tin trong khung chat. Tin hệ thống (chốt lịch, hoàn tất...) là dòng nhỏ giữa khung, kèm liên kết
@@ -10,14 +11,17 @@ import { messageOfferStatusLabel } from '../../utils/chatMessages';
  */
 export function ChatMessage({
   entry,
-  mine,
+  side,
   progressPath,
+  requestId,
   onOpenItem,
   offerActions,
 }: {
   entry: MessageResponse;
-  mine: boolean;
+  side: ChatMessageSide;
   progressPath: string;
+  // Id số của giao dịch: ảnh chat riêng tư chỉ đọc được qua /requests/{id}/media/{mediaId} (D2).
+  requestId: number | string;
   onOpenItem: (itemId: number) => void;
   // Chỉ trang Tin nhắn truyền vào, cho chủ bài ở đề nghị đổi món đang chờ khi giao dịch còn thương lượng.
   offerActions?: { submitting: boolean; onAccept: () => void; onDecline: () => void };
@@ -45,10 +49,16 @@ export function ChatMessage({
     );
   }
   const offerLabel = messageOfferStatusLabel(entry.offerStatus);
+  const darkBubble = side === 'right';
+  const alignment = darkBubble ? 'left' : 'right';
   return (
-    <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+    <div
+      data-message-side={side}
+      data-message-align={alignment}
+      className={`flex ${darkBubble ? 'justify-start' : 'justify-end'}`}
+    >
       <div
-        className={`max-w-[82%] rounded-lg px-3.5 py-2.5 text-sm leading-6 sm:max-w-[70%] ${mine ? 'rounded-br-sm bg-primary text-white' : 'rounded-bl-sm bg-surface-low text-text-primary'}`}
+        className={`max-w-[82%] rounded-lg px-3.5 py-2.5 text-sm leading-6 sm:max-w-[70%] ${darkBubble ? 'rounded-bl-sm bg-primary text-white' : 'rounded-br-sm bg-surface-low text-text-primary'}`}
       >
         {entry.itemCard ? (
           <button
@@ -71,23 +81,18 @@ export function ChatMessage({
           </button>
         ) : null}
         {entry.mediaId ? (
-          <a
-            href={resolveMediaUrl(`/api/v1/media/${entry.mediaId}`)}
-            target="_blank"
-            rel="noreferrer"
-            className="mb-2 block"
-          >
-            <img
-              src={resolveMediaUrl(`/api/v1/media/${entry.mediaId}`)}
+          <div className="mb-2">
+            <PrivateImage
+              path={`/api/v1/requests/${requestId}/media/${entry.mediaId}`}
               alt="Ảnh trong cuộc trò chuyện"
               className="max-h-72 max-w-full rounded-md object-contain"
             />
-          </a>
+          </div>
         ) : null}
         {entry.content ? <p className="whitespace-pre-wrap break-words">{entry.content}</p> : null}
         {offerLabel ? (
           <span
-            className={`mt-1.5 inline-flex rounded-sm px-2 py-0.5 text-2xs font-semibold ${mine ? 'bg-white/15 text-white' : 'bg-white text-primary'}`}
+            className={`mt-1.5 inline-flex rounded-sm px-2 py-0.5 text-2xs font-semibold ${darkBubble ? 'bg-white/15 text-white' : 'bg-white text-primary'}`}
           >
             {offerLabel}
           </span>
@@ -107,7 +112,7 @@ export function ChatMessage({
             </Button>
           </div>
         ) : null}
-        <span className={`mt-1 block text-2xs ${mine ? 'text-white/70' : 'text-text-muted'}`}>
+        <span className={`mt-1 block text-2xs ${darkBubble ? 'text-white/70' : 'text-text-muted'}`}>
           {new Date(entry.createdAt).toLocaleString('vi-VN', {
             hour: '2-digit',
             minute: '2-digit',

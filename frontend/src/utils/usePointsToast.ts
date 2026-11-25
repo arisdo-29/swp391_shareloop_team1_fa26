@@ -4,7 +4,7 @@ import { notificationApi, type NotificationResponse } from '../services/notifica
 import { isRealtimeConnected } from '../services/realtime';
 import { useRealtimeRefresh } from './useRealtimeRefresh';
 
-/** Loại thông báo backend gửi khi giao dịch hoàn tất và điểm uy tín đã được tính (ReputationService). */
+/** Loại thông báo backend gửi khi giao dịch hoàn tất và điểm tích luỹ đã được tính (ReputationService). */
 export const POINTS_NOTIFICATION_TYPE = 'POINTS_AWARDED';
 /** Loại thông báo backend gửi khi người dùng được lên hạng tín nhiệm (R13). */
 export const RANK_UP_NOTIFICATION_TYPE = 'RANK_UP';
@@ -37,7 +37,7 @@ function writeSeen(userId: string, seen: Set<number>) {
 /** Câu toast ngắn: tiêu đề kèm câu đầu của nội dung (lý do cộng / không cộng điểm). */
 export function pointsToastMessage(notification: NotificationResponse) {
   const extra = notification.body.match(/(lên hạng [^!.]+!|hồi 1 sao[^.]*\.)/i)?.[0];
-  if (!extra) return `${notification.title}. Xem chi tiết ở Hồ sơ › Uy tín & Hạng.`;
+  if (!extra) return `${notification.title}. Xem chi tiết ở Hồ sơ › Hạng và Uy tín.`;
   return `${notification.title}. Bạn đã ${extra.charAt(0).toLowerCase()}${extra.slice(1)}`;
 }
 

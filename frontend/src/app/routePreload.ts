@@ -22,10 +22,15 @@ export function preloadRoute(pathname: string): Promise<unknown> {
   if (pathname === '/admin') page = import('../pages/admin/AdminFinancePages');
   else if (pathname === '/admin/moderation') page = import('../pages/admin/AdminModerationList');
   else if (pathname.startsWith('/admin/moderation/')) page = import('../pages/admin/AdminModerationDetail');
+  else if (pathname === '/admin/transactions') page = import('../pages/admin/AdminTransactions');
+  else if (pathname.startsWith('/admin/transactions/')) page = import('../pages/admin/AdminTransactionDetail');
+  else if (pathname === '/admin/items') page = import('../pages/admin/AdminItems');
+  else if (pathname.startsWith('/admin/items/')) page = import('../pages/admin/AdminItemDetail');
   else if (pathname === '/admin/users') page = import('../pages/admin/AdminAccounts');
   else if (pathname === '/admin/reputation') page = import('../pages/admin/AdminReputation');
   else if (pathname === '/admin/complaints' || pathname === '/admin/disputes') page = import('../pages/admin/AdminComplaints');
   else if (pathname === '/admin/finance/topup-orders') page = import('../pages/admin/AdminTopUpOrders');
+  else if (pathname === '/admin/finance/ledger') page = import('../pages/admin/AdminLedger');
   else if (pathname.startsWith('/admin/finance/users')) page = import('../pages/admin/AdminFinanceUsers');
   else if (pathname === '/admin/finance') page = import('../pages/admin/AdminFinancePages');
   else if (pathname === '/admin/alerts') page = import('../pages/admin/AdminAnomalies');

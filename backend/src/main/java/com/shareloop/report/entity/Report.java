@@ -37,6 +37,9 @@ public class Report extends BaseEntity {
     @Column(name = "description", nullable = false, columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "system_title", length = 150)
+    private String systemTitle;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "stage", nullable = false, length = 8)
     private ReportStage stage = ReportStage.BEFORE;
@@ -95,6 +98,24 @@ public class Report extends BaseEntity {
         this.starsDeducted = 0;
     }
 
+    public static Report createSystemReport(Long reporterId, String title, String description) {
+        Report report = new Report(
+                reporterId, TargetType.SYSTEM, null, null, null, ReportReason.OTHER, description, ReportStage.BEFORE);
+        report.systemTitle = title;
+        return report;
+    }
+
+    public String getSystemTitle() {
+        return systemTitle;
+    }
+
+    public void resolveSystemReport(Long adminId, String resolution, Instant now) {
+        this.status = ReportStatus.RESOLVED;
+        this.resolvedBy = adminId;
+        this.resolution = resolution;
+        this.resolvedAt = now;
+    }
+
     /**
      * Tạo khiếu nại giao dịch đã hoàn thành (BC-07, BC-08, Issue #112).
      */
@@ -120,6 +141,30 @@ public class Report extends BaseEntity {
         report.evidence = evidence;
         report.responseDueAt = responseDueAt;
         return report;
+    }
+
+    /**
+     * Tạo báo cáo vi phạm khi một bên từ chối nhận món đồ (GN-07, BC-09). Đây là báo cáo bài, không phải khiếu nại:
+     * nhắm vào món bị từ chối, gắn giao dịch, không có hạn giải trình nên Admin kết luận được ngay.
+     */
+    public static Report createRefusalReport(
+            Long reporterId, Long requestId, Long refusedItemId, Long reportedUserId, String note, String evidence) {
+        Report report = new Report(
+                reporterId,
+                TargetType.ITEM,
+                refusedItemId,
+                reportedUserId,
+                requestId,
+                ReportReason.NOT_AS_DESCRIBED,
+                note,
+                ReportStage.AFTER);
+        report.evidence = evidence;
+        return report;
+    }
+
+    /** Báo cáo này có phải báo cáo từ chối nhận không: báo cáo bài, lý do Không đúng mô tả, có gắn giao dịch. */
+    public boolean isRefusalReport() {
+        return targetType == TargetType.ITEM && requestId != null && reason == ReportReason.NOT_AS_DESCRIBED;
     }
 
     /**
@@ -206,7 +251,19 @@ public class Report extends BaseEntity {
      * trình (Admin đã yêu cầu, hoặc là khiếu nại giao dịch). Hồ sơ chưa có hạn thì bên bị phản ánh chưa được biết.
      */
     public boolean isVisibleToRespondent(Long userId) {
-        return userId != null && userId.equals(targetUserId) && responseDueAt != null;
+        // Báo cáo từ chối nhận không có hạn nhưng bên bị báo cáo đã được báo ngay và được giải trình (GN-07)
+        return userId != null && userId.equals(targetUserId) && (responseDueAt != null || isRefusalReport());
+    }
+
+    /** Bên bị báo cáo còn gửi giải trình được không: chưa kết luận, chưa giải trình và còn hạn (nếu có hạn). */
+    public boolean canStillRespond(Instant now) {
+        if (status == ReportStatus.RESOLVED || status == ReportStatus.DISMISSED || respondedAt != null) {
+            return false;
+        }
+        if (isRefusalReport()) {
+            return true;
+        }
+        return status == ReportStatus.AWAITING_RESPONSE && responseDueAt != null && !now.isAfter(responseDueAt);
     }
 
     public void awaitResponse(Instant dueAt) {
@@ -247,6 +304,11 @@ public class Report extends BaseEntity {
         if (decision == com.shareloop.report.dto.ReportDecision.UPHOLD) {
             this.starsDeducted = 1;
         }
+    }
+
+    /** Khiếu nại được chấp thuận nhưng Admin quyết không trừ sao ai (đề nghị huỷ không tố ai). */
+    public void markNoStarsDeducted() {
+        this.starsDeducted = 0;
     }
 
     /**

@@ -4,12 +4,15 @@ import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -18,16 +21,56 @@ import org.springframework.stereotype.Repository;
 public interface ItemRepository extends JpaRepository<Item, Long> {
 
     /**
+     * Danh sách bài cho Admin ở mọi trạng thái (kể cả đang ẩn). Bài đã xoá mềm bị @SQLRestriction loại. Các cờ
+     * allCategories, allOwners, filterActive và filterBoosted = false thì bỏ qua tham số tương ứng; ids truyền vào
+     * luôn có ít nhất một phần tử để IN không rỗng.
+     */
+    @Query("select i from Item i where (:status is null or i.status = :status)"
+            + " and (:filterActive = false or i.isActive = :active)"
+            + " and (:offerType is null or i.offerType = :offerType)"
+            + " and (:allCategories = true or i.categoryId = :categoryId)"
+            + " and (:allOwners = true or i.donorId = :ownerId)"
+            + " and (:keywordPattern is null or lower(i.title) like :keywordPattern or i.donorId in :keywordOwnerIds)"
+            + " and i.createdAt >= :from and i.createdAt < :to"
+            + " and (:filterBoosted = false or i.id in :boostedIds)")
+    Page<Item> searchForAdmin(
+            @Param("status") ItemStatus status,
+            @Param("filterActive") boolean filterActive,
+            @Param("active") boolean active,
+            @Param("offerType") OfferType offerType,
+            @Param("allCategories") boolean allCategories,
+            @Param("categoryId") long categoryId,
+            @Param("allOwners") boolean allOwners,
+            @Param("ownerId") long ownerId,
+            @Param("keywordPattern") String keywordPattern,
+            @Param("keywordOwnerIds") Collection<Long> keywordOwnerIds,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("filterBoosted") boolean filterBoosted,
+            @Param("boostedIds") Collection<Long> boostedIds,
+            Pageable pageable);
+
+    /**
+     * Bài chỉ hiện công khai khi danh mục và khu vực của bài còn bật (B3). Viết bằng EXISTS ngay trong câu truy vấn để
+     * module item không phải gọi repository của catalog. Danh mục hoặc khu vực bị tắt rồi bật lại thì bài hiện lại.
+     */
+    String ENABLED_CATALOG = "AND EXISTS (SELECT 1 FROM item_categories c WHERE c.id = i.category_id "
+            + "AND c.is_active AND NOT c.is_deleted) "
+            + "AND EXISTS (SELECT 1 FROM areas ar WHERE ar.id = i.area_id AND ar.is_active AND NOT ar.is_deleted) ";
+
+    /**
      * Điều kiện chung của trang Tìm đồ: bài APPROVED, không ẩn, chưa xoá, còn hạn hiển thị, và khớp các bộ lọc tuỳ chọn
      * (danh mục, khu vực, tình trạng, hình thức, từ khoá không dấu theo tên bài). Bộ lọc null thì bỏ qua. Viết một lần
      * để các query đếm, lấy bài đẩy và lấy bài thường luôn lọc giống hệt nhau.
      */
-    String PUBLIC_BROWSE_FILTER = " i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+    String PUBLIC_BROWSE_FILTER = " i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted " + ENABLED_CATALOG + ""
             + "AND (i.expire_at IS NULL OR i.expire_at > :now) "
             + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
             + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
             + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
             + "AND (CAST(:offerType AS varchar) IS NULL OR i.offer_type = :offerType) "
+            + "AND (CAST(:minPrice AS bigint) IS NULL OR i.reference_price >= :minPrice) "
+            + "AND (CAST(:maxPrice AS bigint) IS NULL OR i.reference_price <= :maxPrice) "
             + "AND (CASE WHEN f_unaccent(lower(:q)) ~ '^[a-z0-9 ]+$' THEN "
             + "(' ' || regexp_replace(f_unaccent(lower(i.title)), '[^a-z0-9]+', ' ', 'g') || ' ') LIKE "
             + "'% ' || trim(regexp_replace(f_unaccent(lower(:q)), '[^a-z0-9]+', ' ', 'g')) || ' %' "
@@ -43,11 +86,18 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
     /** Tổng số bài khớp bộ lọc của trang Tìm đồ, gồm cả bài đang đẩy và bài thường. */
     @Query(value = "SELECT count(*) FROM items i WHERE" + PUBLIC_BROWSE_FILTER, nativeQuery = true)
     long countPublicBrowseItems(
-            Long categoryId, Long areaId, String condition, String offerType, String q, Instant now);
+            Long categoryId,
+            Long areaId,
+            String condition,
+            String offerType,
+            String q,
+            Instant now,
+            Long minPrice,
+            Long maxPrice);
 
     @Query(
             value = "SELECT i.category_id, count(*) FROM items i "
-                    + "WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                    + "WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted " + ENABLED_CATALOG + ""
                     + "AND (i.expire_at IS NULL OR i.expire_at > :now) GROUP BY i.category_id",
             nativeQuery = true)
     List<Object[]> countPublicItemsByCategory(Instant now);
@@ -61,7 +111,14 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
                     + "AND i.boosted_until > :now ORDER BY i.id ASC",
             nativeQuery = true)
     List<Long> findPublicBoostedIds(
-            Long categoryId, Long areaId, String condition, String offerType, String q, Instant now);
+            Long categoryId,
+            Long areaId,
+            String condition,
+            String offerType,
+            String q,
+            Instant now,
+            Long minPrice,
+            Long maxPrice);
 
     /**
      * Phần danh sách thường của trang Tìm đồ: mọi bài khớp bộ lọc (kể cả bài đang đẩy) trừ các id trong
@@ -84,6 +141,8 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             String offerType,
             String q,
             Instant now,
+            Long minPrice,
+            Long maxPrice,
             Collection<Long> excludedIds,
             String sort,
             int limit,
@@ -99,9 +158,11 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
     @Query(
             value = "SELECT i.* FROM items i WHERE i.donor_id = :donorId AND i.status = 'APPROVED' "
                     + "AND i.is_active AND NOT i.is_deleted AND (i.expire_at IS NULL OR i.expire_at > :now) "
+                    + ENABLED_CATALOG + ""
                     + "ORDER BY i.created_at DESC, i.id DESC",
             countQuery = "SELECT count(*) FROM items i WHERE i.donor_id = :donorId AND i.status = 'APPROVED' "
-                    + "AND i.is_active AND NOT i.is_deleted AND (i.expire_at IS NULL OR i.expire_at > :now)",
+                    + "AND i.is_active AND NOT i.is_deleted AND (i.expire_at IS NULL OR i.expire_at > :now) "
+                    + ENABLED_CATALOG + "",
             nativeQuery = true)
     Page<Item> findPublicActiveByDonor(@Param("donorId") Long donorId, @Param("now") Instant now, Pageable pageable);
 
@@ -143,6 +204,7 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     @Query(
             value = "SELECT i.* FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                    + ENABLED_CATALOG + ""
                     + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
                     + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
                     + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
@@ -152,6 +214,7 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
                     + "|| '%' ESCAPE '!' ORDER BY i.created_at DESC, i.id DESC",
             countQuery =
                     "SELECT count(*) FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                            + ENABLED_CATALOG + ""
                             + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
                             + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
                             + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
@@ -170,6 +233,7 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     @Query(
             value = "SELECT i.* FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                    + ENABLED_CATALOG + ""
                     + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
                     + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
                     + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
@@ -179,6 +243,7 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
                     + "|| '%' ESCAPE '!' ORDER BY i.created_at DESC, i.id DESC",
             countQuery =
                     "SELECT count(*) FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                            + ENABLED_CATALOG + ""
                             + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
                             + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
                             + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
@@ -194,4 +259,34 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             @Param("offerType") String offerType,
             @Param("q") String q,
             Pageable pageable);
+
+    /**
+     * Lấy bài và khoá dòng tới hết transaction (C3), giống WalletAccountRepository.lockById. Dùng khi giữ chỗ và nhả bài
+     * để hai thao tác cùng lúc trên một bài chạy lần lượt, không cùng đọc APPROVED rồi cùng giữ chỗ.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select i from Item i where i.id = :id")
+    Optional<Item> findByIdForUpdate(@Param("id") Long id);
+
+    /** Bài còn bật danh mục và khu vực không (B3). Bài không tồn tại cũng trả false. */
+    @Query(
+            value = "SELECT EXISTS (SELECT 1 FROM items i WHERE i.id = :itemId " + ENABLED_CATALOG + ")",
+            nativeQuery = true)
+    boolean isInEnabledCatalog(Long itemId);
+
+    /** Số bài đang hiển thị công khai thuộc danh mục (kể cả danh mục con), dùng cho hộp xác nhận tắt danh mục. */
+    @Query(
+            value = "SELECT count(*) FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                    + "AND (i.expire_at IS NULL OR i.expire_at > :now) AND i.category_id IN "
+                    + "(SELECT c.id FROM item_categories c WHERE c.id = :categoryId OR c.parent_id = :categoryId)",
+            nativeQuery = true)
+    long countVisibleInCategory(Long categoryId, Instant now);
+
+    /** Số bài đang hiển thị công khai thuộc khu vực (kể cả khu vực con), dùng cho hộp xác nhận tắt khu vực. */
+    @Query(
+            value = "SELECT count(*) FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                    + "AND (i.expire_at IS NULL OR i.expire_at > :now) AND i.area_id IN "
+                    + "(SELECT a.id FROM areas a WHERE a.id = :areaId OR a.parent_id = :areaId)",
+            nativeQuery = true)
+    long countVisibleInArea(Long areaId, Instant now);
 }

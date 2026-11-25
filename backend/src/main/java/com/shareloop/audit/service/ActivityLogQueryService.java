@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -98,6 +99,19 @@ public class ActivityLogQueryService {
         return repository
                 .findFirstByTypeAndTargetIdOrderByIdDesc(type, targetId)
                 .map(ActivityLog::getReason);
+    }
+
+    /**
+     * Lịch sử các hành động thuộc một nhóm loại trên một đối tượng (ví dụ ẩn và hiện lại một bài), mới nhất trước. Tên
+     * người thực hiện được tra một lần cho cả danh sách.
+     */
+    @Transactional(readOnly = true)
+    public List<ActivityLogDto> findHistory(String targetType, Long targetId, Collection<String> types) {
+        List<ActivityLog> logs =
+                repository.findByTargetTypeAndTargetIdAndTypeInOrderByIdDesc(targetType, targetId, types);
+        Map<Long, UserBrief> users = userService.findBriefs(collectUserIds(logs));
+        Map<Long, String> itemTitles = itemQueryService.findTitles(collectItemIds(logs));
+        return logs.stream().map(log -> toDto(log, users, itemTitles)).toList();
     }
 
     /** Danh sách loại hành động kèm nhãn tiếng Việt cho bộ lọc phía FE. */
@@ -247,8 +261,11 @@ public class ActivityLogQueryService {
             return ActivityType.REVIEW_APPROVE.label();
         }
         if (ActivityType.CONFIG_UPDATE.code().equals(log.getType()) && log.getData() != null) {
-            return configLabel(dataValue(log, "key")) + ": " + dataValue(log, "oldValue") + " → "
+            String change = configLabel(dataValue(log, "key")) + ": " + dataValue(log, "oldValue") + " → "
                     + dataValue(log, "newValue");
+            // Khoá đồng bộ có note giải thích vì sao đổi; log cũ không có note thì hiện như trước.
+            String note = dataValue(log, "note");
+            return note == null ? change : change + " (" + note + ")";
         }
         if ((ActivityType.AI_USAGE.code().equals(log.getType()) || "AiUsage".equals(log.getType()))
                 && log.getData() != null) {

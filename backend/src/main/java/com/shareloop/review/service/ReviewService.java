@@ -13,10 +13,13 @@ import com.shareloop.item.service.ItemService;
 import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.moderation.ModerationReason;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.review.ReviewErrorCode;
 import com.shareloop.review.dto.ChecklistAnswer;
 import com.shareloop.review.dto.ReviewItemAttribute;
 import com.shareloop.review.dto.ReviewItemDetailResponse;
+import com.shareloop.review.dto.ReviewQueueFilter;
+import com.shareloop.review.dto.ReviewQueueFilter.RiskSignal;
 import com.shareloop.review.dto.ReviewQueueItem;
 import com.shareloop.review.dto.ReviewQueueResponse;
 import com.shareloop.review.entity.ReviewItem;
@@ -27,6 +30,7 @@ import com.shareloop.setting.dto.ChecklistItem;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.service.UserService;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -59,6 +63,7 @@ public class ReviewService {
     private final CategoryService categoryService;
     private final AreaService areaService;
     private final CategoryAttributeService categoryAttributeService;
+    private final ReputationService reputationService;
     private final ObjectMapper objectMapper;
 
     public ReviewService(
@@ -73,6 +78,7 @@ public class ReviewService {
             CategoryService categoryService,
             AreaService areaService,
             CategoryAttributeService categoryAttributeService,
+            ReputationService reputationService,
             ObjectMapper objectMapper) {
         this.repository = repository;
         this.reviewItemRepository = reviewItemRepository;
@@ -85,6 +91,7 @@ public class ReviewService {
         this.categoryService = categoryService;
         this.areaService = areaService;
         this.categoryAttributeService = categoryAttributeService;
+        this.reputationService = reputationService;
         this.objectMapper = objectMapper;
     }
 
@@ -96,6 +103,10 @@ public class ReviewService {
         // Ngưỡng "người mới" đọc từ config để Admin đổi được (KD-06); repository dùng nó để xếp người mới trước.
         int newcomerMaxApproved = configService.getInt(ConfigKey.REVIEW_NEWCOMER_MAX_APPROVED);
         List<Object[]> rows = repository.findPendingReviewQueue(PageRequest.of(page, size), newcomerMaxApproved);
+        return mapQueueRows(rows);
+    }
+
+    private List<ReviewQueueItem> mapQueueRows(List<Object[]> rows) {
         Map<Long, UserBrief> donors = findDonors(rows);
 
         List<ReviewQueueItem> items = new ArrayList<>();
@@ -114,8 +125,40 @@ public class ReviewService {
         return userService.findBriefs(donorIds);
     }
 
-    public ReviewQueueResponse listPendingWithChecklist(int page, int size) {
-        return new ReviewQueueResponse(listPending(page, size), configService.checklistItems(), page, size);
+    public ReviewQueueResponse listPendingWithChecklist(int page, int size, ReviewQueueFilter filter) {
+        Integer maxStars = filter.risk() == RiskSignal.LOW_TRUST
+                ? configService.getInt(ConfigKey.REVIEW_LOW_TRUST_MAX_STARS)
+                : null;
+        Integer newcomerLimit = filter.risk() == RiskSignal.NEWCOMER
+                ? configService.getInt(ConfigKey.REVIEW_NEWCOMER_MAX_APPROVED)
+                : null;
+        boolean repeatedPair = filter.risk() == RiskSignal.REPEATED_PAIR;
+        Set<Long> repeatedDonorIds = repeatedPair ? findRepeatedPairDonors() : Set.of();
+        if (repeatedPair && repeatedDonorIds.isEmpty()) {
+            return new ReviewQueueResponse(List.of(), configService.checklistItems(), page, size, 0);
+        }
+        var queue = repository.findFilteredQueue(
+                PageRequest.of(page, size),
+                filter.q() == null ? "" : filter.q().trim(),
+                filter.categoryId(),
+                filter.edited(),
+                maxStars,
+                repeatedPair,
+                repeatedPair ? repeatedDonorIds : List.of(0L),
+                newcomerLimit);
+        return new ReviewQueueResponse(
+                mapQueueRows(queue.getContent()), configService.checklistItems(), page, size, queue.getTotalElements());
+    }
+
+    private Set<Long> findRepeatedPairDonors() {
+        int window = configService.getInt(ConfigKey.REPUTATION_PAIR_WINDOW_DAYS);
+        int threshold = configService.getInt(ConfigKey.REPUTATION_PAIR_ALERT_THRESHOLD);
+        Set<Long> donors = new HashSet<>();
+        for (var pair : reputationService.findRepeatedPairs(Instant.now().minus(Duration.ofDays(window)), threshold)) {
+            donors.add(pair.userAId());
+            donors.add(pair.userBId());
+        }
+        return donors;
     }
 
     /**
@@ -304,7 +347,8 @@ public class ReviewService {
                 ((Number) row[6]).shortValue(),
                 toInstant(row[7]),
                 editCount,
-                isEdited);
+                isEdited,
+                toInstant(row.length > 11 ? row[11] : row[7]));
     }
 
     private ReviewItemDetailResponse toDetailResponse(

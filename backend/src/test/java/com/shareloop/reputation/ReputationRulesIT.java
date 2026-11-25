@@ -3,6 +3,8 @@ package com.shareloop.reputation;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.shareloop.reputation.service.ReputationService;
+import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.service.ConfigService;
 import com.shareloop.support.IntegrationTest;
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -32,6 +34,9 @@ class ReputationRulesIT extends IntegrationTest {
 
     @Autowired
     ReputationService reputationService;
+
+    @Autowired
+    ConfigService configService;
 
     @Autowired
     JdbcTemplate jdbc;
@@ -95,7 +100,7 @@ class ReputationRulesIT extends IntegrationTest {
                         a))
                 .isEqualTo("0/3");
         assertThat(jdbc.queryForObject("SELECT clean_streak FROM users WHERE id = ?", Integer.class, a))
-                .isEqualTo(2);
+                .isEqualTo(1); // giao dịch lặp cặp thứ 3 không tính vào chuỗi (F4)
     }
 
     @Test
@@ -117,6 +122,26 @@ class ReputationRulesIT extends IntegrationTest {
         assertThat(totalPoints(donor)).isEqualTo(15);
         assertThat(jdbc.queryForObject("SELECT points_today FROM users WHERE id = ?", Integer.class, donor))
                 .isEqualTo(30);
+    }
+
+    @Test
+    void onCompleted_crossingSilverThresholdPersistsBothNotifications() {
+        long donor = insertUser();
+        long receiver = insertUser();
+        int silverThreshold = configService.getInt(ConfigKey.REPUTATION_SILVER_MIN);
+        jdbc.update("UPDATE users SET total_points = ? WHERE id = ?", silverThreshold - 1, donor);
+
+        reputationService.onCompleted(insertCompletedRequest(donor, receiver, Instant.now()));
+
+        assertThat(jdbc.queryForObject("SELECT rank_level FROM users WHERE id = ?", String.class, donor))
+                .isEqualTo("SILVER");
+        assertThat(jdbc.queryForList(
+                        "SELECT type FROM notifications WHERE user_id = ? AND link = '/profile?tab=reputation'",
+                        String.class,
+                        donor))
+                .containsExactlyInAnyOrder("POINTS_AWARDED", "RANK_UP");
+        assertThat(jdbc.queryForList("SELECT type FROM notifications WHERE user_id = ?", String.class, receiver))
+                .containsExactly("POINTS_AWARDED");
     }
 
     private long insertUser() {

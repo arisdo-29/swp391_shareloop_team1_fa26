@@ -10,6 +10,7 @@ const sections = [
     label: 'Nội dung',
     items: [
       ['Duyệt bài', '/admin/moderation', 'moderation'],
+      ['Quản lý bài đăng', '/admin/items', 'manageItems'],
       // L16: đã gỡ "Xác minh hàng chính hãng" (/admin/authenticity) ở cả FE lẫn BE.
       // Tạm ẩn "Bài quá hạn" (/admin/expired-posts): backend chưa có API danh sách cho Admin.
       ['Danh mục', '/admin/categories', 'category'],
@@ -22,22 +23,24 @@ const sections = [
     label: 'Quản lý người dùng',
     items: [
       ['Tài khoản', '/admin/users', 'users'],
-      ['Uy tín và hạng', '/admin/reputation', 'reputation'],
+      ['Hạng và Uy tín', '/admin/reputation', 'reputation'],
       ['Giao dịch', '/admin/transactions', 'transactions'],
       ['Khiếu nại và báo cáo', '/admin/complaints', 'complaints'],
       ['Tra cứu người dùng', '/admin/finance/users', 'lookup'],
     ],
   },
   {
-    label: 'Tài chính & Credit',
+    label: 'Tài chính và Credit',
     items: [
+      ['Giao dịch nạp tiền', '/admin/finance/topup-orders', 'topup'],
+      ['Lịch sử giao dịch Credit', '/admin/finance/ledger', 'ledger'],
       ['Báo cáo tài chính', '/admin/finance', 'report'],
-      ['Đơn nạp Credit', '/admin/finance/topup-orders', 'topup'],
     ],
   },
   {
     label: 'Hệ thống',
     items: [
+      ['Báo cáo hệ thống', '/admin/system-reports', 'report'],
       ['Cấu hình phí', '/admin/settings/fees', 'fees'],
       ['Nhật ký hoạt động', '/admin/audit-logs', 'auditLog'],
       ['Cảnh báo bất thường', '/admin/alerts', 'alert'],

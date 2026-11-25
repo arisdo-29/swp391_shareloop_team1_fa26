@@ -2,9 +2,12 @@ package com.shareloop.admin.service;
 
 import com.shareloop.admin.dto.AnomalyReportResponse;
 import com.shareloop.admin.dto.AnomalyUser;
+import com.shareloop.admin.dto.RepeatedCancelerAnomaly;
 import com.shareloop.admin.dto.RepeatedPairAnomaly;
 import com.shareloop.reputation.dto.RepeatedPair;
 import com.shareloop.reputation.service.ReputationService;
+import com.shareloop.request.dto.RepeatedCancelerRow;
+import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.dto.SharedIpGroup;
@@ -29,13 +32,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminAnomalyService {
 
     private final ReputationService reputationService;
+    private final RequestQueryService requestQueryService;
     private final UserService userService;
     private final ConfigService configService;
     private final Clock clock;
 
     public AdminAnomalyService(
-            ReputationService reputationService, UserService userService, ConfigService configService, Clock clock) {
+            ReputationService reputationService,
+            RequestQueryService requestQueryService,
+            UserService userService,
+            ConfigService configService,
+            Clock clock) {
         this.reputationService = reputationService;
+        this.requestQueryService = requestQueryService;
         this.userService = userService;
         this.configService = configService;
         this.clock = clock;
@@ -74,8 +83,36 @@ public class AdminAnomalyService {
         Instant ipSince = now.minus(Duration.ofDays(ipWindowDays));
         List<SharedIpGroup> sharedIpGroups = userService.findSharedIpGroups(ipSince, ipMinAccounts);
 
+        int cancelWindowDays = configService.getInt(ConfigKey.CANCEL_AFTER_CONTACT_WINDOW_DAYS);
+        int cancelThreshold = configService.getInt(ConfigKey.CANCEL_AFTER_CONTACT_ALERT_COUNT);
+        List<RepeatedCancelerAnomaly> repeatedCancelers = findRepeatedCancelers(now, cancelWindowDays, cancelThreshold);
+
         return new AnomalyReportResponse(
-                now, windowDays, threshold, repeatedPairs, ipWindowDays, ipMinAccounts, sharedIpGroups);
+                now,
+                windowDays,
+                threshold,
+                repeatedPairs,
+                ipWindowDays,
+                ipMinAccounts,
+                sharedIpGroups,
+                cancelWindowDays,
+                cancelThreshold,
+                repeatedCancelers);
+    }
+
+    // Huỷ nhiều lần sau khi thấy liên hệ (GN-06): chỉ báo để Admin xem, không tự phạt.
+    private List<RepeatedCancelerAnomaly> findRepeatedCancelers(Instant now, int windowDays, int threshold) {
+        List<RepeatedCancelerRow> rows =
+                requestQueryService.findRepeatedCancelers(now.minus(Duration.ofDays(windowDays)), threshold);
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, UserBrief> briefs = userService.findBriefs(
+                rows.stream().map(RepeatedCancelerRow::userId).distinct().toList());
+        return rows.stream()
+                .map(row -> new RepeatedCancelerAnomaly(
+                        toAnomalyUser(row.userId(), briefs), row.cancelCount(), row.lastCancelledAt()))
+                .toList();
     }
 
     // Người dùng đã xoá mềm không có trong map; hiển thị giống trang nhật ký của Admin.

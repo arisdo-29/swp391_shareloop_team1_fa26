@@ -3,7 +3,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Select } from './ui';
+import { Select, TextArea } from './ui';
 
 afterEach(cleanup);
 
@@ -50,4 +50,48 @@ describe('Select', () => {
     expect((select as HTMLSelectElement).value).toBe('used');
     expect(screen.queryByRole('listbox')).toBeNull();
   });
+
+  it('tách class bố cục của wrapper khỏi class của ô nhập', () => {
+    render(
+      <>
+        <Select label="Danh mục" className="mt-5" inputClassName="min-h-10">
+          <option value="book">Sách</option>
+        </Select>
+        <TextArea label="Mô tả" className="mt-4" inputClassName="min-h-32" />
+      </>,
+    );
+
+    const select = screen.getByRole('combobox', { name: 'Danh mục' });
+    const textarea = screen.getByRole('textbox', { name: 'Mô tả' });
+    expect(select.closest('label')?.classList.contains('mt-5')).toBe(true);
+    expect(select.classList.contains('min-h-10')).toBe(true);
+    expect(select.classList.contains('mt-5')).toBe(false);
+    expect(textarea.closest('label')?.classList.contains('mt-4')).toBe(true);
+    expect(textarea.classList.contains('min-h-32')).toBe(true);
+    expect(textarea.classList.contains('mt-4')).toBe(false);
+  });
+
+  it('hiển thị đầy đủ tên danh mục dài và cho phép tự xuống dòng', async () => {
+    const user = userEvent.setup();
+    const longCategoryName = 'Thiết bị điện tử và phụ kiện công nghệ dành cho học tập';
+    render(
+      <Select label="Danh mục" defaultValue="all">
+        <option value="all">Tất cả danh mục</option>
+        <option value="technology">{longCategoryName}</option>
+      </Select>,
+    );
+
+    await user.click(screen.getByRole('combobox', { name: 'Danh mục' }));
+    const option = within(screen.getByRole('listbox', { name: 'Danh mục' })).getByRole('option', {
+      name: longCategoryName,
+    });
+    const label = within(option).getByText(longCategoryName);
+
+    expect(label.classList.contains('whitespace-normal')).toBe(true);
+    expect(label.classList.contains('break-words')).toBe(true);
+    expect(label.classList.contains('truncate')).toBe(false);
+    expect(label.classList.contains('text-ellipsis')).toBe(false);
+    expect(Array.from(label.classList).some((className) => className.startsWith('line-clamp'))).toBe(false);
+  });
+
 });

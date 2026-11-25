@@ -24,7 +24,7 @@ public class MailTemplateRenderer {
             + " hãy bỏ qua email này. Mật khẩu hiện tại vẫn giữ nguyên.";
 
     private static final String CHANGE_PHONE_NOTE = "Bạn vừa yêu cầu đổi số điện thoại trên ShareLoop. Nếu không phải"
-            + " bạn, hãy bỏ qua email này; số điện thoại hiện tại vẫn giữ nguyên.";
+            + " bạn, hãy bỏ qua email này. Số điện thoại hiện tại vẫn giữ nguyên.";
 
     /**
      * Nội dung email OTP đăng ký (TK-06) từ mẫu otp.html.

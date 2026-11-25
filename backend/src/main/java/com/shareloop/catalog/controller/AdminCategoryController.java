@@ -4,6 +4,7 @@ import com.shareloop.catalog.dto.AdminCategoryActiveRequest;
 import com.shareloop.catalog.dto.AdminCategoryReorderRequest;
 import com.shareloop.catalog.dto.AdminCategoryRequest;
 import com.shareloop.catalog.dto.AdminCategoryResponse;
+import com.shareloop.catalog.dto.VisibleItemCountResponse;
 import com.shareloop.catalog.service.AdminCategoryService;
 import com.shareloop.common.security.CurrentUserId;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,6 +39,15 @@ public class AdminCategoryController {
     @GetMapping
     public List<AdminCategoryResponse> list() {
         return service.listAll();
+    }
+
+    @Operation(
+            summary = "Đếm bài sẽ bị ẩn khi tắt danh mục",
+            description =
+                    "Chỉ Admin. Số bài đang hiển thị công khai thuộc danh mục và danh mục con, dùng cho hộp xác nhận trước khi tắt.")
+    @GetMapping("/{id}/visible-item-count")
+    public VisibleItemCountResponse countVisibleItems(@PathVariable long id) {
+        return service.countVisibleItems(id);
     }
 
     @Operation(

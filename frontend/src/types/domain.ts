@@ -99,6 +99,7 @@ export interface Item {
   district: string;
   images: string[];
   tradeFor?: string;
+  referencePrice?: number;
   brand?: string;
   defectNote?: string;
   defectImages?: string[];
@@ -119,7 +120,6 @@ export interface Item {
   donorName?: string;
   donorTrustStars?: number;
   donorRank?: string;
-  donorAsDescribedRate?: number;
   donorLocked?: boolean;
   // Có khi bài đã giao dịch thành công (TRADED).
   completedAt?: string;
@@ -174,11 +174,12 @@ export interface ItemRequest {
   donorName?: string;
   offeredItemId?: string;
   offeredItemTitle?: string;
+  offeredItemReferencePrice?: number;
+  offeredItemAreaId?: number;
   requesterId: string;
   requesterName?: string;
   requesterTrustStars?: number;
   requesterRank?: string;
-  requesterAsDescribedRate?: number;
   status: ItemRequestStatus;
   message: string;
   createdAt: string;
@@ -186,6 +187,8 @@ export interface ItemRequest {
   itemOfferType?: ItemType;
   // Credit chủ bài trả nếu chuyển bài sang Trao đổi; backend trả, frontend chỉ hiển thị.
   conversionFee?: number;
+  // Cờ cảnh báo từ backend để hiện nhãn trên thẻ yêu cầu.
+  flags?: string[];
 }
 
 export interface CreditHistory {

@@ -505,17 +505,21 @@ await test('danh sách, chi tiết và chọn yêu cầu dùng đúng contract B
   assert.equal(requests[2].body, undefined);
 });
 
-await test('bên nhận giữ nguyên lựa chọn không đúng mô tả và lý do khi xác nhận', async () => {
+await test('hoàn tất giao nhận không còn gửi câu trả lời đúng mô tả', async () => {
   requests = [];
-  await api.requestApi.confirmHandover(101, 7, {
-    asDescribed: false,
-    notAsDescribedReason: 'Màn hình bị vỡ',
-  });
+  await api.requestApi.confirmHandover(101, 7, {});
   assert.equal(requests[0].url, '/api/v1/requests/101/confirm-handover');
-  assert.deepEqual(requests[0].body, {
-    asDescribed: false,
-    notAsDescribedReason: 'Màn hình bị vỡ',
-  });
+  assert.deepEqual(requests[0].body, {});
+});
+
+await test('giao nhận không thành công và từ chối giao nhận gọi đúng endpoint với lý do', async () => {
+  requests = [];
+  await api.requestApi.handoverFailed(101, 7, { reason: 'Không đến điểm hẹn' });
+  await api.requestApi.refuseHandover(101, 7, { reason: 'Màn hình bị vỡ', evidenceMediaIds: [3] });
+  assert.equal(requests[0].url, '/api/v1/requests/101/handover-failed');
+  assert.deepEqual(requests[0].body, { reason: 'Không đến điểm hẹn' });
+  assert.equal(requests[1].url, '/api/v1/requests/101/refuse-handover');
+  assert.deepEqual(requests[1].body, { reason: 'Màn hình bị vỡ', evidenceMediaIds: [3] });
 });
 
 await test('store khởi tạo rỗng, bỏ qua dữ liệu nghiệp vụ và số dư lưu trên trình duyệt', () => {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TopUpOrderResponse } from '../../services/paymentApi';
 import { ApiTopUpOrder } from './Credit';
@@ -61,11 +61,12 @@ describe('B29: đếm ngược đơn nạp đang chờ thanh toán', () => {
     });
 
     // then: chỉ đổi hiển thị, trạng thái thật vẫn do job đổi
-    expect(screen.getAllByText('Hết hạn').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Đơn đã hết hạn').length).toBeGreaterThan(0);
     expect(screen.queryByText('Đang chờ thanh toán')).toBeNull();
-    expect(screen.getByRole('timer').textContent).toBe(
+    expect(screen.queryByRole('timer')).toBeNull();
+    expect(screen.getByText(
       'Đơn đã quá hạn thanh toán. Credit sẽ không được cộng cho đơn này.',
-    );
+    )).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Tiếp tục thanh toán' })).toBeNull();
   });
 
@@ -85,5 +86,24 @@ describe('B29: đếm ngược đơn nạp đang chờ thanh toán', () => {
     // then: vẫn tiếp tục thanh toán được, chỉ không có đồng hồ
     expect(screen.queryByRole('timer')).toBeNull();
     expect(screen.getByRole('link', { name: 'Tiếp tục thanh toán' })).toBeTruthy();
+  });
+
+  it('rút gọn mã đơn dài và sao chép đúng mã đầy đủ', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const orderCode = '0A93D1F4E5B62C0B';
+
+    render(<ApiTopUpOrder order={pendingOrder({ orderCode })} onNewTopup={() => undefined} />);
+
+    expect(screen.getByText('#0A93...2C0B')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Sao chép mã đơn đầy đủ' }));
+      await Promise.resolve();
+    });
+    expect(writeText).toHaveBeenCalledWith(orderCode);
+    expect(screen.getByText('Đã sao chép')).toBeTruthy();
   });
 });

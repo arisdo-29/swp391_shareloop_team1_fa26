@@ -13,6 +13,7 @@ import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.support.IntegrationTest;
 import com.shareloop.wallet.entity.PaymentOrder;
+import com.shareloop.wallet.entity.PaymentOrderStatus;
 import com.shareloop.wallet.entity.PaymentProvider;
 import com.shareloop.wallet.repository.PaymentOrderRepository;
 import com.shareloop.wallet.service.CreditService;
@@ -157,7 +158,8 @@ class VnPayCallbackIT extends IntegrationTest {
     @CsvSource({"00,02", "24,00", "24,02"})
     void bothResponseAndTransactionStatusMustBeSuccessful(String response, String transactionStatus) throws Exception {
         ipn(signed("2000000", response, transactionStatus), "00");
-        assertStatus("FAILED");
+        // Mã 24 là khách hủy tại VNPay (CANCELLED); mã khác là thất bại (FAILED).
+        assertStatus("24".equals(response) ? "CANCELLED" : "FAILED");
         assertNoCredits();
     }
 
@@ -225,7 +227,7 @@ class VnPayCallbackIT extends IntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"FAILED", "EXPIRED"})
+    @ValueSource(strings = {"FAILED", "EXPIRED", "CANCELLED"})
     void terminalUnpaidOrder_cannotBeCredited(String terminalStatus) throws Exception {
         jdbc.update("UPDATE payment_orders SET status = ? WHERE order_code = ?", terminalStatus, orderCode);
         ipn(signed("2000000", "00", "00"), "02");
@@ -268,23 +270,205 @@ class VnPayCallbackIT extends IntegrationTest {
     }
 
     @Test
-    void unsuccessfulPayment_marksFailed() throws Exception {
+    void customerCancelledIpn_marksCancelled() throws Exception {
         ipn(signed("2000000", "24", "02"), "00");
+        assertStatus("CANCELLED");
+        assertNoCredits();
+    }
+
+    @Test
+    void unsuccessfulPayment_marksFailed() throws Exception {
+        ipn(signed("2000000", "51", "02"), "00");
         assertStatus("FAILED");
         assertThat(jdbc.queryForObject("SELECT credit_balance FROM users WHERE id = ?", Long.class, userId))
                 .isZero();
     }
 
     @Test
-    void return_redirectsWithoutCrediting() throws Exception {
+    void return_whenSuccessfulBeforeIpn_creditsOnceAsIpnFallback() throws Exception {
+        // given: VNPay báo thành công về Return URL, IPN chưa tới
         var params = new LinkedMultiValueMap<String, String>();
         signed("2000000", "00", "00").forEach(params::add);
+
+        // when
         mvc.perform(get("/api/v1/payments/vnpay/return").params(params))
                 .andExpect(status().isFound())
                 .andExpect(redirectedUrl("http://localhost:5173/credit?orderCode=" + orderCode + "&status=SUCCESS"));
-        assertStatus("PENDING");
-        assertPristineOrder();
+
+        // then: đơn chốt qua cùng luồng IPN, cộng đúng một lần
+        assertStatus("SUCCESS");
+        assertThat(credit.getWallet(userId).creditBalance()).isEqualTo(20);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM credit_ledger WHERE user_id = ?", Long.class, userId))
+                .isEqualTo(1L);
+    }
+
+    @Test
+    void ipn_whenArrivingAfterSuccessfulReturn_returns02AndKeepsBalance() throws Exception {
+        // given: Return thành công đã chốt đơn
+        var params = new LinkedMultiValueMap<String, String>();
+        signed("2000000", "00", "00").forEach(params::add);
+        mvc.perform(get("/api/v1/payments/vnpay/return").params(params)).andExpect(status().isFound());
+
+        // when: IPN tới muộn
+        ipn(signed("2000000", "00", "00"), "02");
+
+        // then: số dư và ledger không đổi
+        assertStatus("SUCCESS");
+        assertThat(credit.getWallet(userId).creditBalance()).isEqualTo(20);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM credit_ledger WHERE user_id = ?", Long.class, userId))
+                .isEqualTo(1L);
+    }
+
+    @Test
+    void return_whenSuccessfulButOrderAlreadyExpired_doesNotCredit() throws Exception {
+        // given: đơn quá hạn cả dung sai và đã chuyển EXPIRED khi người dùng xem đơn
+        makeOrderOlderThanDeadlineBy(graceMinutes() + 1);
+        assertThat(payment.getOwnOrder(userId, orderCode).status()).isEqualTo(PaymentOrderStatus.EXPIRED);
+        var params = new LinkedMultiValueMap<String, String>();
+        signed("2000000", "00", "00").forEach(params::add);
+
+        // when
+        mvc.perform(get("/api/v1/payments/vnpay/return").params(params)).andExpect(status().isFound());
+
+        // then
+        assertStatus("EXPIRED");
         assertNoCredits();
+    }
+
+    // ---------- hủy đơn: Return thất bại, tự hủy, IPN thành công tới muộn ----------
+
+    @Test
+    void return_whenCustomerCancelledAtVnpay_marksFailedImmediatelyWithReason() throws Exception {
+        // given: VNPay trả code 24 (khách hủy) về Return URL, IPN chưa tới
+        var params = new LinkedMultiValueMap<String, String>();
+        signed("2000000", "24", "02").forEach(params::add);
+
+        // when
+        mvc.perform(get("/api/v1/payments/vnpay/return").params(params))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("http://localhost:5173/credit?orderCode=" + orderCode + "&status=FAILED"));
+
+        // then: đơn CANCELLED ngay (khách hủy), lưu mã lỗi, không cộng Credit; API xem đơn trả lý do cho người dùng
+        assertStatus("CANCELLED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT callback_data ->> 'vnp_ResponseCode' FROM payment_orders WHERE order_code = ?",
+                        String.class,
+                        orderCode))
+                .isEqualTo("24");
+        assertNoCredits();
+        var detail = payment.getOwnOrder(userId, orderCode);
+        assertThat(detail.status()).isEqualTo(PaymentOrderStatus.CANCELLED);
+        assertThat(detail.failureReason()).isEqualTo("Bạn đã hủy giao dịch tại VNPay.");
+        assertThat(detail.paymentUrl()).isNull();
+        assertThat(detail.expiresAt()).isNotNull();
+    }
+
+    @Test
+    void return_whenFailedButAmountTampered_doesNotChangeOrder() throws Exception {
+        // given: chữ ký hợp lệ nhưng số tiền không khớp đơn
+        var params = new LinkedMultiValueMap<String, String>();
+        signed("1000000", "24", "02").forEach(params::add);
+
+        // when
+        mvc.perform(get("/api/v1/payments/vnpay/return").params(params)).andExpect(status().isFound());
+
+        // then
+        assertPristineOrder();
+    }
+
+    @Test
+    void cancelOwnOrder_calledTwice_cancelsOnceAndSecondCallChangesNothing() {
+        // when: hủy lần một
+        var first = payment.cancelOwnOrder(userId, orderCode);
+        Object updatedAtAfterFirst = jdbc.queryForObject(
+                "SELECT updated_at FROM payment_orders WHERE order_code = ?", Object.class, orderCode);
+
+        // when: hủy lần hai
+        var second = payment.cancelOwnOrder(userId, orderCode);
+
+        // then: cả hai lần đều trả CANCELLED kèm lý do; lần hai không ghi gì thêm, không đụng ví
+        assertThat(first.status()).isEqualTo(PaymentOrderStatus.CANCELLED);
+        assertThat(first.failureReason()).isEqualTo("Bạn đã hủy đơn nạp.");
+        assertThat(second.status()).isEqualTo(PaymentOrderStatus.CANCELLED);
+        assertThat(second.failureReason()).isEqualTo("Bạn đã hủy đơn nạp.");
+        assertThat(jdbc.queryForObject(
+                        "SELECT updated_at FROM payment_orders WHERE order_code = ?", Object.class, orderCode))
+                .isEqualTo(updatedAtAfterFirst);
+        assertNoCredits();
+    }
+
+    @Test
+    void cancelOwnOrder_whenOrderOfOtherUser_throwsNotFoundAndKeepsOrder() {
+        // given
+        long otherUserId = jdbc.queryForObject(
+                "INSERT INTO users (email, password_hash, full_name, phone, status) VALUES (?, 'test-hash', 'Other', ?,"
+                        + " 'ACTIVE') RETURNING id",
+                Long.class,
+                "other-" + orderCode + "@test.local",
+                "08" + orderCode.substring(0, 8));
+        try {
+            // when + then
+            assertBlocked(
+                    () -> payment.cancelOwnOrder(otherUserId, orderCode),
+                    WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_FOUND);
+            assertPristineOrder();
+        } finally {
+            jdbc.update("DELETE FROM users WHERE id = ?", otherUserId);
+        }
+    }
+
+    @Test
+    void cancelOwnOrder_whenAlreadyPaid_keepsSuccess() throws Exception {
+        // given: IPN đã cộng Credit
+        ipn(signed("2000000", "00", "00"), "00");
+
+        // when
+        var result = payment.cancelOwnOrder(userId, orderCode);
+
+        // then
+        assertThat(result.status()).isEqualTo(PaymentOrderStatus.SUCCESS);
+        assertThat(result.failureReason()).isNull();
+        assertThat(credit.getWallet(userId).creditBalance()).isEqualTo(20);
+    }
+
+    @Test
+    void successfulIpnAfterUserCancelled_isFlaggedForRefundWithoutCredits() throws Exception {
+        // given: người dùng đã hủy đơn
+        payment.cancelOwnOrder(userId, orderCode);
+
+        // when: VNPay vẫn gửi IPN báo đã thu tiền
+        ipn(signed("2000000", "00", "00"), "02");
+
+        // then: không cộng Credit (cùng cách xử lý đơn trả sau hạn), đơn vẫn CANCELLED và được đánh dấu cần hoàn tiền
+        assertStatus("CANCELLED");
+        assertNoCredits();
+        assertThat(jdbc.queryForObject(
+                        "SELECT review_note FROM payment_orders WHERE order_code = ?", String.class, orderCode))
+                .startsWith("VNPay báo đã thu tiền sau khi đơn đã đóng. Đơn chờ Admin đối soát")
+                .doesNotContain(";")
+                .contains("123456");
+        assertThat(payment.getOwnOrder(userId, orderCode).failureReason())
+                .isEqualTo(
+                        "VNPay đã báo thu tiền sau khi đơn hết hạn. Admin sẽ kiểm tra và cộng Credit hoặc hoàn tiền cho bạn.");
+        assertPaidEvidenceRecorded();
+    }
+
+    @Test
+    void successfulIpnAfterOrderExpiredOnRead_isFlaggedForRefundWithoutCredits() throws Exception {
+        // given: đơn quá hạn cộng dung sai, người dùng xem đơn nên đơn đã chuyển EXPIRED
+        makeOrderOlderThanDeadlineBy(graceMinutes() + 1);
+        assertThat(payment.getOwnOrder(userId, orderCode).status()).isEqualTo(PaymentOrderStatus.EXPIRED);
+
+        // when: VNPay vẫn gửi IPN báo đã thu tiền
+        ipn(signed("2000000", "00", "00"), "02");
+
+        // then: không cộng Credit, đơn vẫn EXPIRED, có ghi chú chờ Admin đối soát
+        assertStatus("EXPIRED");
+        assertNoCredits();
+        assertThat(jdbc.queryForObject(
+                        "SELECT review_note FROM payment_orders WHERE order_code = ?", String.class, orderCode))
+                .contains("đối soát");
+        assertPaidEvidenceRecorded();
     }
 
     @Test
@@ -309,6 +493,7 @@ class VnPayCallbackIT extends IntegrationTest {
         ipn(signed("2000000", "00", "00"), "02");
         assertStatus("EXPIRED");
         assertNoCredits();
+        assertPaidEvidenceRecorded();
     }
 
     @Test
@@ -387,6 +572,17 @@ class VnPayCallbackIT extends IntegrationTest {
         mvc.perform(get("/api/v1/payments/vnpay/ipn").params(query))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.RspCode").value(code));
+    }
+
+    // VNPay đã thu tiền nhưng đơn đã đóng: ghi paid_at và mã giao dịch để Admin đối soát, chưa xử lý nên chưa có
+    // reviewed_at.
+    private void assertPaidEvidenceRecorded() {
+        assertThat(jdbc.queryForObject(
+                        "SELECT paid_at IS NOT NULL AND provider_txn_id = '123456' AND reviewed_at IS NULL"
+                                + " FROM payment_orders WHERE order_code = ?",
+                        Boolean.class,
+                        orderCode))
+                .isTrue();
     }
 
     private void assertStatus(String status) {

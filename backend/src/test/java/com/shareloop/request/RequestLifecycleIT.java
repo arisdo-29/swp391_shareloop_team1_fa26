@@ -124,19 +124,44 @@ class RequestLifecycleIT extends IntegrationTest {
 
         // 6. Donor đề xuất lịch hẹn giao trực tiếp -> chuyển AWAITING_LOGISTICS
         Instant futureTime = Instant.now().plus(2, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
-        ScheduleRequest scheduleReq = new ScheduleRequest("IN_PERSON", "Cổng trường FPT", futureTime, false);
+        ScheduleRequest scheduleReq = new ScheduleRequest("IN_PERSON", "Cổng trường FPT", futureTime, true);
+        mockMvc.perform(post("/api/v1/requests/{id}/schedule", req1Id)
+                        .header("Authorization", donorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new ScheduleRequest("IN_PERSON", scheduleReq.meetingPlace(), futureTime, null))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_WAIVER_REQUIRED"));
         mockMvc.perform(post("/api/v1/requests/{id}/schedule", req1Id)
                         .header("Authorization", donorToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(scheduleReq)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("AWAITING_LOGISTICS"))
+                .andExpect(jsonPath("$.donorWaiverAt").isNotEmpty())
                 .andExpect(jsonPath("$.meetingPlace").value("Cổng trường FPT"));
 
-        // 7. Receiver 1 xác nhận lịch hẹn -> LOGISTICS_CONFIRMED, contactRevealedAt != null
-        ConfirmLogisticsRequest confirmLogistics = new ConfirmLogisticsRequest(false);
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", req1Id)
                         .header("Authorization", r1Token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ConfirmLogisticsRequest(false))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_WAIVER_REQUIRED"));
+
+        // 7. Bản ghi cũ có đồng ý lịch nhưng thiếu cam kết của chủ bài.
+        jdbc.update("UPDATE requests SET donor_waiver_at = NULL WHERE id = ?", req1Id);
+        ConfirmLogisticsRequest confirmLogistics = new ConfirmLogisticsRequest(true);
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", req1Id)
+                        .header("Authorization", r1Token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(confirmLogistics)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("AWAITING_LOGISTICS"))
+                .andExpect(jsonPath("$.donorScheduleOkAt").isNotEmpty())
+                .andExpect(jsonPath("$.receiverWaiverAt").isNotEmpty())
+                .andExpect(jsonPath("$.contactRevealedAt").isEmpty());
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", req1Id)
+                        .header("Authorization", donorToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(confirmLogistics)))
                 .andExpect(status().isOk())
@@ -168,15 +193,14 @@ class RequestLifecycleIT extends IntegrationTest {
                 .andExpect(jsonPath("$.status").value("AWAITING_HANDOVER"))
                 .andExpect(jsonPath("$.donorHandoverAt").isNotEmpty());
 
-        // 11. Receiver 1 bấm xác nhận đã nhận đồ (asDescribed = true) -> chuyển COMPLETED
-        HandoverConfirmRequest receiverHandover = new HandoverConfirmRequest(true, null);
+        // 11. Receiver 1 bấm hoàn tất giao nhận -> chuyển COMPLETED
+        HandoverConfirmRequest receiverHandover = new HandoverConfirmRequest(null);
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", req1Id)
                         .header("Authorization", r1Token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(receiverHandover)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
-                .andExpect(jsonPath("$.asDescribed").value(true))
                 .andExpect(jsonPath("$.completedAt").isNotEmpty());
 
         // 12. Kiểm tra trạng thái cuối và Credit
@@ -211,16 +235,25 @@ class RequestLifecycleIT extends IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("RESERVED"));
 
-        // Chốt lịch hẹn với phương thức SHIPPING và cam kết miễn trừ trách nhiệm
+        // Chốt lịch giao hàng (GN-12): meetingTime là ngày gửi hàng dự kiến, Trao đổi cần địa chỉ của cả hai bên
         Instant futureTime = Instant.now().plus(3, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
-        ScheduleRequest scheduleReq = new ScheduleRequest("SHIPPING", "Gửi qua Viettel Post", futureTime, true);
+        ScheduleRequest scheduleReq = new ScheduleRequest("SHIPPING", null, futureTime, true, "34 Trần Phú");
+        mockMvc.perform(post("/api/v1/requests/{id}/schedule", requestId)
+                        .header("Authorization", donorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new ScheduleRequest("SHIPPING", null, futureTime, false, "34 Trần Phú"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_WAIVER_REQUIRED"));
+        assertThat(queryRequestStatus(requestId)).isEqualTo("RESERVED");
+
         mockMvc.perform(post("/api/v1/requests/{id}/schedule", requestId)
                         .header("Authorization", donorToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(scheduleReq)))
                 .andExpect(status().isOk());
 
-        ConfirmLogisticsRequest confirmLogistics = new ConfirmLogisticsRequest(true);
+        ConfirmLogisticsRequest confirmLogistics = new ConfirmLogisticsRequest(true, "12 Lê Lợi");
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
                         .header("Authorization", receiverToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -228,7 +261,18 @@ class RequestLifecycleIT extends IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("LOGISTICS_CONFIRMED"));
 
-        // Cả hai bên xác nhận giao nhận
+        // Mỗi bên gửi chiều của mình rồi bên nhận bấm đã nhận được hàng
+        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId)
+                        .header("Authorization", donorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trackingCode\":\"GHN1111\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId)
+                        .header("Authorization", receiverToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trackingCode\":\"VTP2222\"}"))
+                .andExpect(status().isOk());
+
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
                         .header("Authorization", donorToken))
                 .andExpect(status().isOk());
@@ -236,7 +280,7 @@ class RequestLifecycleIT extends IntegrationTest {
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
                         .header("Authorization", receiverToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new HandoverConfirmRequest(true, null))))
+                        .content(objectMapper.writeValueAsString(new HandoverConfirmRequest(null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"));
 
@@ -267,7 +311,13 @@ class RequestLifecycleIT extends IntegrationTest {
         assertThat(queryUserCreditBalance(donorId)).isEqualTo(20);
         assertThat(queryUserCreditBalance(receiverId)).isEqualTo(10);
 
-        // Có thể gửi lại yêu cầu mới sau khi yêu cầu cũ đã bị huỷ
+        // Vừa tự huỷ thì chưa gửi lại được (C5), qua thời gian chờ thì gửi lại được
+        mockMvc.perform(post("/api/v1/items/{id}/requests", itemId).header("Authorization", receiverToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REQUEST_RESEND_COOLDOWN"));
+        jdbc.update("ALTER TABLE requests DISABLE TRIGGER trg_requests_updated_at");
+        jdbc.update("UPDATE requests SET updated_at = now() - interval '25 hours' WHERE id = ?", requestId);
+        jdbc.update("ALTER TABLE requests ENABLE TRIGGER trg_requests_updated_at");
         long newRequestId = createRequestViaApi(itemId, receiverToken, null);
         assertThat(queryRequestStatus(newRequestId)).isEqualTo("PENDING");
     }
@@ -406,7 +456,8 @@ class RequestLifecycleIT extends IntegrationTest {
     }
 
     @Test
-    @DisplayName("Các nhánh ràng buộc và lỗi: tự xin bài mình, gửi trùng, bài chưa duyệt, thiếu đánh giá mô tả")
+    @DisplayName(
+            "Các nhánh ràng buộc và lỗi: tự xin bài mình, gửi trùng, bài chưa duyệt, huỷ sau chốt lịch, từ chối sai vai")
     void validationAndConstraintBranches() throws Exception {
         long donorId = insertUser("Donor Valid", 20, 0);
         long receiverId = insertUser("Receiver Valid", 10, 0);
@@ -449,29 +500,34 @@ class RequestLifecycleIT extends IntegrationTest {
                 .andExpect(status().isOk());
 
         Instant futureTime = Instant.now().plus(1, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
-        ScheduleRequest scheduleReq = new ScheduleRequest("IN_PERSON", "FPT Park", futureTime, false);
+        ScheduleRequest scheduleReq = new ScheduleRequest("IN_PERSON", "FPT Park", futureTime, true);
         mockMvc.perform(post("/api/v1/requests/{id}/schedule", reqId)
                         .header("Authorization", donorToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(scheduleReq)))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", reqId).header("Authorization", receiverToken))
-                .andExpect(status().isOk());
-
-        // 8. Bên nhận xác nhận handover nhưng không trả lời asDescribed -> 400 REQUEST_AS_DESCRIBED_REQUIRED
-        mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", reqId).header("Authorization", receiverToken))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("REQUEST_AS_DESCRIBED_REQUIRED"));
-
-        // 9. Bên nhận chọn asDescribed = false nhưng không kèm lý do -> 400 REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED
-        HandoverConfirmRequest invalidReason = new HandoverConfirmRequest(false, "   ");
-        mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", reqId)
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", reqId)
                         .header("Authorization", receiverToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidReason)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED"));
+                        .content(objectMapper.writeValueAsString(new ConfirmLogisticsRequest(true))))
+                .andExpect(status().isOk());
+
+        // 8. Đã chốt lịch thì không còn huỷ bằng cancel-transaction -> 409 REQUEST_INVALID_STATE_TRANSITION
+        mockMvc.perform(post("/api/v1/requests/{id}/cancel-transaction", reqId)
+                        .header("Authorization", receiverToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Tôi không đi được nữa\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REQUEST_INVALID_STATE_TRANSITION"));
+
+        // 9. Chủ bài ở Cho tặng không được từ chối giao nhận -> 403 REQUEST_REFUSE_NOT_ALLOWED
+        mockMvc.perform(post("/api/v1/requests/{id}/refuse-handover", reqId)
+                        .header("Authorization", donorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Không muốn cho nữa\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("REQUEST_REFUSE_NOT_ALLOWED"));
     }
 
     // ---------- Helper methods ----------

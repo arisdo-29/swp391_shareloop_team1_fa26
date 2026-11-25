@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { itemApi, type ItemResponse } from '../../services/itemApi';
 import { requestApi, type RequestResponse } from '../../services/requestApi';
 import type { ApiError } from '../../services/http';
+import { offerChangeErrorMessage } from '../../utils/offerChange';
 import { Alert, Button } from '../ui';
 
 interface Props {
@@ -41,7 +42,13 @@ export function ChangeOfferedItem({ requestId, currentUserId, currentItemId, onU
       setOpen(false);
       setSelectedId(null);
     } catch (caught) {
-      setError((caught as ApiError).message || 'Không đổi được món đề nghị.');
+      const apiError = caught as ApiError;
+      // Món mới đang tạm ẩn: nói rõ là món đề nghị, không phải bài chính của giao dịch.
+      setError(
+        apiError.code === 'ITEM_HIDDEN'
+          ? offerChangeErrorMessage(apiError)
+          : apiError.message || 'Không đổi được món đề nghị.',
+      );
     } finally {
       setLoading(false);
     }

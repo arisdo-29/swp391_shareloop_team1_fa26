@@ -12,35 +12,48 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import { ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
 import { itemApi, type ListingFeeConfigResponse } from '../../services/itemApi';
+import type { PublicConfig } from '../../services/publicConfigApi';
+import { usePublicConfig } from '../../utils/usePublicConfig';
 import { BOOST_BENEFITS, BOOST_REFUND_POLICY } from '../../utils/boostMessages';
 import './about.css';
 
-/** Các con số là luật cố định (Business Rule v12 / SRS Final Report 09/11) nên ghi thẳng trong text. Gom một chỗ để dễ rà soát. */
-const RULES = {
-  giveLimit: 5,
-  pendingRequests: 5,
-  requestPendingDays: 3,
-  chatOpenDays: 10,
-  autoConfirmDays: 3,
-  complaintHours: 24,
-  responseHours: 48,
-  reportHideThreshold: 3,
-  cleanStreakForStar: 10,
-  aiFreePerDay: 5,
-  aiFeePerUse: 2,
-  boostCooldownDays: 3,
-  boostMaxPerUser: 3,
-  boostMaxActive: 30,
-  boostMaxPerPage: 3,
-  boostRotateMinutes: 3,
-} as const;
+/** Các con số đọc từ backend (GET /api/v1/configs/public), có giá trị dự phòng khi gọi lỗi. */
+function toRules(config: PublicConfig) {
+  return {
+    giveLimit: config.max_active_give_items,
+    pendingRequests: config.max_pending_requests,
+    requestPendingDays: config.request_pending_days,
+    chatOpenDays: config.chat_open_days,
+    autoConfirmDays: config.auto_confirm_days,
+    autoConfirmDaysShipping: config.auto_confirm_days_shipping,
+    meetingMaxDaysAhead: config.meeting_max_days_ahead,
+    rescheduleMaxCount: config.reschedule_max_count,
+    cancelResponseHours: config.cancel_request_response_hours,
+    confirmedStaleCancelDays: config.confirmed_stale_cancel_days,
+    shippingSendDeadlineDays: config.shipping_send_deadline_days,
+    reminderHours: config.deadline_reminder_hours_before_response,
+    complaintHours: config.complaint_window_hours,
+    responseHours: config.response_window_hours,
+    reportHideThreshold: config.report_hide_threshold,
+    cleanStreakForStar: config.reputation_clean_streak_for_star,
+    aiFreePerDay: config.ai_free_per_day,
+    aiFeePerUse: config.ai_search_fee,
+    boostCooldownDays: config.boost_cooldown_days,
+    boostMaxPerUser: config.boost_max_per_user,
+    boostMaxActive: config.boost_max_active,
+    boostMaxPerPage: config.boost_max_per_page,
+    boostRotateMinutes: Math.round(config.boost_rotate_seconds / 60),
+  };
+}
+
+type Rules = ReturnType<typeof toRules>;
 
 const reasons = [
   [
     'Gần nhà',
     'Tìm theo quận. Hẹn gặp ở chỗ công cộng gần bạn, hoặc gửi qua đơn vị vận chuyển nếu hai bên đồng ý.',
   ],
-  ['Biết ai đáng tin', 'Mỗi người có hạng, sao uy tín và tỉ lệ đúng mô tả từ các lần giao trước.'],
+  ['Biết ai đáng tin', 'Mỗi người có hạng và sao uy tín từ các lần giao trước.'],
   [
     'Bài được duyệt',
     'Hệ thống tự kiểm khi bạn gửi bài, rồi Admin duyệt từng bài theo checklist. Không có AI trong khâu duyệt bài và kiểm tin nhắn.',
@@ -49,7 +62,7 @@ const reasons = [
 
 const reasonIcons = [MapPin, ShieldCheck, SealCheck] as const;
 
-const receiverSteps = [
+const receiverSteps = (RULES: Rules) => [
   [
     'Tìm món',
     'Khách chưa đăng nhập vẫn xem, tìm và lọc bài được. Muốn làm thêm thì đăng nhập. Bạn cũng có thể mô tả món cần cho Trợ lý AI.',
@@ -60,15 +73,15 @@ const receiverSteps = [
   ],
   [
     'Chờ chủ bài chọn',
-    `Chủ bài xem sao, hạng, tỉ lệ đúng mô tả của bạn rồi chọn đúng 1 người. Yêu cầu chờ quá ${RULES.requestPendingDays} ngày thì tự huỷ, bạn cũng tự rút được khi còn chờ. Được chọn thì chat mở, không được chọn thì bạn nhận thông báo.`,
+    `Chủ bài xem sao và hạng của bạn rồi chọn đúng 1 người. Yêu cầu chờ quá ${RULES.requestPendingDays} ngày thì tự huỷ, bạn cũng tự rút được khi còn chờ. Được chọn thì chat mở, không được chọn thì bạn nhận thông báo.`,
   ],
   [
     'Chốt lịch và xác nhận đã nhận',
-    `Hai bên cùng đồng ý thì lịch được chốt. Quá ${RULES.chatOpenDays} ngày từ lúc được chọn mà chưa chốt thì giao dịch tự huỷ. Nhận đồ rồi bấm "Đã nhận" và cho biết món có đúng mô tả không.`,
+    `Hai bên cùng đồng ý thì lịch được chốt. Quá ${RULES.chatOpenDays} ngày từ lúc được chọn mà chưa chốt thì giao dịch tự huỷ. Giờ hẹn (hoặc ngày gửi hàng dự kiến) chỉ được chọn trong vòng ${RULES.meetingMaxDaysAhead} ngày tới. Từ giờ hẹn trở đi, mỗi bên chọn một trong ba kết quả: Đã giao nhận xong, Giao nhận không thành công hoặc Từ chối giao nhận.`,
   ],
 ] as const;
 
-const giverSteps = [
+const giverSteps = (RULES: Rules) => [
   [
     'Đăng bài',
     `Chụp từ ${ITEM_IMAGES_MIN} đến ${ITEM_IMAGES_MAX} ảnh thật của chính bạn, mỗi ảnh tối đa 5 MB. Bài Trao đổi ghi rõ món mong muốn. Đồ có lỗi thì mô tả lỗi và chụp ảnh lỗi. Bài Cho tặng đăng miễn phí.`,
@@ -79,32 +92,32 @@ const giverSteps = [
   ],
   [
     'Chọn một người',
-    'Xem sao, hạng, tỉ lệ đúng mô tả và món đem đổi của từng người, rồi chọn đúng 1 người. Những người còn lại tự nhận thông báo.',
+    'Xem sao, hạng và món đem đổi của từng người, rồi chọn đúng 1 người. Những người còn lại tự nhận thông báo.',
   ],
   [
     'Giao và xác nhận đã giao',
-    `Bạn bấm "Đã giao", người nhận bấm "Đã nhận". Hai bên xác nhận và đồ đúng mô tả thì giao dịch hoàn tất, cả hai được cộng điểm uy tín. Một bên xác nhận mà bên kia im lặng ${RULES.autoConfirmDays} ngày và không có khiếu nại thì giao dịch tự hoàn tất.`,
+    `Giao xong, hai bên cùng bấm "Đã giao nhận xong" thì giao dịch hoàn tất, cả hai được cộng điểm tích luỹ. Một bên đã bấm mà bên kia im lặng ${RULES.autoConfirmDays} ngày và không có khiếu nại thì giao dịch tự hoàn tất. Giao hàng thì tính theo từng chiều: chiều đã gửi mà bên nhận im lặng ${RULES.autoConfirmDaysShipping} ngày kể từ lúc gửi thì tự ghi nhận đã nhận.`,
   ],
 ] as const;
 
-const safetyTips = [
+const safetyTips = (RULES: Rules) => [
   'Hẹn ở chỗ đông người: cổng chợ, quán cà phê, sảnh chung cư.',
   'Nếu gửi qua đơn vị vận chuyển, hai bên tự gửi và đều phải bấm cam kết tự chịu trách nhiệm.',
-  'ShareLoop không bồi thường tiền hàng hay phí gửi. Hãy kiểm đồ kỹ trước khi bấm "Đã nhận".',
+  'ShareLoop không bồi thường tiền hàng hay phí gửi. Hãy kiểm đồ kỹ trước khi bấm "Đã giao nhận xong" hoặc "Tôi đã nhận được hàng".',
   'Không chuyển tiền hay đặt cọc dưới bất kỳ hình thức nào.',
   'Trước khi chốt lịch, tin nhắn chứa số điện thoại, email, link, mạng xã hội sẽ bị chặn. Sau khi chốt, họ tên, email, số điện thoại của nhau hiện trong trang giao dịch, chỉ trong app.',
   `Bạn báo cáo được một bài hoặc một người. Bài có ${RULES.reportHideThreshold} báo cáo đang chờ thì tạm ẩn, chủ bài có ${RULES.responseHours} giờ giải trình.`,
   `Khiếu nại giao dịch trong ${RULES.complaintHours} giờ sau khi hoàn tất. Bên bị khiếu nại có ${RULES.responseHours} giờ giải trình, Admin chỉ kết luận khi đã có giải trình hoặc hết hạn giải trình.`,
 ];
 
-const faqs = [
+const faqs = (RULES: Rules) => [
   [
     'Tôi có phải trả tiền cho người cho đồ không?',
     'Không. ShareLoop không có mua bán và hai người dùng không trả tiền cho nhau qua hệ thống. Ai đòi tiền hay tiền cọc, hãy báo cáo người dùng đó.',
   ],
   [
     'Tôi chưa đăng nhập thì làm được gì?',
-    'Bạn xem trang chủ, tìm, lọc bài và xem chi tiết bài. Mọi thao tác khác cần đăng nhập; đăng ký bằng email và xác thực qua mã gửi về email.',
+    'Bạn xem trang chủ, tìm, lọc bài và xem chi tiết bài. Mọi thao tác khác cần đăng nhập. Đăng ký bằng email và xác thực qua mã gửi về email.',
   ],
   [
     'Credit dùng để làm gì?',
@@ -124,15 +137,23 @@ const faqs = [
   ],
   [
     'Tôi có huỷ giao dịch được không?',
-    'Được. Trước khi hoàn tất, bên nào cũng huỷ được, kèm lý do và không mất phí. Giao dịch đang tranh chấp thì bạn phải chờ Admin.',
+    `Được. Trước khi chốt lịch, bên nào cũng huỷ được, kèm lý do và không mất phí. Sau khi chốt lịch thì giao dịch chưa huỷ ngay mà cần bên kia xác nhận: bạn bấm "Đề nghị huỷ giao dịch" (trước giờ hẹn) hoặc "Giao nhận không thành công" (từ giờ hẹn). Bên kia có ${RULES.cancelResponseHours} giờ để trả lời. Đồng ý hoặc im lặng thì giao dịch huỷ và không ai bị phạt, không đồng ý thì giao dịch chuyển sang sự cố giao nhận để Admin xác minh. Bạn rút lại được đề nghị trước khi bên kia trả lời.`,
   ],
   [
     'Bên kia không bấm xác nhận thì sao?',
-    `Một bên đã xác nhận, bên kia im lặng ${RULES.autoConfirmDays} ngày và không có khiếu nại thì giao dịch tự hoàn tất. Quá ${RULES.chatOpenDays} ngày từ lúc được chọn mà chưa chốt lịch thì giao dịch tự huỷ.`,
+    `Một bên đã bấm hoàn tất, bên kia im lặng ${RULES.autoConfirmDays} ngày (Giao hàng tính theo từng chiều, ${RULES.autoConfirmDaysShipping} ngày kể từ lúc gửi) và không có khiếu nại thì giao dịch tự hoàn tất, hệ thống nhắc bạn trước 24 giờ. Nếu bạn chưa nhận được đồ thì bấm "Giao nhận không thành công" để mở khiếu nại. Quá ${RULES.chatOpenDays} ngày từ lúc được chọn mà chưa chốt lịch thì giao dịch tự huỷ. Đã chốt lịch mà qua giờ hẹn ${RULES.confirmedStaleCancelDays} ngày vẫn chưa ai xác nhận thì cũng tự huỷ, không ai bị phạt.`,
+  ],
+  [
+    'Tôi có dời lịch được không?',
+    `Được, trước giờ hẹn và khi chưa bên nào bấm hoàn tất hoặc gửi hàng. Bạn bấm "Đề nghị dời lịch", bên kia đồng ý thì đổi lịch, thông tin liên hệ vẫn mở và hai bên không phải cam kết lại. Bên kia từ chối hoặc im lặng quá hạn thì giữ lịch cũ. Mỗi giao dịch dời tối đa ${RULES.rescheduleMaxCount} lần, chỉ tính các lần được đồng ý. Hệ thống nhắc bên được hỏi khi còn ${RULES.reminderHours} giờ.`,
+  ],
+  [
+    'Giao hàng qua đơn vị vận chuyển hoạt động thế nào?',
+    `Mỗi bên tự nhập địa chỉ nhận hàng của mình, địa chỉ chỉ hiện cho bên kia sau khi chốt lịch. Cho tặng có một chiều, Trao đổi có hai chiều. Mỗi chiều đi qua ba bước Chờ gửi, Đã gửi, Đã nhận: bên gửi bấm "Tôi đã gửi hàng" kèm mã vận đơn, bên nhận bấm "Tôi đã nhận được hàng" sau khi hàng tới. Hạn gửi là ngày gửi dự kiến cộng ${RULES.shippingSendDeadlineDays} ngày. Quá hạn mà chưa gửi thì bên nhận báo được, khi đó bên gửi đồng ý huỷ, phản đối bằng cách bấm đã gửi hoặc im lặng. ShareLoop không tra mã vận đơn và không bồi thường tiền hàng hay phí gửi.`,
   ],
   [
     'Đồ nhận được không đúng mô tả thì sao?',
-    `Bạn báo "không đúng mô tả" khi bấm "Đã nhận": giao dịch chuyển sang tranh chấp, chủ bài có ${RULES.responseHours} giờ giải trình và Admin kết luận, trong lúc này chưa cộng điểm. ShareLoop không bồi thường tiền hàng hay phí gửi; khiếu nại đúng chỉ dẫn tới trừ sao người vi phạm.`,
+    `Bạn bấm "Từ chối giao nhận" và nêu lý do. Giao dịch chuyển sang tranh chấp, chủ món đồ có ${RULES.responseHours} giờ giải trình rồi Admin kết luận, trong lúc này chưa cộng điểm. Ở Trao đổi, cả hai bên đều được từ chối món mình nhận. ShareLoop không bồi thường tiền hàng hay phí gửi, khiếu nại đúng chỉ dẫn tới trừ sao người vi phạm.`,
   ],
   [
     'Nếu người kia không đến hẹn hoặc tôi chưa nhận được đồ thì sao?',
@@ -147,7 +168,7 @@ const faqs = [
     'Vật cần sang tên pháp lý (xe có biển số, giấy tờ, sim chính chủ, tài khoản), vật quy đổi ngay ra tiền (vàng, ngoại tệ, thẻ cào, voucher, tiền mã hoá), hàng giả và hàng nhái.',
   ],
   [
-    'Điểm uy tín và sao uy tín khác nhau thế nào?',
+    'Điểm tích luỹ và sao uy tín khác nhau thế nào?',
     `Điểm tăng khi hoàn tất giao dịch và quyết định hạng: Đồng dưới 50, Bạc từ 50, Vàng từ 150, Kim cương từ 400. Sao bắt đầu ở 5, chỉ bị trừ 1 khi Admin chấp thuận một báo cáo hoặc khiếu nại, và hồi 1 sao sau mỗi ${RULES.cleanStreakForStar} giao dịch hoàn tất liên tiếp không bị trừ.`,
   ],
   [
@@ -159,12 +180,28 @@ const faqs = [
     'Tài khoản bị khoá thì sao?',
     'Admin có thể khoá tài khoản kèm lý do. Khi đăng nhập, bạn sẽ thấy lý do đó.',
   ],
+  [
+    'Tôi cần hỗ trợ hoặc gặp sự cố khi sử dụng ShareLoop thì liên hệ ở đâu?',
+    <>
+      Nếu bạn có thắc mắc, cần hỗ trợ về tài khoản, đăng bài, cho tặng, trao đổi, Credit,
+      giao dịch hoặc gặp lỗi trong quá trình sử dụng ShareLoop, vui lòng liên hệ qua email{' '}
+      <a
+        href="mailto:support@shareloop.vn"
+        className="font-semibold text-primary underline underline-offset-2"
+      >
+        support@shareloop.vn
+      </a>
+      . Khi gửi email, bạn nên mô tả rõ vấn đề và đính kèm hình ảnh minh họa (nếu có) để đội
+      ngũ hỗ trợ kiểm tra và phản hồi.
+    </>,
+  ],
 ] as const;
 
 /** Trang giới thiệu ShareLoop và hướng dẫn sử dụng. Ai cũng xem được, kể cả khách chưa đăng nhập. */
 export function About() {
   const user = useAppSelector(selectCurrentUser);
   const fees = useListingFees(Boolean(user));
+  const RULES = toRules(usePublicConfig());
 
   return (
     <div className="about-page">
@@ -212,8 +249,8 @@ export function About() {
             description="Hai hành trình rõ ràng cho người nhận và người đăng đồ."
           />
           <div className="about-step-grid">
-            <StepCard title="Khi bạn muốn nhận hoặc đổi đồ" steps={receiverSteps} />
-            <StepCard title="Khi bạn muốn cho hoặc đổi đồ" steps={giverSteps} />
+            <StepCard title="Khi bạn muốn nhận hoặc đổi đồ" steps={receiverSteps(RULES)} />
+            <StepCard title="Khi bạn muốn cho hoặc đổi đồ" steps={giverSteps(RULES)} />
           </div>
         </section>
 
@@ -273,7 +310,7 @@ export function About() {
             </table>
           </div>
           <p className="about-table-note">
-            Chủ bài không đồng ý chuyển hình thức thì không chọn được người đó. Điểm uy tín tính
+            Chủ bài không đồng ý chuyển hình thức thì không chọn được người đó. Điểm tích luỹ tính
             theo hình thức cuối cùng của bài khi giao dịch hoàn tất.
           </p>
         </section>
@@ -291,9 +328,9 @@ export function About() {
               title="An toàn khi giao nhận"
               id="safety-title"
             />
-            <SafetyGroup title="Gặp và giao đồ" tips={safetyTips.slice(0, 3)} />
-            <SafetyGroup title="Thông tin và thanh toán" tips={safetyTips.slice(3, 5)} />
-            <SafetyGroup title="Báo cáo và khiếu nại" tips={safetyTips.slice(5)} />
+            <SafetyGroup title="Gặp và giao đồ" tips={safetyTips(RULES).slice(0, 3)} />
+            <SafetyGroup title="Thông tin và thanh toán" tips={safetyTips(RULES).slice(3, 5)} />
+            <SafetyGroup title="Báo cáo và khiếu nại" tips={safetyTips(RULES).slice(5)} />
           </section>
         </div>
 
@@ -307,7 +344,7 @@ export function About() {
             description="Những điều cần biết trước khi bắt đầu cho tặng hoặc trao đổi."
           />
           <div className="about-faq-list">
-            {faqs.map(([question, answer], index) => (
+            {faqs(RULES).map(([question, answer], index) => (
               <details key={question} open={index === 0}>
                 <summary>
                   <span>{question}</span>
@@ -337,6 +374,7 @@ export function About() {
 }
 
 function BoostRulesSection({ fees }: { fees: ListingFeeConfigResponse | null }) {
+  const RULES = toRules(usePublicConfig());
   return (
     <section id="day-bai" aria-labelledby="boost-rules-title" className="about-section scroll-mt-24">
       <SectionHeading
@@ -479,6 +517,7 @@ function CreditSection({ fees }: { fees: ListingFeeConfigResponse | null }) {
 }
 
 function FeeList({ fees }: { fees: ListingFeeConfigResponse }) {
+  const RULES = toRules(usePublicConfig());
   const overQuotaText =
     fees.postFeeSwapOverQuota === undefined
       ? 'Đăng vượt hạn mức: phí cao hơn, hệ thống báo trước khi đăng'
@@ -518,6 +557,7 @@ function FeeList({ fees }: { fees: ListingFeeConfigResponse }) {
 }
 
 function GenericFeeList() {
+  const RULES = toRules(usePublicConfig());
   return (
     <ul className="about-compact-list">
       <li>Đăng bài Trao đổi, kể cả khi vượt hạn mức</li>

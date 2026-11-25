@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * Chi tiết một bài đăng trả về cho client.
  *
- * <p>Các trường của người đăng (donorName, donorTrustStars, donorRank, donorAsDescribedRate) do module reputation và
+ * <p>Các trường của người đăng (donorName, donorTrustStars, donorRank) do module reputation và
  * user phụ trách; khi mapper của module item tạo DTO thì tạm để null, service gọi UserService và ReputationService rồi
  * gán qua {@link #withDonor}.
  */
@@ -38,7 +38,6 @@ public record ItemResponse(
         String donorName,
         Integer donorTrustStars,
         String donorRank,
-        Double donorAsDescribedRate,
         Boolean donorLocked,
         // Chỉ có giá trị khi chủ bài hoặc Admin xem; người khác nhận null. hidden = bài đang is_active = false.
         Boolean hidden,
@@ -53,9 +52,12 @@ public record ItemResponse(
         // mốc đẩy muộn nhất của đợt, mốc được đẩy lại. null khi bài chưa từng được đẩy.
         Instant boostStartedAt,
         Instant boostChainEndsAt,
-        Instant boostCooldownUntil) {
+        Instant boostCooldownUntil,
+        // Lý do Admin từ chối lần gần nhất; chỉ chủ bài hoặc Admin xem và chỉ khi bài đang Bị từ chối (B4).
+        String rejectionReason,
+        Long referencePrice) {
 
-    /** Constructor 28 tham số trước khi có ba mốc đợt đẩy; ba trường mới để null. */
+    /** Constructor 30 tham số trước khi có rejectionReason; trường mới để null. */
     public ItemResponse(
             Long id,
             Long donorId,
@@ -79,7 +81,73 @@ public record ItemResponse(
             String donorName,
             Integer donorTrustStars,
             String donorRank,
-            Double donorAsDescribedRate,
+            Boolean donorLocked,
+            Boolean hidden,
+            String hiddenReason,
+            Instant completedAt,
+            Boolean requestable,
+            Instant boostStartedAt,
+            Instant boostChainEndsAt,
+            Instant boostCooldownUntil) {
+        this(
+                id,
+                donorId,
+                categoryId,
+                areaId,
+                offerType,
+                title,
+                description,
+                desiredItem,
+                condition,
+                defectNote,
+                brand,
+                images,
+                status,
+                createdAt,
+                updatedAt,
+                defectImages,
+                operatingStatus,
+                expireAt,
+                boostedUntil,
+                donorName,
+                donorTrustStars,
+                donorRank,
+                donorLocked,
+                hidden,
+                hiddenReason,
+                completedAt,
+                requestable,
+                boostStartedAt,
+                boostChainEndsAt,
+                boostCooldownUntil,
+                null,
+                null);
+    }
+
+    /** Constructor 27 tham số trước khi có ba mốc đợt đẩy; ba trường mới để null. */
+    public ItemResponse(
+            Long id,
+            Long donorId,
+            Long categoryId,
+            Long areaId,
+            OfferType offerType,
+            String title,
+            String description,
+            String desiredItem,
+            ItemCondition condition,
+            String defectNote,
+            String brand,
+            List<String> images,
+            ItemStatus status,
+            Instant createdAt,
+            Instant updatedAt,
+            List<String> defectImages,
+            OperatingStatus operatingStatus,
+            Instant expireAt,
+            Instant boostedUntil,
+            String donorName,
+            Integer donorTrustStars,
+            String donorRank,
             Boolean donorLocked,
             Boolean hidden,
             String hiddenReason,
@@ -108,7 +176,6 @@ public record ItemResponse(
                 donorName,
                 donorTrustStars,
                 donorRank,
-                donorAsDescribedRate,
                 donorLocked,
                 hidden,
                 hiddenReason,
@@ -119,7 +186,7 @@ public record ItemResponse(
                 null);
     }
 
-    /** Constructor 26 tham số trước khi có completedAt, requestable; hai trường mới để null. */
+    /** Constructor 25 tham số trước khi có completedAt, requestable; hai trường mới để null. */
     public ItemResponse(
             Long id,
             Long donorId,
@@ -143,7 +210,6 @@ public record ItemResponse(
             String donorName,
             Integer donorTrustStars,
             String donorRank,
-            Double donorAsDescribedRate,
             Boolean donorLocked,
             Boolean hidden,
             String hiddenReason) {
@@ -170,7 +236,6 @@ public record ItemResponse(
                 donorName,
                 donorTrustStars,
                 donorRank,
-                donorAsDescribedRate,
                 donorLocked,
                 hidden,
                 hiddenReason,
@@ -203,7 +268,6 @@ public record ItemResponse(
                 donorName,
                 donorTrustStars,
                 donorRank,
-                donorAsDescribedRate,
                 donorLocked,
                 hidden,
                 hiddenReason,
@@ -211,7 +275,46 @@ public record ItemResponse(
                 isRequestable,
                 boostStartedAt,
                 boostChainEndsAt,
-                boostCooldownUntil);
+                boostCooldownUntil,
+                null,
+                referencePrice);
+    }
+
+    /** Gắn lý do bị từ chối cho chủ bài hoặc Admin (B4). Gọi sau cùng vì các hàm with khác tạo bản sao 30 trường. */
+    public ItemResponse withRejectionReason(String reason) {
+        return new ItemResponse(
+                id,
+                donorId,
+                categoryId,
+                areaId,
+                offerType,
+                title,
+                description,
+                desiredItem,
+                condition,
+                defectNote,
+                brand,
+                images,
+                status,
+                createdAt,
+                updatedAt,
+                defectImages,
+                operatingStatus,
+                expireAt,
+                boostedUntil,
+                donorName,
+                donorTrustStars,
+                donorRank,
+                donorLocked,
+                hidden,
+                hiddenReason,
+                completedAt,
+                requestable,
+                boostStartedAt,
+                boostChainEndsAt,
+                boostCooldownUntil,
+                reason,
+                referencePrice);
     }
 
     /** Gắn trạng thái tạm ẩn cho chủ bài hoặc Admin (U04). */
@@ -239,7 +342,6 @@ public record ItemResponse(
                 donorName,
                 donorTrustStars,
                 donorRank,
-                donorAsDescribedRate,
                 donorLocked,
                 isHidden,
                 isHidden ? reason : null,
@@ -247,11 +349,12 @@ public record ItemResponse(
                 requestable,
                 boostStartedAt,
                 boostChainEndsAt,
-                boostCooldownUntil);
+                boostCooldownUntil,
+                null,
+                referencePrice);
     }
 
-    public ItemResponse withDonor(
-            String name, Integer trustStars, String rank, Double asDescribedRate, Boolean donorLocked) {
+    public ItemResponse withDonor(String name, Integer trustStars, String rank, Boolean donorLocked) {
         return new ItemResponse(
                 id,
                 donorId,
@@ -275,7 +378,6 @@ public record ItemResponse(
                 name,
                 trustStars,
                 rank,
-                asDescribedRate,
                 donorLocked,
                 hidden,
                 hiddenReason,
@@ -283,7 +385,9 @@ public record ItemResponse(
                 requestable,
                 boostStartedAt,
                 boostChainEndsAt,
-                boostCooldownUntil);
+                boostCooldownUntil,
+                null,
+                referencePrice);
     }
 
     /**
@@ -314,7 +418,6 @@ public record ItemResponse(
                 donorName,
                 donorTrustStars,
                 donorRank,
-                donorAsDescribedRate,
                 donorLocked,
                 hidden,
                 hiddenReason,
@@ -322,14 +425,16 @@ public record ItemResponse(
                 requestable,
                 null,
                 null,
-                null);
+                null,
+                null,
+                referencePrice);
     }
 
-    public ItemResponse withDonor(String name, Integer trustStars, String rank, Double asDescribedRate) {
-        return withDonor(name, trustStars, rank, asDescribedRate, donorLocked);
+    public ItemResponse withDonor(String name, Integer trustStars, String rank) {
+        return withDonor(name, trustStars, rank, donorLocked);
     }
 
-    /** Constructor 25 tham số kế thừa từ U04 (chưa có donorLocked). */
+    /** Constructor 24 tham số kế thừa từ U04 (chưa có donorLocked). */
     public ItemResponse(
             Long id,
             Long donorId,
@@ -353,7 +458,6 @@ public record ItemResponse(
             String donorName,
             Integer donorTrustStars,
             String donorRank,
-            Double donorAsDescribedRate,
             Boolean hidden,
             String hiddenReason) {
         this(
@@ -379,7 +483,6 @@ public record ItemResponse(
                 donorName,
                 donorTrustStars,
                 donorRank,
-                donorAsDescribedRate,
                 null,
                 hidden,
                 hiddenReason);
@@ -407,8 +510,7 @@ public record ItemResponse(
             Instant boostedUntil,
             String donorName,
             Integer donorTrustStars,
-            String donorRank,
-            Double donorAsDescribedRate) {
+            String donorRank) {
         this(
                 id,
                 donorId,
@@ -432,7 +534,6 @@ public record ItemResponse(
                 donorName,
                 donorTrustStars,
                 donorRank,
-                donorAsDescribedRate,
                 null,
                 null,
                 null);
@@ -479,7 +580,6 @@ public record ItemResponse(
                 null,
                 null,
                 null,
-                null,
                 null);
     }
 
@@ -515,7 +615,6 @@ public record ItemResponse(
                 createdAt,
                 updatedAt,
                 List.of(),
-                null,
                 null,
                 null,
                 null,

@@ -56,8 +56,7 @@ class UserProfileServiceTest {
         User user = givenUser("Nguyễn Văn An", UserStatus.ACTIVE);
         user.updateProfile("Nguyễn Văn An", 12L, 30L);
         when(areaService.findName(12L)).thenReturn(Optional.of("Quận 3"));
-        when(reputationService.getReputationSummary(USER_ID))
-                .thenReturn(new ReputationSummary(USER_ID, 4, Rank.GOLD, 0.92));
+        when(reputationService.getReputationSummary(USER_ID)).thenReturn(new ReputationSummary(USER_ID, 4, Rank.GOLD));
         when(requestQueryService.countCompletedByUser(USER_ID)).thenReturn(6L);
 
         // when
@@ -71,7 +70,6 @@ class UserProfileServiceTest {
         assertThat(profile.district()).isEqualTo("Quận 3");
         assertThat(profile.rank()).isEqualTo(Rank.GOLD);
         assertThat(profile.trustStars()).isEqualTo(4);
-        assertThat(profile.asDescribedRate()).isEqualTo(0.92);
         assertThat(profile.completedTransactions()).isEqualTo(6L);
     }
 
@@ -80,7 +78,7 @@ class UserProfileServiceTest {
         // given
         givenUser("An", UserStatus.ACTIVE);
         when(reputationService.getReputationSummary(USER_ID))
-                .thenReturn(new ReputationSummary(USER_ID, 5, Rank.BRONZE, null));
+                .thenReturn(new ReputationSummary(USER_ID, 5, Rank.BRONZE));
 
         // when
         PublicProfileResponse profile = service.getPublicProfile(USER_ID);
@@ -89,7 +87,6 @@ class UserProfileServiceTest {
         assertThat(profile.district()).isNull();
         assertThat(profile.avatarUrl()).isNull();
         assertThat(profile.avatarInitials()).isEqualTo("A");
-        assertThat(profile.asDescribedRate()).isNull();
     }
 
     @Test

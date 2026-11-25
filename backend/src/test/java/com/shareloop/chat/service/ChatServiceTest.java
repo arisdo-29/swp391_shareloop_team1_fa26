@@ -97,6 +97,42 @@ class ChatServiceTest {
         }
 
         @Test
+        @DisplayName("Tin nhắn nhắc mạng xã hội trước khi chốt lịch vẫn được gửi và gắn cờ cho Admin (D3)")
+        void sendMessage_whenReviewKeywordBeforeLogistics_savesMessageAndFlagsForAdmin() {
+            // given
+            RequestChatContext context =
+                    new RequestChatContext(REQUEST_ID, RequestStatus.RESERVED, RECEIVER_ID, DONOR_ID);
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(context);
+            String content = "mình có zalo, bạn kết bạn nhé";
+            when(chatContactFilter.findReviewMatch(content)).thenReturn(java.util.Optional.of("zalo"));
+            when(messageRepository.save(any(Message.class))).thenReturn(new Message(REQUEST_ID, RECEIVER_ID, content));
+
+            // when
+            chatService.sendMessage(REQUEST_ID, RECEIVER_ID, new SendMessageRequest(content));
+
+            // then
+            verify(messageRepository).save(any(Message.class));
+            verify(chatViolationRecorder).flagForAdminReview(REQUEST_ID, RECEIVER_ID, "zalo");
+        }
+
+        @Test
+        @DisplayName("Sau khi chốt lịch thì không gắn cờ từ khoá mạng xã hội (D3)")
+        void sendMessage_whenReviewKeywordAfterLogistics_doesNotFlag() {
+            // given
+            RequestChatContext context =
+                    new RequestChatContext(REQUEST_ID, RequestStatus.LOGISTICS_CONFIRMED, RECEIVER_ID, DONOR_ID);
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(context);
+            String content = "mình có zalo, bạn kết bạn nhé";
+            when(messageRepository.save(any(Message.class))).thenReturn(new Message(REQUEST_ID, RECEIVER_ID, content));
+
+            // when
+            chatService.sendMessage(REQUEST_ID, RECEIVER_ID, new SendMessageRequest(content));
+
+            // then
+            verify(chatViolationRecorder, never()).flagForAdminReview(anyLong(), anyLong(), any());
+        }
+
+        @Test
         @DisplayName("Gửi tin nhắn thành công khi người gửi là donor")
         void sendMessage_success_byDonor() {
             RequestChatContext context =
@@ -207,7 +243,7 @@ class ChatServiceTest {
             assertThat(response.mediaId()).isEqualTo(mediaId);
             assertThat(response.content()).isEqualTo("Ảnh gói đồ");
 
-            verify(mediaService).attach(List.of(mediaId), RECEIVER_ID);
+            verify(mediaService).attachPrivate(List.of(mediaId), RECEIVER_ID);
             verify(messageRepository).save(any(Message.class));
         }
 
@@ -230,7 +266,7 @@ class ChatServiceTest {
             assertThat(response.mediaId()).isEqualTo(mediaId);
             assertThat(response.content()).isNull();
 
-            verify(mediaService).attach(List.of(mediaId), RECEIVER_ID);
+            verify(mediaService).attachPrivate(List.of(mediaId), RECEIVER_ID);
         }
 
         @Test
@@ -248,7 +284,7 @@ class ChatServiceTest {
                             .isEqualTo(ChatErrorCode.CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN));
 
             org.mockito.Mockito.verify(mediaService, org.mockito.Mockito.never())
-                    .attach(any(), org.mockito.ArgumentMatchers.anyLong());
+                    .attachPrivate(any(), org.mockito.ArgumentMatchers.anyLong());
         }
 
         private RequestChatContext contextOfType(String type) {
@@ -269,7 +305,7 @@ class ChatServiceTest {
                     .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                             .isEqualTo(ChatErrorCode.CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN));
             org.mockito.Mockito.verify(mediaService, org.mockito.Mockito.never())
-                    .attach(any(), org.mockito.ArgumentMatchers.anyLong());
+                    .attachPrivate(any(), org.mockito.ArgumentMatchers.anyLong());
         }
 
         @Test
@@ -285,7 +321,7 @@ class ChatServiceTest {
 
             // then
             assertThat(response.kind()).isEqualTo(MessageKind.IMAGE.name());
-            verify(mediaService).attach(List.of(51L), DONOR_ID);
+            verify(mediaService).attachPrivate(List.of(51L), DONOR_ID);
         }
 
         @Test
@@ -336,7 +372,7 @@ class ChatServiceTest {
                             .isEqualTo(ChatErrorCode.CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN));
 
             org.mockito.Mockito.verify(mediaService, org.mockito.Mockito.never())
-                    .attach(any(), org.mockito.ArgumentMatchers.anyLong());
+                    .attachPrivate(any(), org.mockito.ArgumentMatchers.anyLong());
         }
 
         @Test
@@ -355,7 +391,7 @@ class ChatServiceTest {
 
             assertThat(response).isNotNull();
             assertThat(response.kind()).isEqualTo(MessageKind.IMAGE.name());
-            verify(mediaService).attach(List.of(mediaId), DONOR_ID);
+            verify(mediaService).attachPrivate(List.of(mediaId), DONOR_ID);
         }
 
         @Test
@@ -896,5 +932,19 @@ class ChatServiceTest {
                             eq("/requests/100"));
             verify(requestService, never()).acceptOfferedItemInChat(anyLong(), anyLong(), anyLong());
         }
+    }
+
+    @Test
+    @DisplayName("Khiếu nại được mở: thêm một tin SYSTEM ghi số giờ giải trình, không thông báo thêm")
+    void postDisputeOpenedNotice_savesSystemMessageWithResponseHours() {
+        // when
+        chatService.postDisputeOpenedNotice(REQUEST_ID, 48);
+
+        // then
+        verify(messageRepository)
+                .save(argThat(m -> m.getKind() == MessageKind.SYSTEM
+                        && m.getRequestId() == REQUEST_ID
+                        && m.getContent().contains("48 giờ để giải trình")));
+        org.mockito.Mockito.verifyNoInteractions(notificationService);
     }
 }

@@ -2,6 +2,7 @@ package com.shareloop.ops.controller;
 
 import com.shareloop.listingfee.job.BoostNotificationJob;
 import com.shareloop.listingfee.job.ItemExpiryJob;
+import com.shareloop.media.job.MediaOrphanCleanupJob;
 import com.shareloop.request.job.RequestJob;
 import com.shareloop.user.job.PendingAccountCleanupJob;
 import com.shareloop.wallet.job.PaymentExpiryJob;
@@ -36,6 +37,7 @@ public class InternalJobController {
     private final PendingAccountCleanupJob pendingAccountCleanupJob;
     private final PaymentExpiryJob paymentExpiryJob;
     private final BoostNotificationJob boostNotificationJob;
+    private final MediaOrphanCleanupJob mediaOrphanCleanupJob;
 
     // ReviewSlaJob đã gỡ (KD-06, TD-04): nhóm bỏ thông báo nhắc Admin bài chờ duyệt quá 24 giờ.
     public InternalJobController(
@@ -44,13 +46,15 @@ public class InternalJobController {
             RequestJob requestJob,
             PendingAccountCleanupJob pendingAccountCleanupJob,
             PaymentExpiryJob paymentExpiryJob,
-            BoostNotificationJob boostNotificationJob) {
+            BoostNotificationJob boostNotificationJob,
+            MediaOrphanCleanupJob mediaOrphanCleanupJob) {
         this.triggerToken = triggerToken;
         this.itemExpiryJob = itemExpiryJob;
         this.requestJob = requestJob;
         this.pendingAccountCleanupJob = pendingAccountCleanupJob;
         this.paymentExpiryJob = paymentExpiryJob;
         this.boostNotificationJob = boostNotificationJob;
+        this.mediaOrphanCleanupJob = mediaOrphanCleanupJob;
     }
 
     @PostMapping("/run")
@@ -72,6 +76,8 @@ public class InternalJobController {
         results.put("paymentExpiryJob", executeJob(paymentExpiryJob::run, "paymentExpiryJob"));
         // HT-09: báo sắp hết đẩy / đã hết đẩy và dừng đẩy bài bị ẩn. Trên Cloud Run @Scheduled không tự chạy.
         results.put("boostNotificationJob", executeJob(boostNotificationJob::run, "boostNotificationJob"));
+
+        results.put("mediaOrphanCleanupJob", executeJob(mediaOrphanCleanupJob::run, "mediaOrphanCleanupJob"));
 
         return ResponseEntity.ok(results);
     }

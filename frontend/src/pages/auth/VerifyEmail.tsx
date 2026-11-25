@@ -120,6 +120,7 @@ export function VerifyEmail() {
       <form onSubmit={submit} aria-labelledby="verify-title">
         <h2 id="verify-title" className="text-2xl font-bold">Nhập mã xác minh</h2>
         <p className="mt-2 text-sm leading-6 text-text-secondary">Mã 6 số đã được gửi tới email của bạn.</p>
+        <p className="mt-1 text-xs leading-5 text-text-secondary">Nếu email này đã đăng ký trước đó, mật khẩu cũ vẫn được giữ. Quên mật khẩu thì dùng Quên mật khẩu sau khi kích hoạt.</p>
         {!email ? (
           <div className="mt-5">
             <Alert tone="warning">

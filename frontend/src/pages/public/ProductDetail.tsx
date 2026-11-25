@@ -28,6 +28,8 @@ import { loginPath } from '../../utils/authRedirect';
 import { productDetailBackLink } from '../../utils/productDetailNavigation';
 import { findActiveSwapPair, isActiveRequestStatus } from '../../utils/swapRequest';
 import { requestOfferLabel } from '../../utils/requestOffer';
+import { usePublicConfig } from '../../utils/usePublicConfig';
+import { formatReferencePrice, rankOfferedItems } from '../../utils/referencePrice';
 import { OfferedItemOptions } from '../../components/OfferedItemOptions';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
@@ -40,6 +42,7 @@ export function ProductDetail() {
   const user = useAppSelector(selectCurrentUser);
   const navigate = useNavigate();
   const location = useLocation();
+  const { swap_similar_price_percent: similarPricePercent } = usePublicConfig();
   const [requestError, setRequestError] = useState('');
   const [requestSuccess, setRequestSuccess] = useState('');
   const [offeredItemId, setOfferedItemId] = useState('');
@@ -171,6 +174,8 @@ export function ProductDetail() {
   const isDonorLocked = Boolean(item.donorLocked);
   // Bài đã giao dịch thành công: chỉ xem. Dựa vào cờ requestable backend trả, không tự suy từ trạng thái.
   const isTradedReadOnly = item.status === 'TRADED' && item.requestable === false;
+  // Bài đã chọn người khác: người từng gửi yêu cầu vẫn xem lại được bài nhưng không gửi yêu cầu mới.
+  const isReservedReadOnly = item.status === 'RESERVED' && item.requestable === false && !own;
   const ownerProfileId = toBackendUserId(item.ownerId);
   const activeListing =
     (item.status === 'approved' || item.status === 'APPROVED') &&
@@ -192,9 +197,16 @@ export function ProductDetail() {
           entry.id !== item.id &&
           (entry.status === 'approved' || entry.status === 'APPROVED') &&
           (!entry.expiresAt || new Date(entry.expiresAt).getTime() >= Date.now()) &&
+          !entry.hidden &&
           !activeTransactionItemIds.has(entry.id),
       )
     : [];
+
+  const swapOffers = rankOfferedItems(
+    eligibleOfferedItems,
+    item.type === 'trade' ? item.referencePrice : undefined,
+    similarPricePercent,
+  );
 
   // Bài Cho: bấm lại món đang chọn để bỏ kèm món. Bài Trao đổi: chọn món thì bỏ lựa chọn "Chỉ xin nhận".
   const chooseOfferedItem = (itemId: string) => {
@@ -357,11 +369,20 @@ export function ProductDetail() {
               <ConditionBadge condition={item.condition} />
               {isTradedReadOnly ? (
                 <StatusBadge status="TRADED" label="Đã giao dịch" />
+              ) : isReservedReadOnly && !existingRequest ? (
+                <StatusBadge status="RESERVED" label="Đã có người nhận" />
               ) : !activeListing ? (
                 <StatusBadge status={item.status} />
               ) : null}
             </div>
             <h1 className="text-2xl font-bold leading-tight sm:text-3xl">{item.title}</h1>
+            <p className="text-sm font-semibold">{formatReferencePrice(item.referencePrice)}</p>
+            {own && item.hidden && item.hiddenReason ? (
+              <Alert tone="warning">{item.hiddenReason}</Alert>
+            ) : null}
+            {own && item.status === 'REJECTED' && item.rejectionReason ? (
+              <Alert tone="warning">Bài bị từ chối. Lý do: {item.rejectionReason}. Sửa bài để gửi duyệt lại.</Alert>
+            ) : null}
             <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-text-muted">
               <span>{item.district}</span>
               <span>{item.category}</span>
@@ -410,7 +431,7 @@ export function ProductDetail() {
             />
             <div className="min-w-0 flex-1 space-y-1">
               <h2 id="item-owner" className="text-base font-bold">{item.donorName || 'Người đăng'}</h2>
-              <ReputationBadge trustStars={item.donorTrustStars} rank={item.donorRank} asDescribedRate={item.donorAsDescribedRate} />
+              <ReputationBadge trustStars={item.donorTrustStars} rank={item.donorRank} />
             </div>
             {ownerProfileId ? (
               <Button variant="outline" onClick={() => navigate(userProfilePath(ownerProfileId))}>
@@ -473,6 +494,17 @@ export function ProductDetail() {
                 </Button>
               ) : null}
             </>
+          ) : isReservedReadOnly ? (
+            <>
+              <h2 className="text-lg font-bold">Đã có người nhận</h2>
+              <p className="text-sm leading-6 text-text-secondary">
+                Chủ bài đã chọn người nhận cho món này nên bài không nhận yêu cầu mới. Bạn chỉ xem được
+                chi tiết bài đăng.
+              </p>
+              <Link to="/browse">
+                <Button variant="outline" className="w-full">Tìm món khác</Button>
+              </Link>
+            </>
           ) : !activeListing ? (
             <>
               <h2 className="text-lg font-bold">Bài không còn nhận yêu cầu</h2>
@@ -514,7 +546,8 @@ export function ProductDetail() {
                 <fieldset className="min-w-0 w-full max-w-full space-y-2">
                   <legend className="label">Chọn món bạn mang đổi</legend>
                   <OfferedItemOptions
-                    items={eligibleOfferedItems}
+                    items={swapOffers.items}
+                    similarPriceIds={swapOffers.similarIds}
                     selectedItemId={offeredItemId}
                     onSelect={chooseOfferedItem}
                   />
@@ -566,16 +599,17 @@ export function ProductDetail() {
           ) : null}
           {reportNotice ? <Alert tone="success">{reportNotice}</Alert> : null}
           {currentUserId && !own ? (
-            <button
+            <Button
               type="button"
-              className="min-h-11 text-sm font-semibold text-text-secondary hover:text-error"
+              variant="warning"
+              className="w-full"
               onClick={() => {
                 setReportNotice('');
                 setReportOpen(true);
               }}
             >
               Báo cáo bài đăng
-            </button>
+            </Button>
           ) : null}
         </aside>
       </div>

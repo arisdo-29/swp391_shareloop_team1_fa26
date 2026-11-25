@@ -1,7 +1,11 @@
 package com.shareloop.request.mapper;
 
+import com.shareloop.request.dto.CancelRequestInfo;
 import com.shareloop.request.dto.RequestItemInfo;
 import com.shareloop.request.dto.RequestResponse;
+import com.shareloop.request.dto.RescheduleInfo;
+import com.shareloop.request.dto.ShippingInfo;
+import com.shareloop.request.entity.CancelRequestCode;
 import com.shareloop.request.entity.Request;
 
 /**
@@ -16,23 +20,13 @@ public final class RequestMapper {
     }
 
     public static RequestResponse toResponse(Request request, String receiverName) {
-        return toResponse(request, receiverName, null, null, null);
+        return toResponse(request, receiverName, null, null);
     }
 
-    // Map họ tên và thông tin uy tín (TrustStars, hạng, tỉ lệ đúng mô tả) (YC-06, Issue #110), chưa có tên món đồ.
+    // Map họ tên và thông tin uy tín (TrustStars, hạng) (YC-06, Issue #110), chưa có tên món đồ.
     public static RequestResponse toResponse(
-            Request request,
-            String receiverName,
-            Integer receiverTrustStars,
-            String receiverRank,
-            Double receiverAsDescribedRate) {
-        return toResponse(
-                request,
-                receiverName,
-                receiverTrustStars,
-                receiverRank,
-                receiverAsDescribedRate,
-                RequestItemInfo.EMPTY);
+            Request request, String receiverName, Integer receiverTrustStars, String receiverRank) {
+        return toResponse(request, receiverName, receiverTrustStars, receiverRank, RequestItemInfo.EMPTY);
     }
 
     // Map đầy đủ, kèm tên món đồ và tên chủ bài để giao diện không phải hiện id (U2).
@@ -41,14 +35,12 @@ public final class RequestMapper {
             String receiverName,
             Integer receiverTrustStars,
             String receiverRank,
-            Double receiverAsDescribedRate,
             RequestItemInfo itemInfo) {
         if (request == null) {
             return null;
         }
         // Hạn khiếu nại cần đọc ConfigService nên do RequestService tính và truyền vào overload đầy đủ (U08).
-        return toResponse(
-                request, receiverName, receiverTrustStars, receiverRank, receiverAsDescribedRate, itemInfo, null, null);
+        return toResponse(request, receiverName, receiverTrustStars, receiverRank, itemInfo, null, null);
     }
 
     // Map đầy đủ kèm thời hạn khiếu nại (U08) và thời gian tin nhắn mới nhất (U03).
@@ -57,7 +49,6 @@ public final class RequestMapper {
             String receiverName,
             Integer receiverTrustStars,
             String receiverRank,
-            Double receiverAsDescribedRate,
             RequestItemInfo itemInfo,
             java.time.Instant complaintDeadline,
             java.time.Instant lastMessageAt) {
@@ -66,7 +57,6 @@ public final class RequestMapper {
                 receiverName,
                 receiverTrustStars,
                 receiverRank,
-                receiverAsDescribedRate,
                 itemInfo,
                 complaintDeadline,
                 lastMessageAt,
@@ -79,7 +69,6 @@ public final class RequestMapper {
             String receiverName,
             Integer receiverTrustStars,
             String receiverRank,
-            Double receiverAsDescribedRate,
             RequestItemInfo itemInfo,
             java.time.Instant complaintDeadline,
             java.time.Instant lastMessageAt,
@@ -104,13 +93,11 @@ public final class RequestMapper {
                 request.getContactRevealedAt(),
                 request.getDonorHandoverAt(),
                 request.getReceiverHandoverAt(),
-                request.getAsDescribed(),
                 request.getCompletedAt(),
                 request.getCreatedAt(),
                 receiverName,
                 receiverTrustStars,
                 receiverRank,
-                receiverAsDescribedRate,
                 itemInfo.itemTitle(),
                 itemInfo.itemImage(),
                 itemInfo.donorId(),
@@ -127,6 +114,66 @@ public final class RequestMapper {
                 null,
                 itemInfo.itemOfferType(),
                 // Phí đọc ConfigService nên mapper (static) không tính được; RequestService.addExtraInfo điền.
-                null);
+                null,
+                // Khiếu nại theo vai và báo cáo từ chối nhận cần biết người xem nên RequestService gắn sau bằng
+                // withReports.
+                null,
+                null,
+                // Cờ do RequestService gắn sau; đề nghị huỷ đang chờ lấy thẳng từ giao dịch (GN-06).
+                null,
+                toCancelRequestInfo(request),
+                toRescheduleInfo(request),
+                toShippingInfo(request),
+                null,
+                itemInfo.offeredItemReferencePrice(),
+                itemInfo.offeredItemAreaId());
+    }
+
+    // Tiến độ giao hàng hai chiều (GN-12). Địa chỉ đầy đủ ở đây, RequestService ẩn địa chỉ của bên kia khi chưa chốt
+    // lịch.
+    private static ShippingInfo toShippingInfo(Request request) {
+        if (!request.isShipping()) {
+            return ShippingInfo.EMPTY;
+        }
+        return new ShippingInfo(
+                request.getReceiverAddress(),
+                request.getDonorAddress(),
+                request.getDonorShippedAt(),
+                request.getDonorTrackingCode(),
+                request.getReceiverShippedAt(),
+                request.getReceiverTrackingCode(),
+                isFilled(request.getReceiverAddress()),
+                isFilled(request.getDonorAddress()));
+    }
+
+    private static boolean isFilled(String text) {
+        return text != null && !text.isBlank();
+    }
+
+    // Đề nghị dời lịch đang chờ và số lần đã dời (GN-11).
+    private static RescheduleInfo toRescheduleInfo(Request request) {
+        if (!request.hasPendingReschedule()) {
+            return new RescheduleInfo(null, null, null, null, request.getRescheduleCount());
+        }
+        return new RescheduleInfo(
+                request.getRescheduleProposedBy(),
+                request.getRescheduleProposedAt(),
+                request.getRescheduleMeetingTime(),
+                request.getRescheduleMeetingPlace(),
+                request.getRescheduleCount());
+    }
+
+    // Đề nghị huỷ đang chờ bên kia phản hồi; mọi trường null khi không có.
+    private static CancelRequestInfo toCancelRequestInfo(Request request) {
+        if (!request.hasPendingCancelRequest()) {
+            return CancelRequestInfo.EMPTY;
+        }
+        CancelRequestCode code = request.getCancelRequestCode();
+        return new CancelRequestInfo(
+                request.getCancelRequestedBy(),
+                request.getCancelRequestedAt(),
+                code == null ? null : code.name(),
+                code == null ? null : code.label(),
+                request.getCancelRequestReason());
     }
 }

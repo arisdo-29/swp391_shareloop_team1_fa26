@@ -14,6 +14,7 @@ export interface ReviewQueueItem {
   matchedTerms?: string[];
   donorTrustStars?: number | null;
   createdAt: string;
+  queuedAt?: string;
   flagged?: boolean;
   editCount?: number;
   isEdited?: boolean;
@@ -24,11 +25,21 @@ export interface PendingItemsParams {
   size?: number;
 }
 
+export type ReviewRiskSignal = 'LOW_TRUST' | 'REPEATED_PAIR' | 'NEWCOMER';
+
+export interface ReviewQueueParams extends PendingItemsParams {
+  q?: string;
+  categoryId?: number;
+  risk?: ReviewRiskSignal;
+  edited?: boolean;
+}
+
 export interface ReviewQueueResponse {
   items: ReviewQueueItem[];
   checklist: ReviewChecklistItem[];
   page: number;
   size: number;
+  totalElements?: number;
 }
 
 // Contract: docs/api/review.md mục 2 (GET /api/v1/admin/reviews/{itemId})
@@ -77,7 +88,7 @@ export const adminModerationApi = {
     const { data } = await http.get<ReviewQueueItem[]>('/api/v1/admin/items/pending', { params });
     return data;
   },
-  async pendingReviews(params: PendingItemsParams = {}) {
+  async pendingReviews(params: ReviewQueueParams = {}) {
     const { data } = await http.get<ReviewQueueResponse>('/api/v1/admin/reviews/pending', { params });
     return data;
   },

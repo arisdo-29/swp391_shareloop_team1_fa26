@@ -15,15 +15,53 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long> {
+    String ADMIN_DATE_RANGE = "((:paidDate = false and o.createdAt >= :from and o.createdAt < :to)"
+            + " or (:paidDate = true and o.paidAt >= :from and o.paidAt < :to))";
 
-    /** Danh sách đơn nạp cho Admin; provider hoặc status null nghĩa là không lọc theo tiêu chí đó. */
+    /**
+     * Danh sách đơn cho trang Giao dịch nạp tiền của Admin. provider và status null là không lọc. keywordPattern null
+     * là không tìm, ngược lại khớp mã đơn (chữ thường, bọc %) hoặc chủ đơn nằm trong userIds (người dùng tìm theo tên
+     * hoặc email, luôn truyền ít nhất một phần tử để IN không rỗng). reconcileOnly = true chỉ lấy đơn cần đối soát.
+     */
     @Query("select o from PaymentOrder o where (:provider is null or o.provider = :provider)"
-            + " and (:status is null or o.status = :status) and (:submittedOnly = false or o.submittedAt is not null)")
-    org.springframework.data.domain.Page<PaymentOrder> findOrders(
+            + " and (:status is null or o.status = :status)"
+            + " and (:keywordPattern is null or lower(o.orderCode) like :keywordPattern or o.userId in :userIds)"
+            + " and " + ADMIN_DATE_RANGE
+            + " and (:reconcileOnly = false or (o.provider = com.shareloop.wallet.entity.PaymentProvider.VNPAY"
+            + "   and o.status in (com.shareloop.wallet.entity.PaymentOrderStatus.FAILED,"
+            + "     com.shareloop.wallet.entity.PaymentOrderStatus.CANCELLED,"
+            + "     com.shareloop.wallet.entity.PaymentOrderStatus.EXPIRED)"
+            + "   and o.paidAt is not null and o.reviewedAt is null))")
+    org.springframework.data.domain.Page<PaymentOrder> findAdminOrders(
             @Param("provider") PaymentProvider provider,
             @Param("status") PaymentOrderStatus status,
-            @Param("submittedOnly") boolean submittedOnly,
+            @Param("keywordPattern") String keywordPattern,
+            @Param("userIds") Collection<Long> userIds,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("paidDate") boolean paidDate,
+            @Param("reconcileOnly") boolean reconcileOnly,
             org.springframework.data.domain.Pageable pageable);
+
+    /** Số đơn và tổng tiền theo từng trạng thái trong khoảng lọc của Admin. */
+    @Query("select o.status as status, count(o) as orderCount, coalesce(sum(o.amountVnd), 0) as amountVnd"
+            + " from PaymentOrder o where " + ADMIN_DATE_RANGE + " group by o.status")
+    List<StatusTotalView> summarizeByStatus(
+            @Param("from") Instant from, @Param("to") Instant to, @Param("paidDate") boolean paidDate);
+
+    /** Mã đơn của nhiều đơn theo id, dùng để gắn mã vào dòng sổ cái. */
+    @Query("select o.id as id, o.orderCode as orderCode from PaymentOrder o where o.id in :ids")
+    List<OrderCodeView> findCodesByIds(@Param("ids") Collection<Long> ids);
+
+    /** Số đơn cần đối soát trong khoảng lọc của Admin. */
+    @Query("select count(o) from PaymentOrder o where " + ADMIN_DATE_RANGE
+            + " and o.provider = com.shareloop.wallet.entity.PaymentProvider.VNPAY"
+            + " and o.status in (com.shareloop.wallet.entity.PaymentOrderStatus.FAILED,"
+            + "   com.shareloop.wallet.entity.PaymentOrderStatus.CANCELLED,"
+            + "   com.shareloop.wallet.entity.PaymentOrderStatus.EXPIRED)"
+            + " and o.paidAt is not null and o.reviewedAt is null")
+    long countNeedingReconcile(
+            @Param("from") Instant from, @Param("to") Instant to, @Param("paidDate") boolean paidDate);
 
     /** Đọc nhẹ id, chủ đơn, trạng thái và số Credit theo mã đơn; không khoá, không tạo entity managed. */
     @Query(
@@ -36,6 +74,74 @@ public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long
 
     @Query("select o.userId from PaymentOrder o where o.id = :id")
     Optional<Long> findUserIdById(@Param("id") Long id);
+
+    /**
+     * Chuyển một đơn PENDING đã quá hạn sang EXPIRED khi người dùng xem đơn, không chờ PaymentExpiryJob. Người gọi đã
+     * kiểm mốc đóng hẳn (PaymentDeadline.closesAt); câu UPDATE có điều kiện status = PENDING nên IPN vừa cộng tiền xong
+     * (SUCCESS) hay đơn đã hủy thì không bị đổi.
+     *
+     * @return 1 nếu vừa chuyển EXPIRED, 0 nếu đơn không còn PENDING
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update PaymentOrder o set o.status = com.shareloop.wallet.entity.PaymentOrderStatus.EXPIRED"
+            + " where o.id = :id and o.status = com.shareloop.wallet.entity.PaymentOrderStatus.PENDING")
+    int expireIfPending(@Param("id") Long id);
+
+    /**
+     * Người dùng tự hủy đơn nạp: chỉ đổi khi đơn còn PENDING và đúng chủ đơn, trong một câu UPDATE có điều kiện nên gọi
+     * lại nhiều lần cũng chỉ đổi một lần (idempotent). IPN đang giữ khoá dòng thì câu này chờ; IPN cộng tiền xong (đơn
+     * SUCCESS) thì câu này không đổi gì. Ghi lý do vào review_note (cột ghi chú xử lý đơn, không còn dùng cho duyệt tay).
+     *
+     * @return 1 nếu vừa hủy, 0 nếu đơn không còn PENDING, không có hoặc của người khác
+     */
+    // clearAutomatically: bỏ entity cũ khỏi persistence context để lần đọc sau trong cùng transaction thấy trạng thái
+    // mới.
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update PaymentOrder o set o.status = com.shareloop.wallet.entity.PaymentOrderStatus.CANCELLED,"
+            + " o.reviewNote = :reason where o.orderCode = :orderCode and o.userId = :userId"
+            + " and o.status = com.shareloop.wallet.entity.PaymentOrderStatus.PENDING")
+    int cancelPending(
+            @Param("orderCode") String orderCode, @Param("userId") long userId, @Param("reason") String reason);
+
+    /**
+     * Hủy mọi đơn PENDING của một người (dùng khi "Hủy đơn cũ & tạo đơn mới"). Câu UPDATE có điều kiện status = PENDING
+     * nên đơn vừa được IPN cộng tiền không bị đổi. Người gọi đã khoá dòng users nên chạy lần lượt với IPN.
+     *
+     * @return số đơn vừa hủy
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update PaymentOrder o set o.status = com.shareloop.wallet.entity.PaymentOrderStatus.CANCELLED,"
+            + " o.reviewNote = :reason where o.userId = :userId"
+            + " and o.status = com.shareloop.wallet.entity.PaymentOrderStatus.PENDING")
+    int cancelAllPendingOfUser(@Param("userId") long userId, @Param("reason") String reason);
+
+    /**
+     * Chuyển EXPIRED các đơn PENDING của một người tạo trước {@code cutoff} (đã qua hạn cộng dung sai với VNPay). Gọi
+     * trước khi liệt kê hay tạo đơn để đơn quá hạn không hiện như đang chờ, không chờ PaymentExpiryJob.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update PaymentOrder o set o.status = com.shareloop.wallet.entity.PaymentOrderStatus.EXPIRED"
+            + " where o.userId = :userId and o.status = com.shareloop.wallet.entity.PaymentOrderStatus.PENDING"
+            + " and o.createdAt < :cutoff")
+    int expireStalePendingOfUser(@Param("userId") long userId, @Param("cutoff") Instant cutoff);
+
+    /** Đơn nạp của một người, theo thứ tự của pageable; status null là mọi trạng thái (lịch sử nạp). */
+    @Query("select o from PaymentOrder o where o.userId = :userId and (:status is null or o.status = :status)")
+    org.springframework.data.domain.Page<PaymentOrder> findOwnOrders(
+            @Param("userId") long userId,
+            @Param("status") PaymentOrderStatus status,
+            org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Đơn PENDING của một người còn trong hạn thanh toán (tạo sau {@code createdAfter} = now - payment_order_expire_minutes).
+     * Đơn PENDING đã quá hạn nhưng còn trong dung sai chờ IPN không tính là "đang chờ thanh toán".
+     */
+    @Query("select o from PaymentOrder o where o.userId = :userId"
+            + " and o.status = com.shareloop.wallet.entity.PaymentOrderStatus.PENDING and o.createdAt > :createdAfter")
+    org.springframework.data.domain.Page<PaymentOrder> findActivePendingOrders(
+            @Param("userId") long userId,
+            @Param("createdAfter") Instant createdAfter,
+            org.springframework.data.domain.Pageable pageable);
 
     /**
      * Đọc đơn và khoá dòng payment_orders đến hết transaction (SELECT ... FOR UPDATE). Luồng nạp và callback
@@ -72,6 +178,14 @@ public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long
     @Query("select o.paidAt as paidAt, o.amountVnd as amountVnd from PaymentOrder o"
             + " where o.status = :status and o.paidAt >= :from and o.paidAt < :to order by o.paidAt")
     List<PaidOrderView> findPaidOrders(
+            @Param("status") PaymentOrderStatus status, @Param("from") Instant from, @Param("to") Instant to);
+
+    /**
+     * Danh sách các đơn nạp thành công trong khoảng [from, to), sắp xếp theo thời điểm thanh toán cũ nhất trước (L02).
+     */
+    @Query("select o from PaymentOrder o where o.status = :status and o.paidAt >= :from and o.paidAt < :to"
+            + " order by o.paidAt asc, o.id asc")
+    List<PaymentOrder> findSuccessfulOrders(
             @Param("status") PaymentOrderStatus status, @Param("from") Instant from, @Param("to") Instant to);
 
     /**

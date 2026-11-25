@@ -8,9 +8,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { actions, store } from '../../app/store';
 import { itemApi } from '../../services/itemApi';
 import { mediaApi } from '../../services/mediaApi';
-import { requestApi, type RequestResponse } from '../../services/requestApi';
+import { requestApi, type RequestDispute, type RequestResponse } from '../../services/requestApi';
 import type { ItemRequestStatus, User } from '../../types/domain';
+import { respondDispute } from '../../services/reportApi';
 import { TransactionProgress } from './TransactionProgress';
+
+// Ảnh riêng tư tải bằng token: ở test này chỉ cần hook trả blob URL có sẵn.
+vi.mock('../../utils/usePrivateMediaUrl', () => ({
+  usePrivateMediaUrl: () => ({ url: 'blob:test-image', loading: false, failed: false }),
+}));
 
 vi.mock('../../services/requestApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../services/requestApi')>()),
@@ -20,7 +26,8 @@ vi.mock('../../services/requestApi', async (importOriginal) => ({
     cancel: vi.fn(),
     select: vi.fn(),
     cancelTransaction: vi.fn(),
-    reportHandoverIssue: vi.fn(),
+    handoverFailed: vi.fn(),
+    refuseHandover: vi.fn(),
     getContact: vi.fn(),
     confirmHandover: vi.fn(),
     attachMedia: vi.fn(),
@@ -31,6 +38,10 @@ vi.mock('../../services/itemApi', async (importOriginal) => ({
   itemApi: { detail: vi.fn() },
 }));
 vi.mock('../../services/mediaApi', () => ({ mediaApi: { upload: vi.fn() } }));
+vi.mock('../../services/reportApi', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../services/reportApi')>()),
+  respondDispute: vi.fn(),
+}));
 
 const DONOR_ID = 9;
 const RECEIVER_ID = 12;
@@ -134,7 +145,7 @@ describe('Bảo vệ trang Tiến trình', () => {
     // then
     expect(await screen.findByText('Không xem được giao dịch này')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Các bước' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Huỷ giao dịch' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Hủy giao dịch' })).toBeNull();
   });
 
   it('gọi API chi tiết đúng id trên đường dẫn và người đang đăng nhập', async () => {
@@ -186,7 +197,7 @@ describe('Các bước theo trạng thái', () => {
     expect(screen.getByText(/Giao dịch đã hoàn tất lúc 10:36 30\/10\/2026/)).toBeTruthy();
   });
 
-  it('không được chọn và đã huỷ hiện Alert kèm lý do', async () => {
+  it('không được chọn và đã hủy hiện Alert kèm lý do', async () => {
     // when
     await renderProgress(
       RECEIVER_ID,
@@ -289,17 +300,6 @@ describe('Nút theo trạng thái và vai', () => {
     expect(screen.getByText('Cổng số 2 chợ Bà Chiểu')).toBeTruthy();
     expect(await screen.findByText('0901234567')).toBeTruthy();
     expect(requestApi.getContact).toHaveBeenCalledWith(101, RECEIVER_ID);
-  });
-
-  it('người nhận thấy Tôi đã nhận được đồ, chủ bài thấy Tôi đã giao đồ', async () => {
-    // when
-    await renderProgress(RECEIVER_ID, request());
-
-    // then
-    expect(screen.getByRole('button', { name: 'Tôi đã nhận được đồ' })).toBeTruthy();
-    cleanup();
-    await renderProgress(DONOR_ID, request());
-    expect(screen.getByRole('button', { name: 'Tôi đã giao đồ' })).toBeTruthy();
   });
 
   it('thẻ đối tác ghi vai thật và có Nhắn tin, Xem hồ sơ, Báo cáo', async () => {
@@ -565,13 +565,13 @@ describe('Ảnh khiếu nại', () => {
 });
 
 // Chuyển từ Messages.transaction.test.tsx: các chức năng này nay nằm ở trang Tiến trình.
-describe('Huỷ giao dịch', () => {
-  it.each(['RESERVED', 'AWAITING_LOGISTICS', 'LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER'] as const)(
-    'hiện khối Huỷ giao dịch và chú thích khi trạng thái %s',
+describe('Hủy giao dịch', () => {
+  it.each(['RESERVED', 'AWAITING_LOGISTICS'] as const)(
+    'hiện khối Hủy giao dịch và chú thích khi trạng thái %s',
     async (status) => {
       await renderProgress(RECEIVER_ID, request({ status }));
 
-      expect(screen.getByRole('button', { name: 'Huỷ giao dịch' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Hủy giao dịch' })).toBeTruthy();
       expect(
         screen.getByText(
           'Cần nêu lý do. Bài đăng mở lại cho người khác, không mất phí đăng lần nữa.',
@@ -580,12 +580,12 @@ describe('Huỷ giao dịch', () => {
     },
   );
 
-  it.each(['COMPLETED', 'DISPUTED', 'CANCELLED'] as const)(
+  it.each(['LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER', 'COMPLETED', 'DISPUTED', 'CANCELLED'] as const)(
     'không hiện khi trạng thái %s',
     async (status) => {
       await renderProgress(RECEIVER_ID, request({ status }));
 
-      expect(screen.queryByRole('button', { name: 'Huỷ giao dịch' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Hủy giao dịch' })).toBeNull();
     },
   );
 
@@ -594,16 +594,16 @@ describe('Huỷ giao dịch', () => {
     vi.mocked(requestApi.cancelTransaction).mockResolvedValue(
       request({ status: 'CANCELLED', cancelReason: '[Người nhận] Tôi bận việc đột xuất' }),
     );
-    await renderProgress(RECEIVER_ID, request());
+    await renderProgress(RECEIVER_ID, request({ status: 'AWAITING_LOGISTICS' }));
 
-    await userEvents.click(screen.getByRole('button', { name: 'Huỷ giao dịch' }));
+    await userEvents.click(screen.getByRole('button', { name: 'Hủy giao dịch' }));
     const dialog = await screen.findByRole('dialog');
     const submit = within(dialog).getByRole('button', {
-      name: 'Huỷ giao dịch',
+      name: 'Hủy giao dịch',
     }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
 
-    const reasonBox = within(dialog).getByLabelText(/Lý do huỷ/);
+    const reasonBox = within(dialog).getByLabelText(/Lý do hủy/);
     expect(reasonBox.getAttribute('maxlength')).toBe('500');
     await userEvents.type(reasonBox, 'Tôi bận việc đột xuất');
     expect(within(dialog).getByText('21/500')).toBeTruthy();
@@ -633,58 +633,132 @@ describe('Hạn giải trình khi giao dịch đang khiếu nại', () => {
   it('không hiện câu chờ giải trình khi deadline là null', async () => {
     await renderProgress(RECEIVER_ID, request({ status: 'DISPUTED', disputeResponseDueAt: null }));
 
-    expect(screen.getByText(/Giao dịch đang có khiếu nại/)).toBeTruthy();
+    expect(screen.getByText(/Sự cố giao nhận, chờ Admin xác minh/)).toBeTruthy();
     expect(screen.queryByText(/Hạn giải trình ghi nhận/)).toBeNull();
   });
 });
 
-describe('Báo chưa nhận được / chưa giao được', () => {
-  it('người nhận vẫn thấy nút không nhận được đồ khi chủ bài đã xác nhận', async () => {
-    await renderProgress(
-      RECEIVER_ID,
-      request({ status: 'AWAITING_HANDOVER', donorHandoverAt: '2026-10-25T10:00:00Z' }),
-    );
+describe('Ba nút kết quả giao nhận', () => {
+  const swapRequest = (overrides: Partial<RequestResponse> = {}) =>
+    request({ type: 'SWAP', offeredItemId: 77, offeredItemTitle: 'Đàn guitar', ...overrides });
 
-    expect(screen.getByRole('button', { name: 'Tôi không nhận được đồ' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Tôi đã nhận được đồ' })).toBeTruthy();
+  it('người cho ở Cho tặng thấy hai nút, không có Từ chối giao nhận', async () => {
+    // when
+    await renderProgress(DONOR_ID, request());
+
+    // then
+    expect(screen.getByRole('button', { name: 'Đã giao nhận xong' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Giao nhận không thành công' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Từ chối giao nhận' })).toBeNull();
   });
 
-  it('chủ bài vẫn thấy nút không giao được đồ khi người nhận đã xác nhận', async () => {
+  it('người nhận ở Cho tặng thấy đủ ba nút', async () => {
+    // when
+    await renderProgress(RECEIVER_ID, request());
+
+    // then
+    expect(screen.getByRole('button', { name: 'Đã giao nhận xong' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Giao nhận không thành công' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Từ chối giao nhận' })).toBeTruthy();
+  });
+
+  it.each([DONOR_ID, RECEIVER_ID])('Trao đổi: bên %i thấy đủ ba nút', async (viewerId) => {
+    // given
+    vi.mocked(itemApi.detail).mockRejectedValue(new Error('not needed'));
+
+    // when
+    await renderProgress(viewerId, swapRequest());
+
+    // then
+    expect(screen.getByRole('button', { name: 'Đã giao nhận xong' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Giao nhận không thành công' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Từ chối giao nhận' })).toBeTruthy();
+  });
+
+  it('không còn nút Hủy giao dịch sau khi chốt lịch', async () => {
+    // when
+    await renderProgress(RECEIVER_ID, request({ status: 'AWAITING_HANDOVER' }));
+
+    // then
+    expect(screen.queryByRole('button', { name: 'Hủy giao dịch' })).toBeNull();
+  });
+
+  it('ẩn cả ba nút khi mình đã bấm hoàn tất', async () => {
+    // when
     await renderProgress(
-      DONOR_ID,
+      RECEIVER_ID,
       request({ status: 'AWAITING_HANDOVER', receiverHandoverAt: '2026-10-25T10:00:00Z' }),
     );
 
-    expect(screen.getByRole('button', { name: 'Tôi không giao được đồ' })).toBeTruthy();
+    // then
+    expect(screen.getByRole('button', { name: 'Bạn đã xác nhận hoàn tất' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Giao nhận không thành công' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Từ chối giao nhận' })).toBeNull();
   });
 
-  it.each([
-    [RECEIVER_ID, 'Tôi không nhận được đồ', 'Người giao không đến điểm hẹn'],
-    [DONOR_ID, 'Tôi không giao được đồ', 'Người nhận không đến điểm hẹn'],
-  ] as const)('cho vai trò %s chọn lý do và huỷ sau khi đã chốt lịch', async (role, label, reason) => {
+  it('Đã giao nhận xong gọi API không kèm câu hỏi đúng mô tả', async () => {
+    // given
     const userEvents = userEvent.setup();
-    vi.mocked(requestApi.cancelTransaction).mockResolvedValue(request({ status: 'CANCELLED' }));
-    await renderProgress(role, request({ status: 'LOGISTICS_CONFIRMED' }));
-    await userEvents.click(screen.getByRole('button', { name: label }));
-    const dialog = within(screen.getByRole('dialog', { name: label }));
-    const submit = dialog.getByRole('button', { name: 'Huỷ giao dịch' }) as HTMLButtonElement;
+    vi.mocked(requestApi.confirmHandover).mockResolvedValue(
+      request({ status: 'AWAITING_HANDOVER', receiverHandoverAt: '2026-10-25T10:00:00Z' }),
+    );
+    await renderProgress(RECEIVER_ID, request());
+
+    // when
+    await userEvents.click(screen.getByRole('button', { name: 'Đã giao nhận xong' }));
+
+    // then
+    await waitFor(() => expect(requestApi.confirmHandover).toHaveBeenCalledWith(101, RECEIVER_ID, {}));
+    expect(screen.queryByText(/đúng mô tả không/)).toBeNull();
+  });
+
+  it('Giao hàng: người gửi thấy nút Tôi đã gửi hàng, người nhận thấy dòng chờ bên kia gửi', async () => {
+    // when: luật mới (GN-12) Giao hàng có thẻ riêng theo từng chiều
+    await renderProgress(DONOR_ID, request({ deliveryMethod: 'SHIPPING' }));
+
+    // then
+    expect(screen.getByRole('button', { name: 'Tôi đã gửi hàng' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Đã giao nhận xong' })).toBeNull();
+    cleanup();
+    await renderProgress(RECEIVER_ID, request({ deliveryMethod: 'SHIPPING' }));
+    expect(screen.queryByRole('button', { name: 'Tôi đã gửi hàng' })).toBeNull();
+    expect(screen.getByText('Món bạn nhận')).toBeTruthy();
+  });
+
+  it('không thành công khi bên kia chưa bấm: hộp thoại báo đề nghị huỷ chờ bên kia và gọi handover-failed', async () => {
+    // given
+    const userEvents = userEvent.setup();
+    vi.mocked(requestApi.handoverFailed).mockResolvedValue(request());
+    await renderProgress(RECEIVER_ID, request());
+
+    // when
+    await userEvents.click(screen.getByRole('button', { name: 'Giao nhận không thành công' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    expect(dialog.getByText(/Giao dịch chưa bị huỷ ngay/)).toBeTruthy();
+    const submit = dialog.getByRole('button', { name: 'Gửi đề nghị huỷ' }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
-    await userEvents.selectOptions(dialog.getByLabelText('Lý do giao nhận không thành công'), reason);
+    await userEvents.selectOptions(
+      dialog.getByLabelText('Lý do giao nhận không thành công'),
+      'COUNTERPART_NO_SHOW',
+    );
     await userEvents.click(submit);
-    expect(requestApi.cancelTransaction).toHaveBeenCalledWith(101, role, reason);
-    expect(requestApi.reportHandoverIssue).not.toHaveBeenCalled();
+
+    // then
+    await waitFor(() =>
+      expect(requestApi.handoverFailed).toHaveBeenCalledWith(101, RECEIVER_ID, {
+        code: 'COUNTERPART_NO_SHOW',
+        reason: undefined,
+        evidenceMediaIds: undefined,
+      }),
+    );
+    expect(requestApi.cancelTransaction).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Đã gửi đề nghị huỷ. Đang chờ .+ phản hồi./)).toBeTruthy();
   });
 
-  it('ẩn nút khi mình đã xác nhận nhận đồ', async () => {
-    await renderProgress(RECEIVER_ID, request({
-      status: 'AWAITING_HANDOVER', receiverHandoverAt: '2026-10-25T10:00:00Z',
-    }));
-    expect(screen.queryByRole('button', { name: 'Tôi không nhận được đồ' })).toBeNull();
-  });
-
-  it('gửi ghi chú và cập nhật giao dịch sang khiếu nại', async () => {
+  it('không thành công khi bên kia đã bấm: hộp thoại báo tranh chấp và nút Gửi khiếu nại', async () => {
+    // given
     const userEvents = userEvent.setup();
-    vi.mocked(requestApi.reportHandoverIssue).mockResolvedValue(
+    vi.mocked(requestApi.handoverFailed).mockResolvedValue(
       request({ status: 'DISPUTED', donorHandoverAt: '2026-10-25T10:00:00Z' }),
     );
     await renderProgress(
@@ -692,21 +766,80 @@ describe('Báo chưa nhận được / chưa giao được', () => {
       request({ status: 'AWAITING_HANDOVER', donorHandoverAt: '2026-10-25T10:00:00Z' }),
     );
 
-    await userEvents.click(screen.getByRole('button', { name: 'Tôi không nhận được đồ' }));
-    const dialog = await screen.findByRole('dialog');
-    await userEvents.selectOptions(within(dialog).getByLabelText('Lý do giao nhận không thành công'), 'other');
-    await userEvents.type(within(dialog).getByLabelText(/Mô tả sự cố/), 'Chờ mãi không thấy ai giao');
-    await userEvents.click(within(dialog).getByRole('button', { name: 'Gửi báo cáo' }));
+    // when
+    await userEvents.click(screen.getByRole('button', { name: 'Giao nhận không thành công' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    expect(dialog.getByText(/chuyển sang sự cố giao nhận, chờ Admin xác minh/)).toBeTruthy();
+    await userEvents.selectOptions(dialog.getByLabelText('Lý do giao nhận không thành công'), 'OTHER');
+    await userEvents.type(dialog.getByLabelText(/Mô tả sự cố/), 'Chờ mãi không thấy ai giao');
+    await userEvents.click(dialog.getByRole('button', { name: 'Gửi khiếu nại' }));
 
+    // then
     await waitFor(() =>
-      expect(requestApi.reportHandoverIssue).toHaveBeenCalledWith(101, RECEIVER_ID, {
-        note: 'Chờ mãi không thấy ai giao',
+      expect(requestApi.handoverFailed).toHaveBeenCalledWith(101, RECEIVER_ID, {
+        code: 'OTHER',
+        reason: 'Chờ mãi không thấy ai giao',
         evidenceMediaIds: undefined,
       }),
     );
-    expect(await screen.findByText(/Giao dịch đang có khiếu nại/)).toBeTruthy();
+  });
+
+  it('Giao hàng: lý do chưa gửi hàng thay cho không đến điểm hẹn', async () => {
+    // given: chiều 1 đã gửi nên người nhận báo được
+    const userEvents = userEvent.setup();
+    await renderProgress(
+      RECEIVER_ID,
+      request({
+        deliveryMethod: 'SHIPPING',
+        status: 'AWAITING_HANDOVER',
+        donorShippedAt: '2026-10-25T08:00:00Z',
+        donorTrackingCode: 'GHN123',
+      }),
+    );
+
+    // when
+    await userEvents.click(screen.getByRole('button', { name: 'Giao nhận không thành công' }));
+    const dialog = within(await screen.findByRole('dialog'));
+
+    // then
+    expect(dialog.getByRole('option', { name: 'Bên kia chưa gửi hàng' })).toBeTruthy();
+    expect(dialog.queryByRole('option', { name: 'Bên kia không đến điểm hẹn' })).toBeNull();
+  });
+
+  it('Từ chối giao nhận mở hộp thoại Báo cáo vi phạm, bắt buộc mô tả rồi gọi refuse-handover', async () => {
+    // given
+    const userEvents = userEvent.setup();
+    vi.mocked(requestApi.refuseHandover).mockResolvedValue(request({ status: 'CANCELLED' }));
+    await renderProgress(RECEIVER_ID, request());
+
+    // when
+    await userEvents.click(screen.getByRole('button', { name: 'Từ chối giao nhận' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    expect(dialog.getByRole('heading', { name: 'Báo cáo vi phạm' })).toBeTruthy();
+    expect(dialog.getByText('Không đúng mô tả')).toBeTruthy();
+    expect(
+      dialog.getByText(
+        'Giao dịch sẽ bị huỷ. Bài của bạn được mở lại. Món bị từ chối sẽ tạm ẩn cho đến khi Admin xem xét.',
+      ),
+    ).toBeTruthy();
+    const submit = dialog.getByRole('button', { name: 'Gửi báo cáo' }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    await userEvents.type(dialog.getByLabelText(/Mô tả/), 'Máy không bật được');
+    await userEvents.click(submit);
+
+    // then
+    await waitFor(() =>
+      expect(requestApi.refuseHandover).toHaveBeenCalledWith(101, RECEIVER_ID, {
+        reason: 'Máy không bật được',
+        evidenceMediaIds: undefined,
+      }),
+    );
+    expect(
+      await screen.findByText('Bạn đã từ chối nhận và gửi báo cáo. Admin đang xem xét.'),
+    ).toBeTruthy();
   });
 });
+
 
 describe('Món mang đổi', () => {
   it('không cần itemApi khi không phải giao dịch Trao đổi', async () => {
@@ -715,5 +848,157 @@ describe('Món mang đổi', () => {
 
     // then
     expect(itemApi.detail).not.toHaveBeenCalled();
+  });
+});
+
+describe('Khiếu nại theo vai', () => {
+  const dispute = (overrides: Partial<RequestDispute> = {}): RequestDispute => ({
+    id: 7,
+    reason: 'NO_SHOW',
+    openedByMe: false,
+    status: 'AWAITING_RESPONSE',
+    responseDueAt: '2026-10-31T07:30:00Z',
+    respondedAt: null,
+    canRespond: true,
+    ...overrides,
+  });
+
+  it('bên khiếu nại thấy thông báo đã gửi, hạn của đối phương và không có nút giải trình', async () => {
+    // when
+    await renderProgress(
+      RECEIVER_ID,
+      request({ status: 'DISPUTED', disputes: [dispute({ openedByMe: true, canRespond: false })] }),
+    );
+
+    // then
+    expect(
+      screen.getByText(
+        /Bạn đã báo sự cố giao nhận, chờ Admin xác minh. An Chủ Bài có đến 14:30 31\/10 để giải trình, sau đó Admin kết luận\./,
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('Trạng thái: Chờ Admin')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Giải trình ngay' })).toBeNull();
+    expect(screen.queryByText(/Sự cố giao nhận, chờ Admin xác minh/)).toBeNull();
+  });
+
+  it('bên bị khiếu nại thấy cảnh báo và giải trình ngay tại chỗ', async () => {
+    // given
+    const userEvents = userEvent.setup();
+    vi.mocked(respondDispute).mockResolvedValue(undefined);
+    await renderProgress(DONOR_ID, request({ status: 'DISPUTED', disputes: [dispute()] }));
+    expect(
+      screen.getByText(/Bình Người Nhận đã báo sự cố giao nhận, chờ Admin xác minh./),
+    ).toBeTruthy();
+
+    // when
+    await userEvents.click(screen.getByRole('button', { name: 'Giải trình ngay' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    await userEvents.type(dialog.getByLabelText(/Nội dung giải trình/), 'Tôi đã đến đúng giờ hẹn');
+    await userEvents.click(dialog.getByRole('button', { name: 'Gửi giải trình' }));
+
+    // then
+    await waitFor(() =>
+      expect(respondDispute).toHaveBeenCalledWith(7, {
+        note: 'Tôi đã đến đúng giờ hẹn',
+        evidenceMediaIds: undefined,
+      }),
+    );
+    expect(await screen.findByText('Đã gửi giải trình. Admin sẽ xem xét.')).toBeTruthy();
+    expect(requestApi.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('đã giải trình thì hiện giờ giải trình thay cho nút', async () => {
+    // when
+    await renderProgress(
+      DONOR_ID,
+      request({
+        status: 'DISPUTED',
+        disputes: [dispute({ canRespond: false, respondedAt: '2026-10-30T02:00:00Z', status: 'OPEN' })],
+      }),
+    );
+
+    // then
+    expect(screen.getByText(/Bạn đã giải trình lúc 09:00 30\/10\/2026/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Giải trình ngay' })).toBeNull();
+  });
+
+  it('quá hạn giải trình thì báo Admin kết luận theo thông tin hiện có', async () => {
+    // when
+    await renderProgress(DONOR_ID, request({ status: 'DISPUTED', disputes: [dispute({ canRespond: false })] }));
+
+    // then
+    expect(
+      screen.getByText('Đã quá hạn giải trình, Admin sẽ kết luận dựa trên thông tin hiện có.'),
+    ).toBeTruthy();
+  });
+
+  it('đã khiếu nại sau hoàn tất thì ẩn nút Khiếu nại giao dịch', async () => {
+    // when
+    await renderProgress(
+      RECEIVER_ID,
+      request({
+        status: 'COMPLETED',
+        completedAt: '2026-10-29T10:00:00Z',
+        disputes: [dispute({ openedByMe: true, canRespond: false, reason: 'NOT_AS_DESCRIBED' })],
+      }),
+    );
+
+    // then
+    expect(screen.queryByRole('button', { name: 'Khiếu nại giao dịch' })).toBeNull();
+  });
+
+  it('người từ chối nhận thấy đã gửi báo cáo, không có khối khiếu nại', async () => {
+    // when
+    await renderProgress(
+      RECEIVER_ID,
+      request({
+        status: 'CANCELLED',
+        refusalReport: dispute({
+          id: 9,
+          reason: 'NOT_AS_DESCRIBED',
+          openedByMe: true,
+          status: 'OPEN',
+          responseDueAt: null,
+          canRespond: false,
+        }),
+      }),
+    );
+
+    // then
+    expect(screen.getByText(/Bạn đã từ chối nhận và gửi báo cáo\. Admin đang xem xét\./)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Gửi giải trình' })).toBeNull();
+    expect(screen.queryByText(/khiếu nại giao dịch này/)).toBeNull();
+  });
+
+  it('bên bị báo cáo thấy món đang tạm ẩn và gửi giải trình không bắt buộc', async () => {
+    // given
+    const userEvents = userEvent.setup();
+    vi.mocked(respondDispute).mockResolvedValue(undefined);
+    await renderProgress(
+      DONOR_ID,
+      request({
+        status: 'CANCELLED',
+        refusalReport: dispute({ id: 9, reason: 'NOT_AS_DESCRIBED', status: 'OPEN', responseDueAt: null }),
+      }),
+    );
+    expect(
+      screen.getByText('Bình Người Nhận đã từ chối nhận vì món không đúng mô tả.'),
+    ).toBeTruthy();
+    expect(screen.getByText(/Món của bạn đang tạm ẩn chờ Admin xem xét\./)).toBeTruthy();
+
+    // when
+    await userEvents.click(screen.getByRole('button', { name: 'Gửi giải trình' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    expect(dialog.getByRole('heading', { name: 'Giải trình báo cáo' })).toBeTruthy();
+    await userEvents.type(dialog.getByLabelText(/Nội dung giải trình/), 'Máy vẫn bật được lúc giao');
+    await userEvents.click(dialog.getByRole('button', { name: 'Gửi giải trình' }));
+
+    // then
+    await waitFor(() =>
+      expect(respondDispute).toHaveBeenCalledWith(9, {
+        note: 'Máy vẫn bật được lúc giao',
+        evidenceMediaIds: undefined,
+      }),
+    );
   });
 });

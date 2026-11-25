@@ -3,6 +3,7 @@ package com.shareloop.wallet.controller;
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.wallet.dto.AdminFinanceUserSummary;
 import com.shareloop.wallet.dto.FinanceSummaryResponse;
+import com.shareloop.wallet.dto.TopUpReportItem;
 import com.shareloop.wallet.dto.WalletTransactionResponse;
 import com.shareloop.wallet.mapper.FinanceReportCsvWriter;
 import com.shareloop.wallet.mapper.FinanceReportExcelWriter;
@@ -16,6 +17,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -102,13 +104,14 @@ public class AdminFinanceController {
                     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate to) {
         FinanceSummaryResponse report = adminFinanceService.getReport(from, to);
+        List<TopUpReportItem> topUpDetails = adminFinanceService.getTopUpReportDetails(from, to);
         ContentDisposition disposition = ContentDisposition.attachment()
                 .filename(financeReportCsvWriter.fileName(from, to))
                 .build();
         return ResponseEntity.ok()
                 .contentType(TEXT_CSV_UTF8)
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .body(financeReportCsvWriter.write(report, from, to));
+                .body(financeReportCsvWriter.write(report, topUpDetails, from, to));
     }
 
     @Operation(summary = "Xuất báo cáo tài chính Excel")
@@ -121,13 +124,14 @@ public class AdminFinanceController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         FinanceSummaryResponse report = adminFinanceService.getReport(from, to);
+        List<TopUpReportItem> topUpDetails = adminFinanceService.getTopUpReportDetails(from, to);
         ContentDisposition disposition = ContentDisposition.attachment()
                 .filename(financeReportExcelWriter.fileName(from, to))
                 .build();
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(XLSX_CONTENT_TYPE))
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .body(financeReportExcelWriter.write(report, from, to));
+                .body(financeReportExcelWriter.write(report, topUpDetails, from, to));
     }
 
     /**

@@ -41,6 +41,12 @@ export function minimumMeetingTimeValue(now: Date): string {
   return toLocalMeetingTimeValue(minimum);
 }
 
+// Giờ hẹn xa nhất theo cấu hình meeting_max_days_ahead (backend vẫn kiểm lại).
+export function maximumMeetingTimeValue(now: Date, maxDays: number): string {
+  const maximum = new Date(now.getTime() + maxDays * 86_400_000);
+  return toLocalMeetingTimeValue(maximum);
+}
+
 export function validateMeetingPlace(value: string): string | null {
   const place = value.trim();
   if (!place) return 'Vui lòng nhập địa điểm giao nhận.';
@@ -48,12 +54,15 @@ export function validateMeetingPlace(value: string): string | null {
   return null;
 }
 
-export function validateLocalMeetingTime(value: string, now: Date): string | null {
+export function validateLocalMeetingTime(value: string, now: Date, maxDays?: number): string | null {
   if (!value.trim()) return 'Vui lòng chọn thời gian giao nhận.';
   const meetingTime = parseLocalMeetingTime(value);
   if (!meetingTime) return 'Thời gian giao nhận không hợp lệ.';
   if (meetingTime.getTime() <= now.getTime()) {
     return 'Thời gian giao nhận phải sau thời điểm hiện tại.';
+  }
+  if (maxDays !== undefined && meetingTime.getTime() > now.getTime() + maxDays * 86_400_000) {
+    return `Chỉ hẹn trong vòng ${maxDays} ngày tới.`;
   }
   return null;
 }
@@ -92,10 +101,17 @@ export function canConfirmMeetingSchedule({
   );
 }
 
+export function hasConfirmedMeetingSchedule(scheduleOkAt?: string, waiverAt?: string): boolean {
+  return Boolean(scheduleOkAt && waiverAt);
+}
+
 export function scheduleApiErrorMessage(error: unknown, fallback: string): string {
   const apiError = error as Partial<ApiError>;
   if (apiError.code === 'REQUEST_SCHEDULE_PAST_TIME') {
     return 'Thời gian giao nhận phải sau thời điểm hiện tại. Vui lòng chọn lại.';
+  }
+  if (apiError.code === 'REQUEST_SCHEDULE_TOO_FAR') {
+    return apiError.message ? `${apiError.message}.` : 'Giờ hẹn quá xa. Vui lòng chọn lại.';
   }
   if (apiError.code === 'VALIDATION_FAILED') {
     return 'Thông tin lịch giao nhận chưa hợp lệ. Vui lòng kiểm tra địa điểm và thời gian.';

@@ -38,6 +38,30 @@ public enum ConfigKey {
             ConfigGroup.POSTING,
             "Số ngày hiển thị bài",
             "Số ngày bài được hiển thị sau khi duyệt hoặc gia hạn."),
+    RESERVED_DISPLAY_REFUND_MAX_DAYS(
+            "reserved_display_refund_max_days",
+            "7",
+            ConfigGroup.POSTING,
+            "Số ngày trả lại tối đa khi huỷ giao dịch",
+            "Khi giao dịch bị huỷ và bài được mở lại, hạn hiển thị được cộng thêm số ngày bài đã nằm trong giao dịch, tối đa bằng số ngày này."),
+    RESERVED_RELEASE_GRACE_HOURS(
+            "reserved_release_grace_hours",
+            "24",
+            ConfigGroup.POSTING,
+            "Số giờ chờ gia hạn sau khi mở lại bài",
+            "Bài được mở lại sau giao dịch huỷ mà vẫn quá hạn hiển thị thì được giữ thêm số giờ này để chủ bài kịp gia hạn."),
+    MEDIA_ORPHAN_CLEANUP_HOURS(
+            "media_orphan_cleanup_hours",
+            "24",
+            ConfigGroup.POSTING,
+            "Số giờ giữ ảnh chưa dùng",
+            "Ảnh đã tải lên nhưng chưa gắn vào bài đăng hay tin nhắn sau số giờ này sẽ bị xoá."),
+    MEDIA_UPLOAD_PER_HOUR(
+            "media_upload_per_hour",
+            "40",
+            ConfigGroup.POSTING,
+            "Số ảnh tải lên tối đa mỗi giờ",
+            "Số ảnh tối đa một người được tải lên trong một giờ. Vượt số này thì phải chờ."),
     POST_DISPLAY_DAYS_GOLD(
             "post_display_days_gold",
             "45",
@@ -186,6 +210,15 @@ public enum ConfigKey {
             "Ngưỡng người đăng mới",
             "Người đăng có số bài đã từng được duyệt không vượt quá số này được xem là người mới và xếp trước trong"
                     + " hàng chờ duyệt (trong cùng số sao uy tín)."),
+    REVIEW_LOW_TRUST_MAX_STARS(
+            "review_low_trust_max_stars",
+            "2",
+            ConfigGroup.MODERATION,
+            "Ngưỡng ít sao uy tín khi duyệt bài",
+            "Người đăng có số sao uy tín không vượt quá ngưỡng này xuất hiện trong bộ lọc ít sao uy tín.",
+            ValueType.INTEGER,
+            BigDecimal.ZERO,
+            BigDecimal.valueOf(5)),
     ITEM_PHOTOS_MIN(
             "item_photos_min",
             "3",
@@ -211,6 +244,18 @@ public enum ConfigKey {
             "Ngưỡng tự ẩn bài bị báo cáo",
             "Số báo cáo đang mở khiến một bài tự động bị ẩn."),
     // L13: trước đây chỉ đọc bằng getRaw và có cả khoá chữ hoa trùng; nay khai báo ở đây để Admin sửa được.
+    REPORT_TRUSTED_MIN_ACCOUNT_DAYS(
+            "report_trusted_min_account_days",
+            "7",
+            ConfigGroup.MODERATION,
+            "Tuổi tài khoản để báo cáo tính vào ngưỡng tự ẩn",
+            "Báo cáo chỉ tính vào ngưỡng tự ẩn bài khi người báo có tài khoản từ số ngày này, hoặc đã có đủ số giao dịch hoàn tất. Báo cáo của tài khoản mới vẫn vào hàng chờ Admin."),
+    REPORT_TRUSTED_MIN_COMPLETED(
+            "report_trusted_min_completed",
+            "1",
+            ConfigGroup.MODERATION,
+            "Số giao dịch hoàn tất để báo cáo tính vào ngưỡng tự ẩn",
+            "Người báo đã có ít nhất số giao dịch hoàn tất này thì báo cáo tính vào ngưỡng tự ẩn bài dù tài khoản còn mới."),
     REPORT_SERIOUS_REASONS(
             "report_serious_reasons",
             "PROHIBITED_ITEM,COUNTERFEIT",
@@ -248,6 +293,18 @@ public enum ConfigKey {
             ConfigGroup.ACCOUNT,
             "Khoảng cách gửi lại OTP",
             "Số giây tối thiểu giữa hai lần gửi lại mã OTP."),
+    LOGIN_MAX_FAILED_ATTEMPTS(
+            "login_max_failed_attempts",
+            "5",
+            ConfigGroup.ACCOUNT,
+            "Số lần sai mật khẩu liên tiếp tối đa",
+            "Sai mật khẩu đủ số lần này liên tiếp thì email đó bị khoá đăng nhập tạm thời."),
+    LOGIN_LOCK_MINUTES(
+            "login_lock_minutes",
+            "15",
+            ConfigGroup.ACCOUNT,
+            "Thời gian khoá đăng nhập",
+            "Số phút email bị khoá đăng nhập sau khi sai mật khẩu quá số lần cho phép."),
     PENDING_ACCOUNT_TTL_HOURS(
             "pending_account_ttl_hours",
             "24",
@@ -266,6 +323,24 @@ public enum ConfigKey {
             ConfigGroup.TRANSACTION,
             "Số yêu cầu chờ tối đa",
             "Số yêu cầu đang chờ phản hồi mà một người được gửi cùng lúc."),
+    MAX_ACTIVE_TRANSACTIONS(
+            "max_active_transactions",
+            "5",
+            ConfigGroup.TRANSACTION,
+            "Số giao dịch đang chạy tối đa của người nhận",
+            "Số giao dịch chưa xong (từ lúc được chọn tới lúc bàn giao) mà một người nhận được có cùng lúc. Đủ số này thì chưa gửi thêm yêu cầu và chủ bài chưa chọn thêm người đó được."),
+    REQUEST_RESEND_COOLDOWN_HOURS(
+            "request_resend_cooldown_hours",
+            "24",
+            ConfigGroup.TRANSACTION,
+            "Số giờ chờ gửi lại yêu cầu sau khi tự huỷ",
+            "Người nhận tự huỷ yêu cầu cho một bài thì phải chờ đủ số giờ này mới được gửi lại cho đúng bài đó."),
+    REQUEST_QUIET_CANCEL_MINUTES(
+            "request_quiet_cancel_minutes",
+            "5",
+            ConfigGroup.TRANSACTION,
+            "Số phút huỷ yêu cầu mà không báo chủ bài",
+            "Yêu cầu tự huỷ trong vòng số phút này sau khi gửi thì không gửi thông báo huỷ cho chủ bài và thông báo yêu cầu mới được đánh dấu đã đọc."),
     REQUEST_PENDING_DAYS(
             "request_pending_days",
             "3",
@@ -283,7 +358,71 @@ public enum ConfigKey {
             "3",
             ConfigGroup.TRANSACTION,
             "Hạn tự động hoàn tất",
-            "Một bên đã xác nhận mà bên kia im lặng quá số ngày này thì giao dịch tự hoàn tất."),
+            "Gặp trực tiếp: một bên đã xác nhận mà bên kia im lặng quá số ngày này thì giao dịch tự hoàn tất."),
+    AUTO_CONFIRM_DAYS_SHIPPING(
+            "auto_confirm_days_shipping",
+            "7",
+            ConfigGroup.TRANSACTION,
+            "Hạn tự động hoàn tất khi giao hàng",
+            "Giao hàng, tính cho từng chiều: bên gửi đã bấm Đã gửi hàng mà bên nhận im lặng quá số ngày này kể từ lúc gửi"
+                    + " thì chiều đó tự ghi nhận Đã nhận. Đủ mọi chiều thì giao dịch hoàn tất."),
+    CANCEL_REQUEST_RESPONSE_HOURS(
+            "cancel_request_response_hours",
+            "24",
+            ConfigGroup.TRANSACTION,
+            "Hạn phản hồi đề nghị huỷ",
+            "Số giờ bên kia được phản hồi một đề nghị huỷ giao dịch đã chốt lịch. Im lặng quá hạn thì giao dịch tự huỷ, không phạt ai."),
+    CANCEL_AFTER_CONTACT_ALERT_COUNT(
+            "cancel_after_contact_alert_count",
+            "3",
+            ConfigGroup.TRANSACTION,
+            "Ngưỡng cảnh báo huỷ nhiều lần sau khi thấy liên hệ",
+            "Một người đề nghị huỷ giao dịch đã huỷ từ số lần này trở lên trong khoảng theo dõi thì hiện ở trang Giám sát bất thường. Không tự phạt."),
+    CANCEL_AFTER_CONTACT_WINDOW_DAYS(
+            "cancel_after_contact_window_days",
+            "30",
+            ConfigGroup.TRANSACTION,
+            "Số ngày theo dõi huỷ sau khi thấy liên hệ",
+            "Số ngày gần nhất dùng để đếm các lần đề nghị huỷ sau khi đã thấy thông tin liên hệ."),
+    MEETING_MAX_DAYS_AHEAD(
+            "meeting_max_days_ahead",
+            "7",
+            ConfigGroup.TRANSACTION,
+            "Giờ hẹn xa nhất",
+            "Số ngày xa nhất, tính từ lúc đề xuất, mà hai bên được hẹn giờ giao nhận hoặc ngày gửi hàng."),
+    RESCHEDULE_MAX_COUNT(
+            "reschedule_max_count",
+            "2",
+            ConfigGroup.TRANSACTION,
+            "Số lần dời lịch tối đa",
+            "Số lần tối đa một giao dịch được dời lịch sau khi đã chốt. Chỉ tính các lần bên kia đồng ý."),
+    CONFIRMED_STALE_CANCEL_DAYS(
+            "confirmed_stale_cancel_days",
+            "3",
+            ConfigGroup.TRANSACTION,
+            "Số ngày tự huỷ giao dịch đã chốt lịch mà không ai làm gì",
+            "Giao dịch đã chốt lịch, qua giờ hẹn hoặc hạn gửi hàng quá số ngày này mà chưa bên nào bấm gì thì tự huỷ, không phạt ai."),
+    SHIPPING_SEND_DEADLINE_DAYS(
+            "shipping_send_deadline_days",
+            "3",
+            ConfigGroup.TRANSACTION,
+            "Hạn gửi hàng",
+            "Hạn gửi của mỗi chiều giao hàng là ngày gửi hàng dự kiến cộng thêm số ngày này. Quá hạn mà chưa gửi thì bên nhận được báo chưa nhận hàng."),
+    DEADLINE_REMINDER_HOURS_BEFORE_RESPONSE(
+            "deadline_reminder_hours_before_response",
+            "6",
+            ConfigGroup.TRANSACTION,
+            "Nhắc trước hạn phản hồi",
+            "Số giờ trước hạn phản hồi đề nghị huỷ hoặc đề nghị dời lịch thì hệ thống nhắc bên được hỏi một lần."),
+    SWAP_SIMILAR_PRICE_PERCENT(
+            "swap_similar_price_percent",
+            "20",
+            ConfigGroup.TRANSACTION,
+            "Khoảng giá gợi ý món đổi",
+            "Mức chênh lệch tối đa tính theo phần trăm giá tham khảo của món đang xem.",
+            ValueType.INTEGER,
+            BigDecimal.ZERO,
+            BigDecimal.valueOf(100)),
     STUCK_REQUEST_HOURS(
             "stuck_request_hours",
             "48",
@@ -308,7 +447,7 @@ public enum ConfigKey {
             "30",
             ConfigGroup.REPUTATION,
             "Trần điểm mỗi ngày",
-            "Số điểm uy tín tối đa một người được cộng trong một ngày."),
+            "Số điểm tích luỹ tối đa một người được cộng trong một ngày."),
     PAYMENT_ORDER_EXPIRE_MINUTES(
             "payment_order_expire_minutes",
             "30",
@@ -351,6 +490,12 @@ public enum ConfigKey {
             ConfigGroup.REPUTATION,
             "Điểm mỗi bên khi trao đổi",
             "Số điểm mỗi bên nhận được khi một giao dịch Trao đổi hoàn tất."),
+    STAR_RESTORE_MIN_DISTINCT_PARTNERS(
+            "star_restore_min_distinct_partners",
+            "5",
+            ConfigGroup.REPUTATION,
+            "Số đối tác khác nhau để hồi sao",
+            "Chuỗi giao dịch sạch phải có ít nhất số người khác nhau này mới được hồi sao. Giao dịch lặp với cùng một người không tính vào chuỗi."),
     REPUTATION_CLEAN_STREAK_FOR_STAR(
             "reputation_clean_streak_for_star",
             "10",

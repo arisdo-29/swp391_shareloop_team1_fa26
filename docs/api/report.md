@@ -1,6 +1,27 @@
 # Report API Contract
 
-Module báo cáo vi phạm (`report`) quản lý việc tiếp nhận khiếu nại và báo cáo từ người dùng nhằm duy trì môi trường an toàn cho nền tảng ShareLoop.
+Module `report` tiếp nhận báo cáo lỗi hệ thống, báo cáo vi phạm và khiếu nại giao dịch trên ShareLoop.
+
+## Báo cáo lỗi hệ thống
+
+Người dùng đã đăng nhập gửi và xem báo cáo của mình. Chỉ Admin xem danh sách chung và ghi kết quả xử lý.
+
+| Phương thức và đường dẫn | Nội dung |
+| --- | --- |
+| `POST /api/v1/me/system-reports` | Gửi `title` (tối đa 150 ký tự) và `description` (tối đa 2.000 ký tự). Cả hai bắt buộc. Trả 201 và hồ sơ ở trạng thái `OPEN`. |
+| `GET /api/v1/me/system-reports` | Liệt kê báo cáo hệ thống của chính người gọi. |
+| `GET /api/v1/me/system-reports/{reportId}` | Xem nội dung, trạng thái và kết quả của báo cáo do chính mình gửi. |
+| `GET /api/v1/admin/system-reports` | Liệt kê báo cáo hệ thống. Có thể lọc `status=OPEN` hoặc `status=RESOLVED`. |
+| `GET /api/v1/admin/system-reports/{reportId}` | Xem chi tiết báo cáo và tên người gửi. |
+| `POST /api/v1/admin/system-reports/{reportId}/resolve` | Gửi `resolution` bắt buộc, tối đa 2.000 ký tự. Trả 200 và hồ sơ ở trạng thái `RESOLVED`. |
+
+Danh sách nhận `page` từ 0 và `size` từ 1 đến 100, mặc định `page=0&size=20`.
+Kết quả gồm `items`, `page`, `totalPages` và `totalElements`, sắp theo `createdAt DESC, id DESC`.
+Mỗi hồ sơ có `id`, `title`, `description`, `status`, `createdAt`, `resolution`, `resolvedAt` và `reporterName`.
+`resolution` và `resolvedAt` là `null` khi hồ sơ còn chờ xử lý. `reporterName` chỉ có giá trị trong API Admin khi còn tra được tên.
+
+Báo cáo mới tạo thông báo chuông cho Admin với link đến hồ sơ. Khi xử lý, người gửi nhận thông báo chuông dẫn đến kết quả.
+Nếu gửi kết quả lần nữa, API trả 409 `SYSTEM_REPORT_ALREADY_RESOLVED`. Hồ sơ không tồn tại, sai loại hoặc thuộc người gửi khác trả 404 `SYSTEM_REPORT_NOT_FOUND` ở các đường dẫn trên.
 
 ## Admin đọc khiếu nại (#118)
 
@@ -126,36 +147,48 @@ Endpoint `POST /disputes/{disputeId}/response` hiện có vẫn nhận `{note, e
 trả `200` và giữ các mã lỗi `DISPUTE_*` riêng. Cả hai endpoint đều gắn bằng chứng riêng tư
 qua cùng gateway và chuyển `AWAITING_RESPONSE` về `OPEN` sau khi giải trình, đúng mục 3.9 (Sơ đồ trạng thái) của SRS Final Report 09/11.
 
-### Report tự mở khi báo "chưa nhận được" / "chưa giao được" đồ
+### Report tự mở khi giao nhận không thành công
 
-Không có endpoint mới. Khi một bên gọi `POST /api/v1/requests/{id}/handover-issue`, module request chuyển Request sang
-`DISPUTED` rồi phát event `HandoverIssueReportedEvent`. Listener trong module report (`@EventListener`, chạy **cùng
-transaction** với bước chuyển `DISPUTED`, lỗi thì cả hai rollback) gọi
-`ReportService.openHandoverIssueReport(reporterId, requestId, note, evidenceMediaIds)`:
+Không có endpoint mới. Khi một bên gọi `POST /api/v1/requests/{id}/handover-failed` lúc bên kia **đã** bấm hoàn tất,
+module request chuyển Request sang `DISPUTED` rồi phát event `HandoverIssueReportedEvent`. Listener trong module report
+(`@EventListener`, chạy **cùng transaction** với bước chuyển `DISPUTED`, lỗi thì cả hai rollback) gọi
+`ReportService.openHandoverIssueReport(reporterId, requestId, note, evidenceMediaIds)`. Khi bên kia chưa bấm hoàn tất thì
+giao dịch bị huỷ, không mở report nào. Endpoint cũ `POST /requests/{id}/handover-issue` đã bị xoá (21/11/2026).
 
 - Tạo đúng 1 report: `targetType = REQUEST`, `reason = NO_SHOW`, `stage = AFTER`, `status = AWAITING_RESPONSE`,
-  `description` là ghi chú của người báo, `evidence` lấy từ `evidenceMediaIds` qua `ReportEvidenceService.attach`,
+  `description` là lý do người báo nhập, `evidence` lấy từ `evidenceMediaIds` qua `ReportEvidenceService.attach`,
   `targetUserId` là bên còn lại, `responseDueAt` theo `response_window_hours` (48 giờ). Không thêm bảng hay cột.
 - Chống trùng: người báo đã có report `REQUEST` cho giao dịch này thì bỏ qua, không lỗi.
 - Gửi thông báo `DISPUTE_OPENED` cho bên còn lại, dẫn tới `/me/disputes/{reportId}` để giải trình.
 - Chủ bài, người nhận và Admin xử lý như khiếu nại thường (`POST /disputes/{disputeId}/response`, `.../conclude`).
 
-### Report tự mở khi bên nhận chọn "Không đúng mô tả" (GN-07, BC-09)
+### Báo cáo vi phạm tự mở khi một bên bấm "Từ chối giao nhận" (GN-07, BC-09)
 
-Không có endpoint mới. Khi bên nhận gọi `POST /api/v1/requests/{id}/confirm-handover` với `asDescribed = false`,
-module request phát event `NotAsDescribedReportedEvent`. Listener trong module report
-(`@TransactionalEventListener(AFTER_COMMIT)`, chạy trong transaction mới) gọi
-`ReportService.openNotAsDescribedReport(receiverId, requestId, reason)`:
+Từ 21/11/2026 từ chối nhận là **báo cáo vi phạm, không phải khiếu nại**. Khiếu nại (`targetType = REQUEST`) chỉ có sau
+khi giao dịch `COMPLETED` (24 giờ, bên kia giải trình 48 giờ) và cho sự cố giao nhận. Không có endpoint mới.
 
-- Tạo đúng 1 report: `targetType = REQUEST`, `reason = NOT_AS_DESCRIBED`, `stage = AFTER`, `status = AWAITING_RESPONSE`,
-  `description` là lý do bên nhận nhập, `targetUserId` là chủ bài, `responseDueAt` theo `response_window_hours` (48 giờ).
-  Không thêm bảng hay cột.
-- Khác `POST /requests/{requestId}/disputes`: không đòi giao dịch đã `COMPLETED` và không xét cửa sổ khiếu nại
-  24 giờ (`complaint_window_hours`, BC-07), vì bên nhận có thể trả lời khi giao dịch còn `AWAITING_HANDOVER`.
-- Chống trùng: bên nhận đã có report `REQUEST` cho giao dịch này thì bỏ qua, không lỗi.
-- Gửi thông báo `DISPUTE_OPENED` cho chủ bài, dẫn tới `/me/disputes/{reportId}` để giải trình.
-- Chủ bài và Admin xử lý như khiếu nại thường (`POST /disputes/{disputeId}/response`, `.../conclude`).
-- `ReportService.hasReportForRequest(requestId)` cho job tự hoàn tất ở module request bỏ qua giao dịch đã có report (GN-09).
+Khi một bên gọi `POST /api/v1/requests/{id}/refuse-handover`, module request huỷ giao dịch ngay, tạm ẩn món bị từ chối,
+mở lại món của người từ chối rồi phát `NotAsDescribedReportedEvent(requestId, reporterId, refusedItemId, reportedUserId,
+reason, evidenceMediaIds)`. Listener trong module report (`@EventListener`, chạy **cùng transaction**) gọi
+`ReportService.openRefusalReport(...)`:
+
+- Tạo đúng 1 **báo cáo bài**: `targetType = ITEM`, `itemId` = món bị từ chối, `targetUserId` = chủ món đó,
+  `requestId` = giao dịch, `reason = NOT_AS_DESCRIBED`, `stage = AFTER`, `status = OPEN`, `responseDueAt = null`,
+  `description` là mô tả bên từ chối nhập, `evidence` lấy từ `evidenceMediaIds`. Không thêm bảng hay cột.
+- Chống trùng: người báo đã có báo cáo `ITEM` gắn giao dịch này thì bỏ qua, không lỗi.
+- Không gửi thông báo ở module report: module request đã báo cả hai bên. Không ghi tin hệ thống "đang có khiếu nại" vào chat.
+- Không tính vào ngưỡng tự ẩn `report_hide_threshold` (món đã được ẩn trực tiếp). `keepsItemHidden(itemId)` trả `true`
+  khi món còn báo cáo từ chối nhận đang chờ, để mở khoá tài khoản không làm món hiện lại trước khi Admin kết luận.
+- **Giải trình không bắt buộc, không có hạn, không chặn Admin kết luận.** Bên bị báo cáo gửi qua
+  `POST /api/v1/disputes/{id}/response` (trang Tiến trình, khung chat) hoặc `POST /api/v1/reports/{id}/response` (trang
+  `/me/reports/{id}`), được một lần, tới khi Admin kết luận. Báo cáo này có trong danh sách `GET /api/v1/reports/against-me`
+  và trong danh sách báo cáo đã gửi của người từ chối (mục Hoạt động, nhóm báo cáo).
+- Admin kết luận như báo cáo bài thường (mục 4), giao dịch **không đổi** (vẫn `CANCELLED`, không cộng điểm tích luỹ):
+  - `UPHOLD`: trừ 1 sao uy tín của chủ món bị từ chối, món giữ ẩn.
+  - `DISMISS`: mở lại món (luật BC-04 như báo cáo bài thường) và **trừ 1 sao uy tín của người báo cáo**. Hệ thống chưa có
+    luật riêng cho báo cáo sai nên dùng cùng mức của một vi phạm.
+- `RequestService` đọc báo cáo này qua `findRefusalReportsForRequests(requestIds, viewerId)` để trả `refusalReport` trong
+  `RequestResponse` (xem `request.md`), tách khỏi `disputes`.
 
 Lỗi ghi bổ sung: `400 VALIDATION_FAILED`; `403 REPORT_NOT_PARTICIPANT` (giải trình qua `/reports`)
 hoặc `DISPUTE_NOT_A_PARTY` (tạo báo cáo `REQUEST`);
@@ -296,6 +329,17 @@ Một trong hai bên tham gia giao dịch (người cho hoặc người nhận) 
 
 ---
 
+### Khiếu nại theo vai và dòng tin hệ thống trong chat (D-04, 21/11/2026)
+
+- `ReportService.findDisputesForRequest(requestId, viewerId)` và `findDisputesForRequests(requestIds, viewerId)` trả
+  `RequestDisputeSummary` cho module request gắn vào `RequestResponse.disputes` (xem `request.md`). `canRespond` dùng đúng
+  điều kiện của `POST /disputes/{disputeId}/response`: là bên bị khiếu nại, chưa giải trình, chưa kết luận, còn hạn.
+- Mỗi lần mở khiếu nại giao dịch (khiếu nại sau hoàn tất, giao nhận không thành công khi bên kia đã bấm hoàn tất; báo cáo từ chối nhận không phát) report phát
+  `DisputeOpenedEvent(requestId, responseHours)`. Module chat nghe sau khi commit và thêm một tin `SYSTEM`: "Giao dịch
+  đang có khiếu nại. Bên bị khiếu nại có 48 giờ để giải trình, sau đó Admin kết luận." Lỗi ghi tin không làm hỏng khiếu nại.
+- Giải trình không phụ thuộc trạng thái giao dịch: `DISPUTED` hay `COMPLETED` đều giải trình được (D2). Luật 48 giờ,
+  một lần, tối đa 2000 ký tự giữ nguyên.
+
 ## 3. POST /api/v1/disputes/{disputeId}/response
 
 Bên bị khiếu nại gửi văn bản giải trình kèm bằng chứng đối chất (BC-08, Issue #112).
@@ -347,7 +391,7 @@ Admin đưa ra kết luận xử lý đối với báo cáo hoặc khiếu nại
   - Báo cáo phải tồn tại trong hệ thống (`404 REPORT_NOT_FOUND`).
   - Báo cáo chưa được kết luận trước đó; nếu đã ở trạng thái `RESOLVED` hoặc `DISMISSED` thì từ chối xử lý (`409 REPORT_ALREADY_CONCLUDED`).
   - **Chỉ kết luận khi đã giải trình hoặc hết hạn (D-15, BC-10):** hồ sơ đang `AWAITING_RESPONSE` và `now <= responseDueAt` thì từ chối (`409 REPORT_RESPONSE_WINDOW_OPEN`, `details.responseDueAt` là hạn giải trình dạng ISO-8601). Bên bị báo cáo giải trình xong thì hồ sơ về `OPEN` và kết luận được ngay; quá hạn mà chưa giải trình thì cũng kết luận được.
-  - **Giao dịch đang `DISPUTED`** (khiếu nại `REQUEST` mở từ `POST /requests/{id}/handover-issue`): kết luận xong thì giao dịch được đưa ra khỏi `DISPUTED`. `UPHOLD` -> giao dịch `CANCELLED` (`cancelReason` có tiền tố `[Hệ thống]`), nhả cả hai món về `APPROVED`. `DISMISS` -> giao dịch `COMPLETED` như hoàn tất bình thường (hai món `TRADED`, cộng điểm uy tín). Cả hai bên nhận thông báo kết quả. Khiếu nại mở sau khi giao dịch đã `COMPLETED` (`POST /requests/{requestId}/disputes`) không đổi trạng thái giao dịch, chỉ áp dụng trừ sao như trước.
+  - **Giao dịch đang `DISPUTED`** (khiếu nại `REQUEST` sự cố giao nhận mở từ `POST /requests/{id}/handover-failed`): kết luận xong thì giao dịch được đưa ra khỏi `DISPUTED`. `UPHOLD` -> giao dịch `CANCELLED` (`cancelReason` có tiền tố `[Hệ thống]`), nhả cả hai món về `APPROVED`. `DISMISS` -> giao dịch `COMPLETED` như hoàn tất bình thường (hai món `TRADED`, cộng điểm tích luỹ). Cả hai bên nhận thông báo kết quả. Báo cáo từ chối nhận là báo cáo bài, giao dịch đã `CANCELLED` từ trước nên không đi qua đây. Khiếu nại mở sau khi giao dịch đã `COMPLETED` (`POST /requests/{requestId}/disputes`) không đổi trạng thái giao dịch, chỉ áp dụng trừ sao như trước.
   - **Khi kết luận DISMISS (Bác bỏ / Không có cơ sở):**
     - Trạng thái báo cáo chuyển thành `DISMISSED`.
     - Không trừ sao uy tín, không ẩn bài đăng.
@@ -362,7 +406,7 @@ Admin đưa ra kết luận xử lý đối với báo cáo hoặc khiếu nại
     - Trừ 1 sao uy tín của người vi phạm qua `ReputationService.deductStar(violatorId, 1, note)` (UT-02).
     - Nếu lý do vi phạm thuộc nhóm nghiêm trọng cấu hình qua `report_serious_reasons` (`ConfigKey.REPORT_SERIOUS_REASONS`, Admin sửa ở trang Cấu hình; mặc định `PROHIBITED_ITEM`, `COUNTERFEIT`; khoá chữ hoa trùng đã xoá mềm ở L13):
       - Hệ thống tự động ẩn toàn bộ các bài đăng đang hoạt động khác của người vi phạm để rà soát (`itemService.hideAllOfUser(violatorId)`, BC-06).
-    - Nếu đối tượng báo cáo là bài đăng cụ thể (`ITEM`), tự động ẩn bài đăng đó (`itemService.hide(itemId)`).
+    - Nếu đối tượng báo cáo là bài đăng cụ thể (`ITEM`), tự động ẩn bài đăng đó (`itemService.hide(itemId)`). Bài chỉ hiện lại khi chủ bài sửa (`PUT /items/{id}`) và Admin duyệt lại, xem `item.md` mục `PUT /api/v1/items/{id}` (22/11/2026).
     - **Báo cáo bài (D-07, BC-05):** các báo cáo khác của cùng bài đang `OPEN`/`AWAITING_RESPONSE` đóng theo: `RESOLVED`, `starsDeducted = 0`, `resolution = "Đóng theo kết luận báo cáo #<id>"`. Chủ bài chỉ bị trừ 1 sao cho lần chấp thuận này.
     - Ghi nhận nhật ký hành động Admin (`activity_logs` loại `REPORT_UPHELD`; có `closedReportIds` khi đóng theo báo cáo khác).
   - Cập nhật thông tin Admin kết luận (`resolved_by`), ghi chú kết luận (`resolution`) và thời điểm kết luận (`resolved_at`).
@@ -447,7 +491,7 @@ Member xem các báo cáo bài đăng, người dùng và khiếu nại giao d�
 
 ## 7. GET /api/v1/reports/against-me
 
-Member xem các hồ sơ nhắm vào mình **đã có hạn giải trình**: báo cáo bài/người dùng mà Admin đã yêu cầu giải trình (mục 5) và mọi khiếu nại giao dịch. Báo cáo còn `OPEN` chưa có hạn không trả về.
+Member xem các hồ sơ nhắm vào mình **đã có hạn giải trình**: báo cáo bài/người dùng mà Admin đã yêu cầu giải trình (mục 5) và mọi khiếu nại giao dịch. Báo cáo còn `OPEN` chưa có hạn không trả về, trừ báo cáo từ chối nhận (GN-07): báo cáo này không có hạn nhưng vẫn trả về và `responseWindowOpen = true` tới khi bên bị báo cáo giải trình hoặc Admin kết luận (21/11/2026).
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT).
 - **Quy tắc:** bên bị phản ánh là `target_user_id` (chủ bài với báo cáo `ITEM`, đối tác với khiếu nại `REQUEST`).
@@ -557,3 +601,55 @@ Không có `reporterId` và `description` để bên bị phản ánh không bi�
 - `AWAITING_RESPONSE`: Chờ bên bị khiếu nại gửi giải trình (cửa sổ 3 ngày).
 - `RESOLVED`: Đã giải quyết xong (chấp thuận khiếu nại).
 - `DISMISSED`: Bác bỏ báo cáo / khiếu nại.
+
+## Bài bị báo cáo đang có giao dịch mở (F1)
+
+- Chấp thuận báo cáo bài có lý do thuộc `report_serious_reasons` (mặc định hàng cấm, hàng giả) mà bài đang có giao dịch mở (từ `RESERVED` tới `DISPUTED`, bài là bài chính hoặc món mang đổi): giao dịch bị huỷ qua đường huỷ của Admin với lý do "Món đồ vi phạm quy định nên giao dịch bị huỷ", không cộng điểm cho ai, hai bên nhận thông báo `TRANSACTION_CANCELLED`, món đổi của bên kia được nhả như huỷ thường.
+- Lý do khác, hoặc bài tự ẩn do đủ `report_hide_threshold` báo cáo: giao dịch tiếp tục, hai bên nhận thông báo `TRANSACTION_ITEM_UNDER_REVIEW` ("Bài đang bị xem xét vi phạm", với tự ẩn chỉ gửi một lần lúc chạm ngưỡng). `GET /requests/{id}` trả `flags` chứa `ITEM_UNDER_REVIEW` khi bài của giao dịch đang bị ẩn để trang Tiến trình giao dịch hiện cảnh báo.
+- `GET /admin/reports/{id}` thêm `openTransactionPartnerName` (tên bên còn lại của giao dịch đang mở, null nếu không có) và `seriousReason` để hộp kết luận báo trước hệ quả.
+
+## Báo cáo của tài khoản mới không tính vào ngưỡng tự ẩn (F2)
+
+Chỉ báo cáo của người đủ tin cậy mới được tính vào `report_hide_threshold`. Đủ tin cậy khi tuổi tài khoản từ `report_trusted_min_account_days` ngày (mặc định 7) hoặc đã có ít nhất `report_trusted_min_completed` giao dịch hoàn tất (mặc định 1). Báo cáo của tài khoản mới vẫn được lưu và vào hàng chờ Admin như thường. `ReportResponse.newReporterAccount` (chỉ có trong API của Admin) là `true` khi người gửi chưa đủ tin cậy, màn Admin hiện nhãn "Tài khoản mới".
+
+## Khiếu nại thắng sau khi giao dịch hoàn tất thì thu hồi điểm (F3)
+
+Chấp thuận khiếu nại của giao dịch đã `COMPLETED`: trừ lại đúng số điểm nhật ký `POINTS` đã ghi cho người vi phạm (bên bị khiếu nại, hoặc người Admin chọn khi có) từ giao dịch đó, không để điểm âm, tính lại hạng, ghi nhật ký `POINTS_REVOKED` ("Thu hồi điểm") và báo người đó (`POINTS_REVOKED`). Người khiếu nại giữ điểm. Kết luận gọi lại không trừ hai lần.
+
+## Thông báo kết quả báo cáo (F6)
+
+Admin kết luận báo cáo bài hoặc người dùng thì người báo nhận thông báo `REPORT_CONCLUDED` ("Báo cáo của bạn đã có kết quả", kèm kết quả và ghi chú của Admin, không lộ thông tin cá nhân người bị báo). Kết luận bác bỏ thì người bị báo cũng nhận `REPORT_CONCLUDED` ("Báo cáo về bài hoặc tài khoản của bạn đã được xem xét và không có vi phạm."). Link dẫn tới `/activities?tab=complaints`. Khiếu nại giao dịch giữ cách báo riêng của giao dịch nên không gửi thêm.
+
+## Phạt báo sai và kiểm lý do theo loại (F7)
+
+- `POST /admin/reports/{id}/conclude` nhận thêm `deliberateFalseReport` (boolean, mặc định `false`). Bác bỏ mà tích cờ này thì trừ 1 sao người báo (`TRUST_STARS_DEDUCTED`) và ghi nhật ký `STARS`. Báo cáo "Từ chối giao nhận" bỏ qua cờ vì người báo đã bị trừ sao tự động.
+- `POST /reports` kiểm lý do theo loại đối tượng, sai trả `400 REPORT_REASON_NOT_ALLOWED` ("Lý do không phù hợp với loại báo cáo"). Bài (`ITEM`): `NOT_AS_DESCRIBED`, `COUNTERFEIT`, `PROHIBITED_ITEM`, `OTHER`. Người dùng (`USER`): `NO_SHOW`, `WRONG_CONTACT_INFO`, `HARASSMENT`, `OTHER`. Giao dịch (`REQUEST`): `NOT_AS_DESCRIBED`, `COUNTERFEIT`, `NO_SHOW`, `WRONG_CONTACT_INFO`, `HARASSMENT`, `OTHER`. Bảng này nằm ở `ReportReason.allowedFor` và khớp `reportReasonsByTarget` ở frontend.
+- `WRONG_CONTACT_INFO` với người dùng chỉ báo được khi hai người từng có giao dịch đã chốt lịch (`contact_revealed_at` khác null), nếu không trả `400 REPORT_CONTACT_REASON_NOT_ALLOWED`.
+
+## Kết luận khiếu nại theo từng món của giao dịch (GN-14)
+
+Khi Admin chấp thuận (`UPHOLD`) khiếu nại sự cố giao nhận mà giao dịch đang `DISPUTED`, giao dịch bị huỷ và `POST /admin/reports/{id}/conclude` nhận thêm `itemOutcomes`: danh sách `{itemId, choice}`, bắt buộc có đủ mọi món của giao dịch (món chính và món đổi nếu có), mỗi món đúng một lựa chọn.
+
+| `choice` | Nhãn | Kết quả |
+|---|---|---|
+| `REOPEN` | Mở lại | Bài về `APPROVED` và hiển thị lại. Dùng `ItemService.releaseIfReservedAfterCancel`, thời gian giữ chỗ được trả lại theo `reserved_display_refund_max_days`. |
+| `HIDE` | Ẩn | Bài về `APPROVED` rồi bị Admin ẩn (`items.hidden_by_admin = true`). Các đường tự động (báo cáo bị bác bỏ, duyệt lại, mở khoá tài khoản) không hiện lại được, chỉ nút hiện lại của Admin xoá cờ. |
+| `TRANSFERRED` | Đã đổi chủ | Như `HIDE`, nhật ký `ADMIN_ITEM_HIDDEN` ghi lý do "Món đã được trao trong một giao dịch bị huỷ", nên `hiddenReason` của bài hiện lý do này. Hai bên được báo "Món <tên> đã nằm ở chỗ <tên người giữ>. Hai bên liên hệ để hoàn trả nếu cần." Hệ thống không tự hoàn trả, không giữ đồ hay tiền. |
+
+- Luật giống nhau cho chủ bài và người nhận. Giá trị mặc định ở giao diện: món của bên vi phạm là `HIDE`, món của bên không vi phạm là `REOPEN`. Bản cũ chỉ ẩn khi chủ bài vi phạm đã bị bỏ.
+- Thiếu món, thừa món lạ, trùng món hoặc thiếu `choice` trả `400 REQUEST_ITEM_OUTCOMES_REQUIRED` ("Cần chọn cách xử lý cho từng món của giao dịch trước khi chấp thuận khiếu nại.") và không đổi gì.
+- Bác bỏ (`DISMISS`) không cần `itemOutcomes`: giao dịch `COMPLETED`, các món sang `TRADED` như cũ. Giao dịch không còn `DISPUTED` (khiếu nại mở sau khi hoàn tất) thì bỏ qua `itemOutcomes`.
+- Mỗi món ghi một dòng nhật ký: `ADMIN_ITEM_HIDDEN` cho `HIDE` và `TRANSFERRED`, `REQUEST_CANCEL` cho `REOPEN`.
+
+### Khiếu nại từ đề nghị huỷ bị bên kia không đồng ý (GN-06)
+
+Bên không đồng ý một đề nghị huỷ **không bao giờ bị trừ sao chỉ vì từ chối**. Lý do khiếu nại phụ thuộc mã lý do của người đề nghị:
+
+| Mã lý do đề nghị | Lý do khiếu nại | Admin chấp thuận (`UPHOLD`) | Admin bác (`DISMISS`) |
+|---|---|---|---|
+| `COUNTERPART_NO_SHOW`, `COUNTERPART_NOT_SHIPPED`, `CANNOT_CONTACT` | `NO_SHOW` | Huỷ giao dịch, trừ 1 sao bên bị tố (bên không đồng ý) | Giao dịch `COMPLETED` như khiếu nại sự cố giao nhận |
+| `BUSY`, `NO_LONGER_NEEDED`, `OTHER` | `OTHER` | Huỷ giao dịch, **không trừ sao ai**, hoặc trừ 1 sao đúng bên Admin chọn qua `penalizedUserId` | Giao dịch **tiếp tục** (`DISPUTED` về `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER`), xoá đề nghị huỷ, báo `TRANSACTION_RESUMED` |
+
+- `POST /admin/reports/{id}/conclude` có thêm `penalizedUserId` (số, tuỳ chọn). Chỉ có tác dụng khi chấp thuận khiếu nại không tố ai. Phải là chủ bài hoặc người nhận của giao dịch, nếu không trả `400 REPORT_PENALIZED_USER_INVALID` và không đổi gì. Bỏ trống thì không trừ sao ai (`starsDeducted = 0`). Với khiếu nại có tố bên kia thì bỏ qua trường này.
+- Mặc định ở giao diện cho khiếu nại không tố ai: ô "Bên bị trừ 1 sao" là "Không trừ sao ai", cả hai món là `REOPEN`.
+- Giao hàng: món đang ở chỗ nào lấy theo từng chiều (chiều đã nhận thì món ở chỗ người nhận chiều đó và mặc định `TRANSFERRED`), Admin vẫn đổi được.

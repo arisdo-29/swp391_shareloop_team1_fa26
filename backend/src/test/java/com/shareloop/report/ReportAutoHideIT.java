@@ -109,8 +109,8 @@ class ReportAutoHideIT extends IntegrationTest {
 
     private long insertUser(boolean admin) {
         Long id = jdbc.queryForObject(
-                "INSERT INTO users (email, password_hash, full_name, phone, status, is_admin)"
-                        + " VALUES (?, 'not-a-real-hash', 'Report IT', ?, 'ACTIVE', ?) RETURNING id",
+                "INSERT INTO users (email, password_hash, full_name, phone, status, is_admin, created_at)"
+                        + " VALUES (?, 'not-a-real-hash', 'Report IT', ?, 'ACTIVE', ?, now() - interval '30 days') RETURNING id",
                 Long.class,
                 "report-it-" + UUID.randomUUID() + "@test.local",
                 "03" + (PHONE_BASE + PHONE_SEQUENCE.incrementAndGet()),

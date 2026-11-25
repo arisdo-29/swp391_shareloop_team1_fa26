@@ -2,8 +2,14 @@
 
 ## Service cửa ngõ nội bộ
 
-- `ItemService.reserve(Long itemId)` chuyển `APPROVED → RESERVED`; `release(long itemId)` chuyển `RESERVED → APPROVED`. Trạng thái khác trả `ITEM_INVALID_STATUS_TRANSITION`.
+- `ItemService.reserve(Long itemId)` chuyển `APPROVED → RESERVED`; `release(long itemId)` chuyển `RESERVED → APPROVED`. Trạng thái khác trả `ITEM_INVALID_STATUS_TRANSITION`. Bài bị ẩn (`is_active = false`) thì `reserve` trả `409 ITEM_HIDDEN` "Bài đang tạm ẩn nên chưa giữ chỗ được." (22/11/2026).
+- Bài do Admin ẩn (cột `items.hidden_by_admin = true`, migration `V202611221010`) chỉ `ItemService.unhideByAdmin` mới hiện lại được. `ItemService.unhide` (báo cáo bị bác bỏ, bài được duyệt lại sau khi sửa) và `unhideItems` (mở khoá tài khoản) bỏ qua bài có cờ này. Xem `admin.md`, mục "Quản lý bài đăng (Admin)".
 - `markTraded` và `markExpired` chuyển trạng thái qua `canTransition()`; `hide/unhide/hideAllOfUser` chỉ đổi `is_active`.
+- `ItemUnavailableEvent(itemId, reason)` (22/11/2026): phát khi bài rời trạng thái "APPROVED và đang hiển thị" ở
+  `reserve` (`RESERVED`), xoá (`REMOVED`, phát cùng `ItemRemovedEvent` cũ), `hide` / `hideApprovedItemsOfUser` /
+  `hideAllOfUser` (`HIDDEN`), `updateItem` khi bài đang `APPROVED` (`EDITED`), `markExpired` (`EXPIRED`). `release` và
+  `markApproved` không phát. Module request nghe để huỷ yêu cầu PENDING đang dùng bài làm món đem đổi và báo người
+  đang xin bài khi bài bị sửa (xem `request.md`, mục "Yêu cầu tự huỷ khi món đem đổi không còn dùng được").
 - `remove(itemId, userId)` phục vụ DELETE của chủ bài; `remove(itemId)` là cửa ngõ nội bộ. Các hàm vòng đời khác chưa có endpoint HTTP riêng.
 
 Quy ước chung: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
@@ -34,6 +40,7 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
   "categoryId": 1,
   "areaId": 1,
   "offerType": "GIVE",
+  "referencePrice": 120000,
   "title": "Giáo trình Toán rời rạc",
   "description": "Sách còn mới 95%, tặng cho bạn nào cần ôn thi",
   "desiredItem": null,
@@ -45,6 +52,7 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
 ```
 
 *Lưu ý nghiệp vụ:*
+- `referencePrice` là giá tham khảo bằng đồng, bắt buộc cho cả bài Cho tặng và bài Trao đổi mới. Giá phải là số nguyên dương và nằm trong phạm vi số nguyên an toàn của JavaScript.
 - Nếu `offerType` là `SWAP`, bắt buộc trường `desiredItem` không được rỗng.
 - Nếu `condition` là `DEFECTIVE`, bắt buộc trường `defectNote` không được rỗng.
 - Nếu `condition` là `DEFECTIVE`, `defectImages` phải có ít nhất một URL ảnh lỗi đã upload của chủ bài; ảnh này lưu với role `DEFECT`, tách khỏi `images` (3–8 ảnh chính).
@@ -114,6 +122,10 @@ Xem chi tiết một bài đăng theo ID.
     nhận hay yêu cầu liên quan. Gọi thẳng `POST /api/v1/items/{id}/requests` vẫn bị chặn `409 REQUEST_ITEM_NOT_AVAILABLE`.
   - Với cả hai trường hợp trên, bài phải đang hiển thị (`is_active = true`) và chủ bài không bị khoá.
   - Bài ở trạng thái `RESERVED` (đang trong giao dịch): Ngoài chủ bài đăng, các bên tham gia giao dịch đang hoạt động (người nhận được chọn hoặc người trao đổi món `offered_item_id`) cũng được xem ở chế độ chỉ xem (`requestable = false`).
+  - Người **từng gửi yêu cầu** tới bài (Request ở bất kỳ trạng thái nào, kể cả `REJECTED` khi chủ bài chọn người khác,
+    kiểm qua `RequestQueryService.hasRequestedItem`) xem được bài `APPROVED`, `RESERVED` hoặc `TRADED` ở chế độ chỉ xem
+    (`requestable = false` khi bài không còn `APPROVED`), để nút "Xem chi tiết" trong khung chat cũ không trả 404
+    (22/11/2026). Bài bị ẩn (`is_active = false`), đã xoá mềm hoặc chủ bài bị khoá vẫn trả `404` như với mọi người.
   - Bài ở các trạng thái khác (`PENDING_REVIEW`, `REJECTED`, `EXPIRED`): Chỉ chính **chủ bài đăng** (`donorId`) mới xem được.
   - Trường hợp bài không tồn tại, đã xoá mềm, hoặc người xem không có quyền: Trả về `404 ITEM_NOT_FOUND`.
 - `requestable`: `true` khi bài `APPROVED`, đang hiển thị, chủ bài không bị khoá. Frontend ẩn nút "Gửi yêu cầu" khi
@@ -130,11 +142,16 @@ Xem chi tiết một bài đăng theo ID.
 ## PUT /api/v1/items/{id}
 
 - **Xác thực:** Bearer Token, chỉ chủ bài. Body gồm các trường nội dung như `CreateItemRequest`; `images` và `defectImages` có thể bỏ qua để giữ ảnh hiện tại, hoặc gửi danh sách URL media của chính chủ bài để thay và sắp lại thứ tự. Khi đổi sang `DEFECTIVE` phải có ít nhất một ảnh lỗi; khi chọn danh mục điện tử phải gửi `operatingStatus`.
-- **Luồng:** Từ chối bài đã `RESERVED`/`TRADED`/`EXPIRED` hoặc có Request từ `RESERVED` trở lên. **Không cho phép đổi hình thức** (`GIVE` ↔ `SWAP`): hình thức là thuộc tính cố định từ lúc tạo bài (BD-10); nếu gửi `offerType` khác hình thức hiện tại của bài, hệ thống trả `409 ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED` với thông điệp: "Không đổi hình thức Cho tặng / Trao đổi khi sửa bài." (D-02). Muốn đổi hình thức, người dùng phải đóng/xoá bài cũ và đăng bài mới. Kiểm duyệt tầng 1 tiêu đề, mô tả và món mong muốn; nội dung bị chặn trả `422`, không giữ phí hay đổi bài. Sau đó gọi `quoteEdit` và `holdEditFee` theo [luật phí sửa](listingfee.md). Bài thành `PENDING_REVIEW`, tạm ẩn để Admin duyệt lại.
+- Có thể bỏ qua `referencePrice` hoặc gửi `null` để giữ giá hiện tại. Bài cũ chưa có giá có thể tiếp tục để trống.
+- **Luồng:** Từ chối bài đã `RESERVED`/`TRADED`/`EXPIRED` hoặc có Request từ `RESERVED` trở lên. **Không cho phép đổi hình thức** (`GIVE` ↔ `SWAP`): hình thức là thuộc tính cố định từ lúc tạo bài (BD-10); nếu gửi `offerType` khác hình thức hiện tại của bài, hệ thống trả `409 ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED` với thông điệp: "Không đổi hình thức Cho tặng / Trao đổi khi sửa bài." (D-02). Muốn đổi hình thức, người dùng phải đóng/xoá bài cũ và đăng bài mới. Kiểm duyệt tầng 1 tiêu đề, mô tả và món mong muốn; nội dung bị chặn trả `422`, không giữ phí hay đổi bài. Sau đó gọi `quoteEdit` và `holdEditFee` theo [luật phí sửa](listingfee.md). Bài thành `PENDING_REVIEW`, tạm ẩn để Admin duyệt lại. **Bài bị ẩn vì báo cáo vi phạm được chấp nhận** (báo cáo bài, kể cả báo cáo từ chối nhận): chủ bài sửa rồi Admin duyệt lại (`markApproved`) thì bài được bật lại cờ hiện (`is_active = true`) cùng lúc chuyển `APPROVED` (22/11/2026). Module item phát `ItemApprovedEvent`, module report nghe và chỉ hiện lại khi bài đang ẩn, có báo cáo được chấp nhận **sau lần duyệt trước** (`items.approved_at`), chủ bài không bị khoá và còn sao. Chủ bài chưa sửa thì bài chưa qua duyệt lại nên vẫn ẩn. Bài ẩn vì lý do khác (Admin gỡ thủ công, khoá tài khoản, đủ ngưỡng báo cáo chờ, `hideAllOfUser` do lý do nghiêm trọng) và bài hết hạn không bị đụng tới.
 - **Thành công:** `200 OK`, `ItemResponse` mới.
 - **Lỗi chính:** `401 UNAUTHORIZED`, `403 ITEM_NOT_OWNER`, `403 ITEM_ADMIN_BLOCKED` (quản trị viên), `403 ITEM_REPUTATION_BLOCKED` (chủ bài có 0 sao uy tín), `404 ITEM_NOT_FOUND`, `409 ITEM_EDIT_NOT_ALLOWED`, `409 ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED`, `409 ITEM_GIVE_LIMIT_REACHED`, `422 ITEM_MODERATION_BLOCKED` (`field: content`), `422 ITEM_INVALID_IMAGE_COUNT`, lỗi media và `402 WALLET_INSUFFICIENT_BALANCE`.
 
 ---
+
+### Cộng bù thời gian chờ duyệt bản sửa (B1)
+
+Bài đã từng duyệt gửi bản sửa: server ghi mốc `items.edit_submitted_at`. Khi Admin duyệt bản sửa, số giờ từ mốc tới lúc duyệt được cộng vào `expireAt` và vào `boostedUntil` nếu đợt đẩy còn chạy lúc gửi, rồi xoá mốc và ghi nhật ký `ITEM_DISPLAY_COMPENSATED`. Bản sửa bị từ chối thì xoá mốc, không cộng bù. FE hỏi xác nhận trước khi gửi bản sửa của bài đã duyệt.
 
 ## DELETE /api/v1/items/{id}
 
@@ -191,6 +208,8 @@ Tham số tùy chọn: `q` (tìm theo cụm từ trong tiêu đề món đồ, k
 `viewerKey` (số nguyên ≥ 0; khoá xoay của khách chưa đăng nhập, FE tự sinh một lần và giữ lại; bỏ qua khi có token). Tất cả bộ lọc đều không bắt buộc và kết hợp được với nhau;
 lọc ở server nên `totalElements` và phân trang tính trên kết quả đã lọc (TT-01). Kết quả là `ItemListPageResponse`:
 
+Khoảng giá dùng `minPrice` và `maxPrice` (số nguyên dương bằng đồng, bao gồm hai đầu). Có thể gửi một đầu. Khoảng giá áp dụng cho cả bài Cho tặng và bài Trao đổi. Có thể dùng cùng `offerType` để giới hạn theo hình thức. Khi có khoảng giá, API bỏ qua bài chưa có giá. Nếu giá từ lớn hơn giá đến, API trả `400 ITEM_INVALID_PRICE_RANGE`.
+
 Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2&condition=GOOD&offerType=GIVE`. `q` rỗng hoặc chỉ có khoảng trắng tương đương không tìm kiếm; `%` và `_` được xem là ký tự thường.
 
 ```json
@@ -200,6 +219,8 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2&condition=GOOD&o
 `rotationSeed` là lượt xoay đã dùng cho trang này. FE gửi lại đúng số này khi sang trang khác (cùng bộ lọc) để các trang
 thuộc cùng một lượt: không trùng bài, không sót bài. Không gửi thì backend tính theo giờ hiện tại, nên trang 2 gọi sau
 khi đã đổi lượt có thể lệch với trang 1.
+
+Khi chọn món đem đổi, giao diện ưu tiên giá nằm trong ngưỡng `swap_similar_price_percent` từ cấu hình công khai, mặc định 20%. Món ngoài ngưỡng hoặc chưa có giá vẫn chọn được nếu đủ điều kiện.
 
 ### Cách xếp bài đẩy (vòng xoay)
 
@@ -324,6 +345,7 @@ Quy tắc:
 | `offerType` | string | Có | `GIVE` hoặc `SWAP` |
 | `title` | string | Có | Tối đa 150 ký tự |
 | `description` | string | Có | Không được để trống |
+| `referencePrice` | number | Có | Giá tham khảo bằng đồng, số nguyên dương |
 | `desiredItem` | string? | Điều kiện | Bắt buộc nếu `offerType` là `SWAP` |
 | `condition` | string | Có | `NEW`, `LIKE_NEW`, `GOOD`, `DEFECTIVE` |
 | `defectNote` | string? | Điều kiện | Bắt buộc nếu `condition` là `DEFECTIVE` |
@@ -343,6 +365,7 @@ Quy tắc:
 | `offerType` | string | `GIVE` hoặc `SWAP` |
 | `title` | string | Tiêu đề bài đăng |
 | `description` | string | Nội dung mô tả |
+| `referencePrice` | number? | Giá tham khảo bằng đồng. Giá trị rỗng nếu bài chưa có giá |
 | `desiredItem` | string? | Món đồ mong muốn đổi (nếu SWAP) |
 | `condition` | string | Tình trạng đồ |
 | `defectNote` | string? | Mô tả lỗi (nếu DEFECTIVE) |
@@ -358,7 +381,6 @@ Quy tắc:
 | `donorName` | string? | Tên người đăng; chỉ có ở API chi tiết |
 | `donorTrustStars` | number? | Sao uy tín người đăng; chỉ có ở API chi tiết |
 | `donorRank` | string? | Hạng người đăng; chỉ có ở API chi tiết |
-| `donorAsDescribedRate` | number? | Tỉ lệ đúng mô tả thang 0–1; chỉ có ở API chi tiết |
 | `hidden` | boolean? | Bài đang tạm ẩn (`is_active = false`), ví dụ tự ẩn do đủ báo cáo đang chờ (U04). Chỉ có khi **chủ bài** xem (chi tiết, sửa, bài của tôi) hoặc Admin xem; người khác nhận `null` |
 | `hiddenReason` | string? | Lý do ẩn. Hiện luôn `null` vì chưa lưu lý do ẩn (C06); FE hiện câu mặc định |
 | `completedAt` | string? | Thời điểm giao dịch hoàn tất ISO-8601 UTC. Chỉ có khi bài `TRADED`, ở API chi tiết và `GET /users/{id}/items?tab=DONE`; nơi khác `null` |
@@ -380,7 +402,7 @@ Với danh sách, hai trường này được đọc bằng một query cho cả
 
 | code | HTTP | Khi nào |
 |---|---|---|
-| `ITEM_NOT_FOUND` | 404 | Không tìm thấy bài đăng hoặc bài không ở `APPROVED`/`TRADED` mà người xem không phải chủ |
+| `ITEM_NOT_FOUND` | 404 | Không tìm thấy bài đăng hoặc người xem không có quyền xem (xem quy tắc hiển thị ở mục 2) |
 | `USER_NOT_FOUND` | 404 | `GET /users/{id}/items`: người dùng không tồn tại, chưa xác thực, bị khoá, bị cấm hoặc là Admin (mã của module user) |
 | `ITEM_SWAP_DESIRED_ITEM_REQUIRED` | 400 | Bài đăng SWAP nhưng thiếu món mong muốn |
 | `ITEM_DEFECT_NOTE_REQUIRED` | 400 | Bài đăng có tình trạng DEFECTIVE nhưng thiếu mô tả lỗi |
@@ -394,7 +416,21 @@ Với danh sách, hai trường này được đọc bằng một query cho cả
 | `ITEM_NOT_OWNER` | 403 | Sửa bài không phải của mình |
 | `ITEM_EDIT_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được sửa |
 | `ITEM_REMOVE_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được gỡ |
+| `ITEM_HIDDEN` | 409 | Giữ chỗ (`reserve`) bài đang tạm ẩn, gặp khi chọn người, đổi món đề nghị hoặc đồng ý đổi món trong chat |
+| `ITEM_HIDE_NOT_ALLOWED` | 409 | Admin ẩn bài đang có giao dịch chạy (bài đã giữ chỗ trở lên hoặc có giao dịch đã chọn người chưa kết thúc) |
+| `ITEM_ALREADY_HIDDEN` | 409 | Admin ẩn bài đã ẩn |
+| `ITEM_NOT_HIDDEN` | 409 | Admin hiện lại bài đang hiển thị |
+| `ITEM_UNHIDE_NOT_ALLOWED` | 409 | Admin hiện lại bài của chủ bài đang bị khoá |
 | `ITEM_REPUTATION_BLOCKED` | 403 | Người đăng hoặc sửa bài có 0 sao uy tín (BD-07) |
 | `ITEM_MODERATION_BLOCKED` | 422 | Nội dung tạo hoặc sửa bị kiểm duyệt tầng 1 chặn |
 | `VALIDATION_FAILED` | 400 | Sai định dạng hoặc thiếu trường bắt buộc |
 | `UNAUTHORIZED` | 401 | Thiếu token hoặc token không hợp lệ |
+
+## Lý do ẩn và lý do từ chối cho chủ bài (B4)
+
+`ItemResponse` thêm `rejectionReason`: lý do Admin từ chối lần gần nhất, chỉ chủ bài hoặc Admin nhận và chỉ khi bài đang `REJECTED`. `hiddenReason` được điền khi bài đang tạm ẩn (`hidden = true`), mỗi trường hợp một câu kèm việc cần làm. Thứ tự ưu tiên khi trùng:
+
+1. Tài khoản của chủ bài đang bị khoá.
+2. Admin ẩn bài (kèm lý do Admin đã ghi ở nhật ký `ADMIN_ITEM_HIDDEN`).
+3. Báo cáo vi phạm đã được kết luận: "Bài vi phạm quy định. Sửa bài để gửi duyệt lại."
+4. Còn lại là đang chờ Admin xem xét báo cáo.

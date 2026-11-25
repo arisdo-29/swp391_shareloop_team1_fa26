@@ -12,6 +12,7 @@ import com.shareloop.reputation.dto.PointHistoryDto;
 import com.shareloop.reputation.dto.RepeatedPair;
 import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.dto.RequestParticipantProjection;
+import com.shareloop.reputation.dto.RequestPointsAward;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.entity.UserReputation;
 import com.shareloop.reputation.repository.UserReputationRepository;
@@ -26,6 +27,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,9 +46,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReputationService {
 
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
-
-    /** SRS 6.12: tỉ lệ đúng mô tả chỉ hiện khi người đăng có từ 3 giao dịch đã được đánh giá trở lên. */
-    static final int MIN_RATED_FOR_AS_DESCRIBED_RATE = 3;
 
     private final ConfigService configService;
     private final UserReputationRepository userReputationRepository;
@@ -212,6 +211,83 @@ public class ReputationService {
     }
 
     /**
+     * Điểm tích luỹ đã cộng nhờ một giao dịch hoàn tất, mỗi người một dòng (đọc từ nhật ký POINTS của giao dịch). Giao
+     * dịch chưa hoàn tất hoặc chưa cộng điểm thì trả danh sách rỗng. Dùng cho trang chi tiết giao dịch của Admin.
+     */
+    public List<RequestPointsAward> findPointsAwardedForRequest(long requestId) {
+        if (activityLogQueryService == null) {
+            return List.of();
+        }
+        List<RequestPointsAward> awards = new ArrayList<>();
+        for (ActivityLogDto log :
+                activityLogQueryService.findHistory("REQUEST", requestId, List.of(ActivityType.POINTS.code()))) {
+            int points =
+                    log.data() != null && log.data().get("points") instanceof Number number ? number.intValue() : 0;
+            String role = log.data() != null && log.data().get("role") != null
+                    ? String.valueOf(log.data().get("role"))
+                    : null;
+            if (log.actorId() != null) {
+                awards.add(new RequestPointsAward(log.actorId(), role, points));
+            }
+        }
+        return awards;
+    }
+
+    /**
+     * Thu hồi điểm đã cộng cho một người nhờ một giao dịch hoàn tất, khi khiếu nại giao dịch đó được chấp thuận (F3). Trừ đúng
+     * số điểm nhật ký POINTS ghi cho người đó, không để điểm âm, tính lại hạng, ghi nhật ký POINTS_REVOKED và báo người đó. Người
+     * bị hại giữ điểm vì chỉ gọi cho người vi phạm. Gọi lại lần hai không trừ thêm.
+     *
+     * @return số điểm đã thu hồi, 0 khi không có gì để thu hồi
+     */
+    @Transactional
+    public int revokePointsForRequest(long userId, long requestId, String reason) {
+        if (userReputationRepository == null) {
+            return 0;
+        }
+        int awarded = findPointsAwardedForRequest(requestId).stream()
+                .filter(award -> award.userId() == userId)
+                .mapToInt(RequestPointsAward::points)
+                .sum();
+        if (awarded <= 0 || userReputationRepository.isPointsRevokedForRequest(requestId, userId)) {
+            return 0;
+        }
+        UserReputation user = userReputationRepository.findByIdForUpdate(userId).orElse(null);
+        if (user == null) {
+            return 0;
+        }
+        int revoked = Math.min(awarded, user.getTotalPoints());
+        user.revokePoints(revoked, getRank(user.getTotalPoints() - revoked));
+        userReputationRepository.save(user);
+
+        if (activityLogService != null) {
+            activityLogService.log(
+                    ActivityType.POINTS_REVOKED.name(),
+                    userId,
+                    "REQUEST",
+                    requestId,
+                    Map.of(
+                            "points",
+                            revoked,
+                            "totalPoints",
+                            user.getTotalPoints(),
+                            "rank",
+                            user.getRankLevel().name()),
+                    reason != null ? reason : "Thu hồi " + revoked + " điểm của giao dịch bị kết luận vi phạm");
+        }
+        if (notificationService != null) {
+            notificationService.notify(
+                    userId,
+                    "POINTS_REVOKED",
+                    "Bạn bị thu hồi điểm",
+                    "Giao dịch bị kết luận vi phạm nên " + revoked
+                            + " điểm đã cộng cho bạn từ giao dịch này bị thu hồi.",
+                    "/profile?tab=reputation");
+        }
+        return revoked;
+    }
+
+    /**
      * Lấy thông tin uy tín tổng quan của người dùng (YC-06, Issue #110).
      * Bao gồm TrustStars (mặc định 5), hạng (mặc định BRONZE) và tỉ lệ đúng mô tả thang 0–1 (null khi dưới 3 giao
      * dịch đã được đánh giá).
@@ -222,25 +298,25 @@ public class ReputationService {
     @Transactional(readOnly = true)
     public ReputationSummary getReputationSummary(Long userId) {
         if (userId == null) {
-            return new ReputationSummary(null, 5, Rank.BRONZE, null);
+            return new ReputationSummary(null, 5, Rank.BRONZE);
         }
         if (userReputationRepository == null) {
-            return new ReputationSummary(userId, 5, Rank.BRONZE, null);
+            return new ReputationSummary(userId, 5, Rank.BRONZE);
         }
 
         UserReputation reputation = userReputationRepository.findById(userId).orElse(null);
         if (reputation == null) {
-            return new ReputationSummary(userId, 5, Rank.BRONZE, null);
+            return new ReputationSummary(userId, 5, Rank.BRONZE);
         }
 
         int trustStars = reputation.getTrustStars();
         Rank rank = getRank(reputation.getTotalPoints());
 
-        return new ReputationSummary(userId, trustStars, rank, asDescribedRate(userId));
+        return new ReputationSummary(userId, trustStars, rank);
     }
 
     /**
-     * Xem thông tin điểm, hạng, TrustStars, tỉ lệ đúng mô tả và lịch sử biến động điểm của chính người dùng (UC-05, Issue #128).
+     * Xem thông tin điểm, hạng, TrustStars và lịch sử biến động điểm của chính người dùng (UC-05, Issue #128).
      *
      * @param userId ID người dùng đang đăng nhập
      * @param page số trang (bắt đầu từ 0)
@@ -263,8 +339,6 @@ public class ReputationService {
         int trustStars = reputation != null ? reputation.getTrustStars() : 5;
         Rank rank = getRank(totalPoints);
 
-        Double accuracyRate = asDescribedRate(userId);
-
         int pageNumber = Math.max(page, 0);
         int pageSize = Math.min(Math.max(size, 1), 50);
 
@@ -283,9 +357,18 @@ public class ReputationService {
         }
 
         Rank nextRank = nextRank(rank);
-        Integer pointsToNextRank = nextRank == null ? null : Math.max(rankMinPoints(nextRank) - totalPoints, 0);
+        int currentRankMinPoints = rankMinPoints(rank);
+        Integer nextRankMinPoints = nextRank == null ? null : rankMinPoints(nextRank);
+        Integer pointsToNextRank = nextRankMinPoints == null ? null : Math.max(nextRankMinPoints - totalPoints, 0);
         return new MyReputationResponse(
-                totalPoints, rank, trustStars, accuracyRate, history, nextRank, pointsToNextRank);
+                totalPoints,
+                rank,
+                trustStars,
+                history,
+                nextRank,
+                pointsToNextRank,
+                currentRankMinPoints,
+                nextRankMinPoints);
     }
 
     // Hạng ngay trên hạng hiện tại; Kim cương là hạng cao nhất.
@@ -396,19 +479,25 @@ public class ReputationService {
                 pairTransactionNo >= configInt(ConfigKey.REPUTATION_PAIR_NO_POINTS_FROM),
                 LocalDate.ofInstant(now, VIETNAM_ZONE),
                 configInt(ConfigKey.DAILY_POINTS_CAP),
-                configInt(ConfigKey.REPUTATION_CLEAN_STREAK_FOR_STAR));
+                configInt(ConfigKey.REPUTATION_CLEAN_STREAK_FOR_STAR),
+                configInt(ConfigKey.STAR_RESTORE_MIN_DISTINCT_PARTNERS));
 
         // 6. Cộng điểm trong trần ngày, tính lại hạng ngay lập tức và ghi chuỗi giao dịch sạch
         if (donor != null) {
-            applyCompletion(donor, donorPts, "DONOR", "vai trò cho/tặng", context);
+            applyCompletion(donor, donorPts, "DONOR", "vai trò cho/tặng", context, receiverId);
         }
         if (receiver != null) {
-            applyCompletion(receiver, receiverPts, "RECEIVER", "vai trò nhận/đổi", context);
+            applyCompletion(receiver, receiverPts, "RECEIVER", "vai trò nhận/đổi", context, donorId);
         }
     }
 
     private void applyCompletion(
-            UserReputation user, int basePoints, String role, String roleLabel, CompletionContext context) {
+            UserReputation user,
+            int basePoints,
+            String role,
+            String roleLabel,
+            CompletionContext context,
+            long partnerId) {
         int granted =
                 user.claimDailyPoints(context.repeatedPair() ? 0 : basePoints, context.dailyCap(), context.today());
         int newTotal = user.getTotalPoints() + granted;
@@ -417,7 +506,10 @@ public class ReputationService {
         user.addPoints(granted, newRank);
 
         int starsBefore = user.getTrustStars();
-        boolean starRestored = user.recordCleanTransaction(context.streakForStar());
+        // F4: giao dịch cặp lặp (từ lần thứ 3 giữa cùng cặp) không tính vào chuỗi sạch, không thêm đối tác, không tăng
+        // chuỗi
+        boolean starRestored = !context.repeatedPair()
+                && user.recordCleanTransaction(context.streakForStar(), context.minDistinctPartners(), partnerId);
         userReputationRepository.save(user);
         notifyPointsResult(user, basePoints, granted, newTotal, rankBefore, newRank, starRestored, context, roleLabel);
 
@@ -478,7 +570,7 @@ public class ReputationService {
             return;
         }
         String title =
-                granted > 0 ? "Bạn được cộng " + granted + " điểm uy tín" : "Giao dịch hoàn tất, chưa được cộng điểm";
+                granted > 0 ? "Bạn được cộng " + granted + " điểm tích luỹ" : "Giao dịch hoàn tất, chưa được cộng điểm";
         StringBuilder body = new StringBuilder(pointsReason(context, roleLabel, basePoints, granted));
         body.append(". Tổng điểm hiện tại: ").append(newTotal).append(".");
         if (rankBefore != null && newRank.ordinal() > rankBefore.ordinal()) {
@@ -715,20 +807,6 @@ public class ReputationService {
         return null;
     }
 
-    /**
-     * Tỉ lệ đúng mô tả theo thang 0–1 (0.92 nghĩa là 92%), dùng chung cho hồ sơ, danh sách yêu cầu và /me/reputation để
-     * mọi nơi cùng một thang. Dưới {@value #MIN_RATED_FOR_AS_DESCRIBED_RATE} giao dịch đã được đánh giá thì trả null vì
-     * quá ít dữ liệu (SRS 6.12).
-     */
-    private Double asDescribedRate(Long userId) {
-        if (userReputationRepository == null
-                || userReputationRepository.countRatedCompletedAsDonor(userId) < MIN_RATED_FOR_AS_DESCRIBED_RATE) {
-            return null;
-        }
-        Double percent = userReputationRepository.calculateAsDescribedRate(userId);
-        return percent != null ? percent / 100.0 : null;
-    }
-
     // configService null chỉ gặp ở unit test dựng service rút gọn; khi đó dùng giá trị mặc định của ConfigKey.
     private int configInt(ConfigKey key) {
         return configService != null ? configService.getInt(key) : key.getDefaultValue();
@@ -744,7 +822,8 @@ public class ReputationService {
             boolean repeatedPair,
             LocalDate today,
             int dailyCap,
-            int streakForStar) {}
+            int streakForStar,
+            int minDistinctPartners) {}
 
     /**
      * Lớp hỗ trợ gói ItemService thành ObjectProvider khi dùng trong unit test.

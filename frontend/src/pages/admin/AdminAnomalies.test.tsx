@@ -103,7 +103,7 @@ describe('AdminAnomalies', () => {
     const cuongLink = screen.getByRole('link', { name: 'Lê Văn Cường' });
     expect(cuongLink.getAttribute('href')).toBe('/admin/finance/users/10');
     expect(screen.getByText('cuong@fpt.edu.vn')).toBeTruthy();
-    expect(screen.getByText('5 ⭐')).toBeTruthy();
+    expect(screen.getByRole('img', { name: '5 trên 5 sao' })).toBeTruthy();
     expect(screen.getByText('Đang hoạt động')).toBeTruthy();
 
     const dungLink = screen.getByRole('link', { name: 'Lê Văn Dũng' });
@@ -125,7 +125,29 @@ describe('AdminAnomalies', () => {
     renderComponent();
 
     expect(await screen.findByText('Chưa có cảnh báo nào')).toBeTruthy();
-    expect(screen.getByText('Không có cảnh báo')).toBeTruthy();
+    // Hai khối không có dữ liệu: huỷ nhiều lần sau khi thấy liên hệ và nhóm IP
+    expect(screen.getAllByText('Không có cảnh báo')).toHaveLength(2);
+  });
+
+  it('hiện mục huỷ nhiều lần sau khi thấy liên hệ kèm số lần và ngưỡng', async () => {
+    vi.mocked(adminAnomalyApi.report).mockResolvedValue({
+      ...reportWithData,
+      cancelWindowDays: 30,
+      cancelThreshold: 3,
+      repeatedCancelers: [
+        {
+          user: { id: 21, fullName: 'Phạm Văn Huy', email: 'huy@fpt.edu.vn' },
+          cancelCount: 4,
+          lastCancelRequestedAt: '2026-11-20T08:00:00Z',
+        },
+      ],
+    });
+
+    renderComponent();
+
+    expect(await screen.findByText('Huỷ nhiều lần sau khi thấy liên hệ')).toBeTruthy();
+    expect(screen.getByText('Phạm Văn Huy')).toBeTruthy();
+    expect(screen.getByText('Đang cảnh báo từ 3 lần trong 30 ngày')).toBeTruthy();
   });
 
   it('hiện lỗi khi không tải được và không hiện nút làm mới', async () => {

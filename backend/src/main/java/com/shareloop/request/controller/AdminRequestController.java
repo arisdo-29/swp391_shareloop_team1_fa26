@@ -35,15 +35,32 @@ public class AdminRequestController {
 
     @Operation(
             summary = "Danh sách giao dịch",
-            description = "Chỉ Admin. Lọc theo trạng thái, giao dịch bị kẹt và từ khoá; mới nhất trước.")
+            description =
+                    "Chỉ Admin. Lọc theo trạng thái, giao dịch bị kẹt, từ khoá, loại, hình thức giao nhận và ngày tạo; mới nhất trước.")
     @GetMapping
     public AdminRequestPageResponse list(
             @RequestParam(required = false) RequestStatus status,
             @RequestParam(required = false) Boolean stuck,
             @RequestParam(required = false) String q,
+            // GIVE (Cho tặng) hoặc SWAP (Trao đổi)
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String deliveryMethod,
+            @RequestParam(required = false)
+                    @org.springframework.format.annotation.DateTimeFormat(
+                            iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+                    java.time.LocalDate from,
+            @RequestParam(required = false)
+                    @org.springframework.format.annotation.DateTimeFormat(
+                            iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+                    java.time.LocalDate to,
+            // Chỉ giao dịch có đề nghị huỷ đang chờ phản hồi (true) hoặc không có (false)
+            @RequestParam(required = false) Boolean pendingCancel,
+            // Chỉ giao dịch Giao hàng đã quá hạn gửi mà còn chiều chưa gửi (true) hoặc không (false)
+            @RequestParam(required = false) Boolean sendOverdue,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return adminRequestService.list(status, stuck, q, page, size);
+        return adminRequestService.list(
+                status, stuck, q, type, deliveryMethod, from, to, pendingCancel, sendOverdue, page, size);
     }
 
     @Operation(summary = "Huỷ giao dịch", description = "Chỉ Admin. Bắt buộc có lý do, hành động được ghi nhật ký.")

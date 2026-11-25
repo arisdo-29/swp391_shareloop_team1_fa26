@@ -86,8 +86,8 @@ class UserUnlockReportedItemsIT extends IntegrationTest {
     private long user() {
         return jdbc.queryForObject(
                 """
-                INSERT INTO users (email, password_hash, full_name, phone, status)
-                VALUES (?, 'unused-test-hash', 'Unlock IT', ?, 'ACTIVE') RETURNING id
+                INSERT INTO users (email, password_hash, full_name, phone, status, created_at)
+                VALUES (?, 'unused-test-hash', 'Unlock IT', ?, 'ACTIVE', now() - interval '30 days') RETURNING id
                 """,
                 Long.class,
                 UUID.randomUUID() + "@example.test",

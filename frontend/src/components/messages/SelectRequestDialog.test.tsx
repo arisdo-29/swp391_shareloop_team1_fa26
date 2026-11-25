@@ -3,6 +3,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ItemResponse } from '../../services/itemApi';
 import type { RequestResponse } from '../../services/requestApi';
 import { SelectRequestDialog } from './SelectRequestDialog';
 
@@ -74,7 +75,7 @@ describe('SelectRequestDialog khi chọn người làm đổi hình thức bài'
     // then
     expect(
       within(dialog).getByText(
-        'Bài đang là Trao đổi. Chọn người này thì bài chuyển sang Cho tặng; phí đăng đã trả không được hoàn.',
+        'Người này không kèm món đổi. Bài sẽ chuyển sang Cho tặng, phí đăng đã trả không được hoàn.',
       ),
     ).toBeTruthy();
   });
@@ -85,6 +86,68 @@ describe('SelectRequestDialog khi chọn người làm đổi hình thức bài'
 
     // then
     expect(within(dialog).queryByRole('note')).toBeNull();
+  });
+
+  it('món đổi đã bị giữ chỗ ở giao dịch khác thì cảnh báo và khoá nút xác nhận', () => {
+    // given: món đề xuất tải về đang RESERVED
+    const swapRequest = { ...baseRequest, type: 'SWAP' as const, offeredItemId: 60 };
+    const offeredItem = {
+      id: 60,
+      title: 'Ghế xoay',
+      status: 'RESERVED',
+      condition: 'GOOD',
+      images: [],
+    } as unknown as ItemResponse;
+
+    // when
+    render(
+      <MemoryRouter>
+        <SelectRequestDialog
+          conversation={{ request: swapRequest, offeredItem }}
+          participantName="Nguyễn Văn A"
+          submitting={false}
+          error=""
+          onCancel={vi.fn()}
+          onConfirm={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Xác nhận chọn người giao dịch' });
+
+    // then
+    expect(within(dialog).getByText('Món người này đề nghị đổi không còn khả dụng.')).toBeTruthy();
+    expect(
+      (within(dialog).getByRole('button', { name: 'Xác nhận chọn' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it('backend báo món đổi không còn khả dụng thì hiện câu lỗi và khoá nút xác nhận', () => {
+    // given
+    const onConfirm = vi.fn();
+
+    // when
+    render(
+      <MemoryRouter>
+        <SelectRequestDialog
+          conversation={{ request: { ...baseRequest, offeredItemId: 60 } }}
+          participantName="Nguyễn Văn A"
+          submitting={false}
+          error="Món người này đề nghị đổi không còn khả dụng."
+          blocked
+          onCancel={vi.fn()}
+          onConfirm={onConfirm}
+        />
+      </MemoryRouter>,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Xác nhận chọn người giao dịch' });
+
+    // then
+    expect(within(dialog).getByRole('alert').textContent).toBe(
+      'Món người này đề nghị đổi không còn khả dụng.',
+    );
+    expect(
+      (within(dialog).getByRole('button', { name: 'Xác nhận chọn' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 
   it('thiếu Credit thì báo số cần và có nút Nạp Credit dẫn tới trang nạp', () => {

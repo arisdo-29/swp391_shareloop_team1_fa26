@@ -1,3 +1,4 @@
+import { formatReferencePrice, parseReferencePrice } from '../../utils/referencePrice';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
@@ -23,12 +24,18 @@ import { offerConversion, requestOfferLabel, selectionQuestion } from '../../uti
 import { DialogFrame } from '../../components/Dialog';
 import { ChangeOfferedItem } from '../../components/transaction/ChangeOfferedItem';
 import { toast } from '../../components/toast';
-import { boostStatusLines, formatDateTime } from '../../utils/boostMessages';
+import { boostStatusLines, formatDateTime, formatRemaining } from '../../utils/boostMessages';
 import { userProfilePath } from '../../utils/chatMessages';
 import { ActivitiesComplaints } from './ActivitiesComplaints';
 import { BoostDialogBody, type BoostFailure } from './BoostDialogBody';
 import { DescribeItemSuggestion } from '../../components/ai/DescribeItemSuggestion';
-import { CONDITIONS, ELECTRONIC_DEFECT_HINT, ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
+import {
+  CONDITIONS,
+  ELECTRONIC_DEFECT_HINT,
+  ITEM_IMAGES_MAX,
+  ITEM_IMAGES_MIN,
+  REQUEST_FLAG_LABELS,
+} from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import { fileToDataUrl } from '../../utils/files';
 import {
@@ -106,8 +113,11 @@ const isOperatingStatus = (value: string): value is OperatingStatus =>
 type EditFormErrors = Partial<
   Record<
     | 'title'
+    | 'category'
+    | 'area'
     | 'description'
     | 'desiredItem'
+    | 'referencePrice'
     | 'brand'
     | 'images'
     | 'defectNote'
@@ -160,6 +170,8 @@ export function Activities() {
   const [editQuoteError, setEditQuoteError] = useState('');
   const [editQuoteNeedsTopUp, setEditQuoteNeedsTopUp] = useState(false);
   const [apiEditingItem, setApiEditingItem] = useState<ItemResponse | null>(null);
+  // Bản sửa đang chờ chủ bài xác nhận (bài đã từng duyệt sẽ tạm ẩn khi chờ duyệt lại).
+  const [confirmEditInput, setConfirmEditInput] = useState<UpdateItemRequest | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [myItems, setMyItems] = useState<Item[]>([]);
   const [apiRequestsByItem, setApiRequestsByItem] = useState<Record<string, ItemRequest[]>>({});
@@ -180,6 +192,7 @@ export function Activities() {
   const [listingFeeError, setListingFeeError] = useState('');
   const [listingFeeNeedsTopUp, setListingFeeNeedsTopUp] = useState(false);
   const [listingFeeNotice, setListingFeeNotice] = useState('');
+  const [removeNotice, setRemoveNotice] = useState('');
   const [removingItemId, setRemovingItemId] = useState('');
   const [itemsReloadKey, setItemsReloadKey] = useState(0);
   useRealtimeRefresh(['REQUEST', 'ITEM', 'NOTIFICATION'], (update) => {
@@ -270,6 +283,15 @@ export function Activities() {
     }
   };
 
+  // Bài đã từng duyệt: hỏi lại trước khi gửi bản sửa vì bài sẽ ẩn trong lúc chờ duyệt.
+  const requestSaveApiItem = async (input: UpdateItemRequest) => {
+    if (apiEditingItem?.expireAt) {
+      setConfirmEditInput(input);
+      return;
+    }
+    await saveApiItem(input);
+  };
+
   const saveApiItem = async (input: UpdateItemRequest) => {
     if (!apiEditingItem || editSaving) return;
     setEditSaving(true);
@@ -322,15 +344,28 @@ export function Activities() {
   const removeApiItem = async (itemId: string) => {
     const id = Number(itemId);
     if (!Number.isSafeInteger(id) || removingItemId) return;
+    const withdrawingReviewRequest =
+      myItems.find((item) => item.id === itemId)?.status === 'PENDING_REVIEW';
     setRemovingItemId(itemId);
     setMyItemsError('');
+    setRemoveNotice('');
     try {
       await itemApi.remove(id);
       setMyItems((current) => current.filter((item) => item.id !== itemId));
       setRemoveConfirmId('');
+      const notice = withdrawingReviewRequest
+        ? 'Đã thu hồi yêu cầu đăng bài.'
+        : 'Đã gỡ bài đăng.';
+      setRemoveNotice(notice);
+      toast.warning(notice);
     } catch (error) {
       const apiError = error as ApiError;
-      setMyItemsError(apiError.message || 'Không gỡ được bài đăng.');
+      const fallback = withdrawingReviewRequest
+        ? 'Không thu hồi được yêu cầu đăng bài. Vui lòng thử lại.'
+        : 'Không gỡ được bài đăng. Vui lòng thử lại.';
+      const message = apiError.message || fallback;
+      setMyItemsError(message);
+      toast.error(message);
     } finally {
       setRemovingItemId('');
     }
@@ -449,6 +484,7 @@ export function Activities() {
     removeConfirmItem?.boostedUntil && Date.parse(removeConfirmItem.boostedUntil) > Date.now()
       ? removeConfirmItem.boostedUntil
       : null;
+  const withdrawingReviewRequest = removeConfirmItem?.status === 'PENDING_REVIEW';
 
   // Số Credit còn thiếu so với phí BE báo; chỉ để hiển thị, việc trừ tiền và kiểm số dư thật vẫn ở BE.
   const creditShortage =
@@ -633,16 +669,12 @@ export function Activities() {
       <PageHeader
         title="Hoạt động"
         description="Quản lý bài đăng và chọn người nhận ở đây. Sau khi chọn, hẹn lịch và bàn giao diễn ra trong Tin nhắn."
-        action={
-          <Link to="/post">
-            <Button className="bronze-action">Đăng tin</Button>
-          </Link>
-        }
       />
       <div className="space-y-3 empty:hidden [&:not(:empty)]:mb-6">
         {pageNotice ? <Alert tone="success">{pageNotice}</Alert> : null}
         {editNotice ? <Alert tone="warning">{editNotice}</Alert> : null}
         {listingFeeNotice ? <Alert tone="success">{listingFeeNotice}</Alert> : null}
+        {removeNotice ? <Alert tone="warning">{removeNotice}</Alert> : null}
         {deepLinkNotice ? <Alert tone="warning">{deepLinkNotice}</Alert> : null}
         {selectNotice ? <Alert tone="warning">{selectNotice}</Alert> : null}
       </div>
@@ -704,7 +736,7 @@ export function Activities() {
             [
               ['items', `Bài của tôi (${filteredItems.length})`],
               ['sent', `Yêu cầu tôi đã gửi (${filteredSentRequests.length})`],
-              ['complaints', 'Khiếu nại & Báo cáo'],
+              ['complaints', 'Khiếu nại và Báo cáo'],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -719,7 +751,7 @@ export function Activities() {
             </button>
           ))}
         </div>
-        {/* Tab Khiếu nại & Báo cáo có hai danh sách riêng, không dùng chung bộ lọc trạng thái bài/yêu cầu. */}
+        {/* Tab Khiếu nại và Báo cáo có hai danh sách riêng, không dùng chung bộ lọc trạng thái bài/yêu cầu. */}
         {tab === 'complaints' ? null : (
         <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
           <span className="shrink-0 text-xs text-text-muted">{activeResultCount} kết quả</span>
@@ -826,7 +858,7 @@ export function Activities() {
                       {item.hidden ? (
                         <p className="text-sm leading-6 text-warning">
                           {item.hiddenReason?.trim() ||
-                            'Bài đang tạm ẩn khỏi Tìm đồ. Admin sẽ xem xét và báo kết quả.'}
+                            'Bài đang tạm ẩn khỏi Tìm đồ.'}
                         </p>
                       ) : null}
                       <p className="text-sm leading-6">
@@ -902,7 +934,11 @@ export function Activities() {
                             disabled={!canRemove || removingItemId === item.id}
                             onClick={() => setRemoveConfirmId(item.id)}
                           >
-                            Gỡ bài
+                            {item.status === 'PENDING_REVIEW'
+                              ? 'Thu hồi yêu cầu đăng bài'
+                              : item.status === 'APPROVED'
+                                ? 'Gỡ bài đăng'
+                                : 'Gỡ bài'}
                           </Button>
                         </div>
                       </div>
@@ -918,6 +954,7 @@ export function Activities() {
                       itemStatus={item.status}
                       hasAcceptedRequest={hasAcceptedRequest}
                       itemRequests={itemRequests}
+                      areas={editAreas}
                       allowAccept={Boolean(currentUserId)}
                       onAccept={(requestId) => {
                         setAcceptError('');
@@ -995,7 +1032,7 @@ export function Activities() {
                 areas={editAreas}
                 disabled={editSaving || editQuoteLoading}
                 onCancel={() => setEditingId('')}
-                onSave={saveApiItem}
+                onSave={requestSaveApiItem}
               />
             ) : editQuoteLoading ? null : (
               <div className="mt-6 flex justify-end">
@@ -1006,6 +1043,44 @@ export function Activities() {
             )}
           </div>
         </div>
+      ) : null}
+
+      {confirmEditInput && apiEditingItem ? (
+        <DialogFrame
+          labelledBy="confirm-edit-title"
+          onClose={() => setConfirmEditInput(null)}
+        >
+          <h2 id="confirm-edit-title" className="text-xl font-bold">
+            Gửi bản sửa để duyệt lại
+          </h2>
+          <p className="mt-2 text-sm">
+            Bài sẽ tạm ẩn khi chờ duyệt. Thời gian chờ duyệt sẽ được cộng bù vào hạn hiển thị khi bản sửa
+            được duyệt. Nếu bản sửa bị từ chối, bài bị gỡ cho tới khi bạn sửa lại.
+          </p>
+          <ul className="mt-3 list-disc pl-5 text-sm text-text-secondary">
+            {apiEditingItem.expireAt ? (
+              <li>Hạn hiển thị còn {formatRemaining(apiEditingItem.expireAt, Date.now())}.</li>
+            ) : null}
+            {apiEditingItem.boostedUntil &&
+            new Date(apiEditingItem.boostedUntil).getTime() > Date.now() ? (
+              <li>Lượt đẩy đang chạy còn {formatRemaining(apiEditingItem.boostedUntil, Date.now())}.</li>
+            ) : null}
+          </ul>
+          <div className="mt-5 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setConfirmEditInput(null)}>
+              Xem lại
+            </Button>
+            <Button
+              onClick={() => {
+                const input = confirmEditInput;
+                setConfirmEditInput(null);
+                void saveApiItem(input);
+              }}
+            >
+              Gửi duyệt lại
+            </Button>
+          </div>
+        </DialogFrame>
       ) : null}
 
       {listingFeeAction?.type === 'boost' ? (
@@ -1113,9 +1188,13 @@ export function Activities() {
 
       {removeConfirmId ? (
         <DialogFrame>
-          <h2 className="text-xl font-bold">Gỡ bài đăng?</h2>
+          <h2 className="text-xl font-bold">
+            {withdrawingReviewRequest ? 'Thu hồi yêu cầu đăng bài?' : 'Gỡ bài đăng?'}
+          </h2>
           <p className="mt-2 text-sm leading-6 text-text-muted">
-            Bài đăng sẽ không còn hiển thị với người dùng khác.
+            {withdrawingReviewRequest
+              ? 'Yêu cầu sẽ được thu hồi và bài bị gỡ khỏi hệ thống. Phí đang giữ sẽ được nhả. Các yêu cầu đang chờ (nếu có) sẽ bị hủy.'
+              : 'Bài đăng sẽ không còn hiển thị với người dùng khác.'}
           </p>
           {/* Chủ bài tự gỡ thì backend không gửi thông báo dừng đẩy, nên đây là nơi duy nhất người dùng được biết. */}
           {removeConfirmBoostedUntil ? (
@@ -1138,7 +1217,13 @@ export function Activities() {
               disabled={Boolean(removingItemId)}
               onClick={() => void removeApiItem(removeConfirmId)}
             >
-              {removingItemId ? 'Đang gỡ...' : 'Xác nhận gỡ'}
+              {removingItemId
+                ? withdrawingReviewRequest
+                  ? 'Đang thu hồi...'
+                  : 'Đang gỡ...'
+                : withdrawingReviewRequest
+                  ? 'Xác nhận thu hồi'
+                  : 'Xác nhận gỡ'}
             </Button>
           </div>
         </DialogFrame>
@@ -1163,7 +1248,6 @@ export function Activities() {
               <ReputationBadge
                 trustStars={acceptRequest.requesterTrustStars}
                 rank={acceptRequest.requesterRank}
-                asDescribedRate={acceptRequest.requesterAsDescribedRate}
               />
             </div>
           </div>
@@ -1220,6 +1304,7 @@ function EditItemForm({
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description);
   const [desiredItem, setDesiredItem] = useState(item.desiredItem ?? '');
+  const [referencePrice, setReferencePrice] = useState(item.referencePrice?.toString() ?? '');
   const [categoryId, setCategoryId] = useState(item.categoryId);
   const [selectedCondition, setCondition] = useState<ApiCondition>(item.condition);
   const [defectNote, setDefectNote] = useState(item.defectNote ?? '');
@@ -1280,8 +1365,17 @@ function EditItemForm({
 
   const validate = () => {
     const nextErrors: EditFormErrors = {};
+    if (!categories.some((category) => category.id === categoryId)) {
+      nextErrors.category = 'Danh mục này đã ngưng, vui lòng chọn mục khác.';
+    }
+    if (!areas.some((area) => area.id === areaId)) {
+      nextErrors.area = 'Khu vực này đã ngưng, vui lòng chọn mục khác.';
+    }
     if (!title.trim()) nextErrors.title = 'Vui lòng nhập tiêu đề.';
     else if (title.trim().length > 150) nextErrors.title = 'Tiêu đề tối đa 150 ký tự.';
+    if (referencePrice && parseReferencePrice(referencePrice) === undefined) {
+      nextErrors.referencePrice = 'Vui lòng nhập giá tham khảo là số nguyên dương.';
+    }
     if (!description.trim()) nextErrors.description = 'Vui lòng nhập mô tả.';
     if (item.offerType === 'SWAP' && !desiredItem.trim()) {
       nextErrors.desiredItem = 'Vui lòng nhập món đồ mong muốn.';
@@ -1371,6 +1465,7 @@ function EditItemForm({
         title: title.trim(),
         description: description.trim(),
         desiredItem: item.offerType === 'SWAP' ? desiredItem.trim() : null,
+        referencePrice: parseReferencePrice(referencePrice),
         condition,
         defectNote: condition === 'DEFECTIVE' ? defectNote.trim() : null,
         brand: brand.trim() || null,
@@ -1419,6 +1514,14 @@ function EditItemForm({
         />
       ) : null}
       <Field
+        label="Giá tham khảo (đồng)"
+        inputMode="numeric"
+        value={referencePrice}
+        disabled={formDisabled}
+        error={errors.referencePrice}
+        onChange={(event) => setReferencePrice(event.target.value)}
+      />
+      <Field
         label="Tên món đồ"
         value={title}
         disabled={formDisabled}
@@ -1427,12 +1530,13 @@ function EditItemForm({
       />
       <Select
         label="Danh mục"
+        error={errors.category}
         value={categoryId}
         disabled={formDisabled}
         onChange={(event) => setCategoryId(Number(event.target.value))}
       >
         {!categories.some((category) => category.id === categoryId) ? (
-          <option value={categoryId}>Danh mục hiện tại</option>
+          <option value={categoryId}>Đã ngưng, vui lòng chọn mục khác</option>
         ) : null}
         {[...categories]
           .sort(
@@ -1530,12 +1634,13 @@ function EditItemForm({
       />
       <Select
         label="Khu vực"
+        error={errors.area}
         value={areaId}
         disabled={formDisabled}
         onChange={(event) => setAreaId(Number(event.target.value))}
       >
         {!areas.some((area) => area.id === areaId) ? (
-          <option value={areaId}>Khu vực hiện tại</option>
+          <option value={areaId}>Đã ngưng, vui lòng chọn mục khác</option>
         ) : null}
         {areas.map((area) => (
           <option key={area.id} value={area.id}>
@@ -1551,26 +1656,7 @@ function EditItemForm({
         onChange={(event) => setDescription(event.target.value)}
       />
       <DescribeItemSuggestion title={title} disabled={formDisabled} onUse={setDescription} />
-      {attributesLoading ? (
-        <p className="text-xs text-text-muted">Đang tải thuộc tính danh mục...</p>
-      ) : null}
       {attributesError ? <p className="text-xs text-error">{attributesError}</p> : null}
-      {!attributesLoading && !attributesError && sortedCategoryAttributes.length ? (
-        <div className="flex flex-wrap gap-2">
-          {sortedCategoryAttributes.map((attribute) => (
-            <span
-              key={attribute.id}
-              className="rounded-full bg-surface-low px-3 py-1 text-xs ring-1 ring-border"
-            >
-              {attribute.name}
-              {attribute.required ? ' · bắt buộc' : ''}
-              {attribute.options.length
-                ? ` · ${attribute.options.join(', ')}`
-                : ` · ${attribute.dataType}`}
-            </span>
-          ))}
-        </div>
-      ) : null}
 
       <ImageEditor
         label="Ảnh"
@@ -1747,7 +1833,10 @@ function itemSummary(item: Item, pendingCount: number, chosenRequest?: ItemReque
     };
   }
   if (status === 'PENDING_REVIEW')
-    return { headline: 'Admin đang duyệt bài.', detail: 'Bài chưa hiện với người khác.' };
+    return {
+      headline: 'Yêu cầu đăng bài đang chờ quản trị viên xét duyệt.',
+      detail: 'Bài chưa hiển thị với người khác.',
+    };
   if (status === 'REJECTED' || status === 'VIOLATION') {
     return {
       headline: 'Bài chưa được duyệt.',
@@ -1918,12 +2007,14 @@ function RequestPanel({
   itemStatus,
   hasAcceptedRequest,
   itemRequests,
+  areas,
   allowAccept,
   onAccept,
 }: {
   itemStatus: string;
   hasAcceptedRequest: boolean;
   itemRequests: ItemRequest[];
+  areas: AreaOption[];
   allowAccept: boolean;
   onAccept: (requestId: string) => void;
 }) {
@@ -1944,6 +2035,7 @@ function RequestPanel({
       <div className="space-y-2">
         {itemRequests.map((request) => {
           const requesterName = requesterDisplayName(request);
+          const offeredArea = areas.find((area) => area.id === request.offeredItemAreaId)?.label;
           // requesterId dạng "api_12"; đổi về id số của backend để mở hồ sơ. Không đổi được thì không gắn link.
           const requesterUserId = toBackendUserId(request.requesterId);
           const profilePath = requesterUserId !== null ? userProfilePath(requesterUserId) : null;
@@ -1978,7 +2070,6 @@ function RequestPanel({
                   <ReputationBadge
                     trustStars={request.requesterTrustStars}
                     rank={request.requesterRank}
-                    asDescribedRate={request.requesterAsDescribedRate}
                     compact
                   />
                   <span className="text-xs text-text-muted">
@@ -1997,8 +2088,19 @@ function RequestPanel({
                     >
                       {request.offeredItemTitle ?? 'Xem chi tiết'}
                     </Link>
+                    <span className="block">{formatReferencePrice(request.offeredItemReferencePrice)}</span>
+                    {offeredArea ? <span className="block">Khu vực: {offeredArea}</span> : null}
                   </p>
                 ) : null}
+                {request.status === 'PENDING'
+                  ? (request.flags ?? []).map((flag) =>
+                      REQUEST_FLAG_LABELS[flag] ? (
+                        <p key={flag} className="text-xs font-semibold text-warning">
+                          {REQUEST_FLAG_LABELS[flag]}
+                        </p>
+                      ) : null,
+                    )
+                  : null}
                 {request.status !== 'PENDING' ? (
                   <span
                     className={`inline-flex rounded-sm px-2 py-0.5 text-2xs font-bold ${requestChipClass(request.status)}`}

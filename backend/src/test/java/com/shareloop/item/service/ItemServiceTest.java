@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.catalog.AreaErrorCode;
 import com.shareloop.catalog.CatalogErrorCode;
 import com.shareloop.catalog.dto.AreaResponse;
@@ -31,7 +32,9 @@ import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
+import com.shareloop.item.event.ItemApprovedEvent;
 import com.shareloop.item.event.ItemRemovedEvent;
+import com.shareloop.item.event.ItemUnavailableEvent;
 import com.shareloop.item.repository.ItemRepository;
 import com.shareloop.listingfee.dto.DisplayWindow;
 import com.shareloop.listingfee.service.ListingFeeQueryService;
@@ -112,6 +115,9 @@ class ItemServiceTest {
     @Mock
     AreaService areaService;
 
+    @Mock
+    ActivityLogService activityLogService;
+
     @InjectMocks
     ItemService itemService;
 
@@ -144,7 +150,7 @@ class ItemServiceTest {
         lenient().when(userService.isAdmin(anyLong())).thenReturn(false);
         lenient()
                 .when(reputationService.getReputationSummary(10L))
-                .thenReturn(new ReputationSummary(10L, 4, Rank.SILVER, 0.9));
+                .thenReturn(new ReputationSummary(10L, 4, Rank.SILVER));
         lenient()
                 .when(userService.findBriefs(List.of(10L)))
                 .thenReturn(Map.of(10L, new UserBrief(10L, "Người thật", "user@example.test")));
@@ -661,7 +667,6 @@ class ItemServiceTest {
         assertThat(response.donorName()).isEqualTo("Người thật");
         assertThat(response.donorTrustStars()).isEqualTo(4);
         assertThat(response.donorRank()).isEqualTo("SILVER");
-        assertThat(response.donorAsDescribedRate()).isEqualTo(0.9);
     }
 
     @Test
@@ -727,7 +732,8 @@ class ItemServiceTest {
 
         assertThat(response.status()).isEqualTo(ItemStatus.APPROVED);
         assertThat(response.hidden()).isTrue();
-        assertThat(response.hiddenReason()).isNull();
+        // Không phải Admin ẩn, chưa kết luận vi phạm: câu mặc định là đang chờ Admin xem xét báo cáo (B4)
+        assertThat(response.hiddenReason()).isEqualTo("Bài đang tạm ẩn để Admin xem xét báo cáo.");
     }
 
     @Test
@@ -772,6 +778,58 @@ class ItemServiceTest {
         assertThatThrownBy(() -> itemService.getItem(1L, 99L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
+    }
+
+    @Test
+    void getItem_whenRejectedRequesterViewsReservedItem_returnsReadOnlyItem() {
+        // given: bài đã chọn người khác, người 30 từng gửi yêu cầu và bị từ chối
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        item.reserve();
+        ReflectionTestUtils.setField(item, "id", 1L);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(requestQueryService.isParticipantInActiveTransaction(1L, 30L)).thenReturn(false);
+        when(requestQueryService.hasRequestedItem(1L, 30L)).thenReturn(true);
+
+        // when
+        ItemResponse response = itemService.getItem(1L, 30L);
+
+        // then
+        assertThat(response.status()).isEqualTo(ItemStatus.RESERVED);
+        assertThat(response.requestable()).isFalse();
+    }
+
+    @Test
+    void getItem_whenStrangerViewsReservedItem_throwsNotFound() {
+        // given: người 99 chưa từng gửi yêu cầu
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        item.reserve();
+        ReflectionTestUtils.setField(item, "id", 1L);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(requestQueryService.hasRequestedItem(1L, 99L)).thenReturn(false);
+
+        // when, then
+        assertThatThrownBy(() -> itemService.getItem(1L, 99L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
+    }
+
+    @Test
+    void getItem_whenRejectedRequesterViewsHiddenItem_throwsNotFound() {
+        // given: bài bị ẩn thì người từng gửi yêu cầu cũng không xem được
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        item.reserve();
+        item.deactivate();
+        ReflectionTestUtils.setField(item, "id", 1L);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        // when, then
+        assertThatThrownBy(() -> itemService.getItem(1L, 30L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
+        verify(requestQueryService, never()).hasRequestedItem(anyLong(), anyLong());
     }
 
     @Test
@@ -930,7 +988,8 @@ class ItemServiceTest {
         item.approve();
         ReflectionTestUtils.setField(item, "id", 1L);
 
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(item));
 
         itemService.reserve(1L);
 
@@ -945,16 +1004,119 @@ class ItemServiceTest {
     @Test
     void reserveRejectsUnapprovedAndMissingItems() {
         Item pending = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(pending));
+        lenient().when(itemRepository.findById(1L)).thenReturn(Optional.of(pending));
+        lenient().when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pending));
         assertThatThrownBy(() -> itemService.reserve(1L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
         assertThat(pending.getStatus()).isEqualTo(ItemStatus.PENDING_REVIEW);
 
-        when(itemRepository.findById(2L)).thenReturn(Optional.empty());
+        lenient().when(itemRepository.findById(2L)).thenReturn(Optional.empty());
+        lenient().when(itemRepository.findByIdForUpdate(2L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> itemService.reserve(2L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
+    }
+
+    @Test
+    void reserve_whenItemHidden_throwsItemHiddenAndKeepsStatus() {
+        // given: bài APPROVED nhưng đang bị ẩn
+        Item item = approvedItem(1L);
+        item.deactivate();
+        lenient().when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(item));
+
+        // when, then
+        assertThatThrownBy(() -> itemService.reserve(1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_HIDDEN);
+        assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
+        verify(eventPublisher, never()).publishEvent(any(ItemUnavailableEvent.class));
+    }
+
+    @Test
+    void reserve_whenSuccess_publishesItemUnavailableEvent() {
+        // given
+        lenient().when(itemRepository.findById(1L)).thenReturn(Optional.of(approvedItem(1L)));
+        lenient().when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(approvedItem(1L)));
+
+        // when
+        itemService.reserve(1L);
+
+        // then
+        verify(eventPublisher).publishEvent(new ItemUnavailableEvent(1L, ItemUnavailableEvent.Reason.RESERVED));
+    }
+
+    @Test
+    void hide_publishesItemUnavailableEvent() {
+        // given
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(approvedItem(1L)));
+
+        // when
+        itemService.hide(1L);
+
+        // then
+        verify(eventPublisher).publishEvent(new ItemUnavailableEvent(1L, ItemUnavailableEvent.Reason.HIDDEN));
+    }
+
+    @Test
+    void markExpired_publishesItemUnavailableEvent() {
+        // given
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(approvedItem(1L)));
+
+        // when
+        itemService.markExpired(1L);
+
+        // then
+        verify(eventPublisher).publishEvent(new ItemUnavailableEvent(1L, ItemUnavailableEvent.Reason.EXPIRED));
+    }
+
+    @Test
+    void remove_publishesItemUnavailableEventBesideItemRemovedEvent() {
+        // given
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(approvedItem(1L)));
+
+        // when
+        itemService.remove(1L);
+
+        // then
+        verify(eventPublisher).publishEvent(new ItemUnavailableEvent(1L, ItemUnavailableEvent.Reason.REMOVED));
+        verify(eventPublisher).publishEvent(any(ItemRemovedEvent.class));
+    }
+
+    @Test
+    void hideApprovedItemsOfUser_publishesItemUnavailableEventForEachItem() {
+        // given
+        when(itemRepository.findByDonorIdAndStatusAndIsActiveTrue(10L, ItemStatus.APPROVED))
+                .thenReturn(List.of(approvedItem(1L), approvedItem(2L)));
+
+        // when
+        itemService.hideApprovedItemsOfUser(10L);
+
+        // then
+        verify(eventPublisher)
+                .publishEvent(new ItemUnavailableEvent(1L, ItemUnavailableEvent.Reason.HIDDEN_BY_ACCOUNT));
+        verify(eventPublisher)
+                .publishEvent(new ItemUnavailableEvent(2L, ItemUnavailableEvent.Reason.HIDDEN_BY_ACCOUNT));
+    }
+
+    @Test
+    void releaseAndMarkApproved_doNotPublishItemUnavailableEvent() {
+        // given: bài đang giữ chỗ và bài chờ duyệt
+        Item reserved = approvedItem(1L);
+        reserved.reserve();
+        Item pending = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        lenient().when(itemRepository.findById(1L)).thenReturn(Optional.of(reserved));
+        lenient().when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(reserved));
+        lenient().when(itemRepository.findById(2L)).thenReturn(Optional.of(pending));
+        lenient().when(itemRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(pending));
+
+        // when
+        itemService.release(1L);
+        itemService.markApproved(2L);
+
+        // then
+        verify(eventPublisher, never()).publishEvent(any(ItemUnavailableEvent.class));
     }
 
     @Test
@@ -962,7 +1124,8 @@ class ItemServiceTest {
         Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
         item.approve();
         item.reserve();
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(item));
 
         itemService.release(1L);
         assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
@@ -971,7 +1134,8 @@ class ItemServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
         assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
 
-        when(itemRepository.findById(2L)).thenReturn(Optional.empty());
+        lenient().when(itemRepository.findById(2L)).thenReturn(Optional.empty());
+        lenient().when(itemRepository.findByIdForUpdate(2L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> itemService.release(2L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
@@ -983,7 +1147,8 @@ class ItemServiceTest {
         Item item = new Item(10L, 1L, 1L, OfferType.SWAP, "Sách", "Mô tả", "Vở", ItemCondition.NEW, null, null);
         item.approve();
         item.reserve();
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(item));
 
         // when
         itemService.releaseIfReserved(1L);
@@ -997,7 +1162,8 @@ class ItemServiceTest {
         // given
         Item item = new Item(10L, 1L, 1L, OfferType.SWAP, "Sách", "Mô tả", "Vở", ItemCondition.NEW, null, null);
         item.approve();
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(item));
 
         // when
         itemService.releaseIfReserved(1L);
@@ -1025,6 +1191,7 @@ class ItemServiceTest {
 
         itemService.markApproved(1L);
         assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
+        verify(eventPublisher).publishEvent(new ItemApprovedEvent(1L));
 
         assertThatThrownBy(() -> itemService.markApproved(1L))
                 .isInstanceOf(BusinessException.class)
@@ -1149,9 +1316,11 @@ class ItemServiceTest {
             items.put(id, approvedItem(id));
         }
         when(configService.getInt(ConfigKey.BOOST_MAX_PER_PAGE)).thenReturn(3);
-        when(itemRepository.findPublicBoostedIds(eq(null), eq(null), eq(null), eq(null), eq(""), any(Instant.class)))
+        when(itemRepository.findPublicBoostedIds(
+                        eq(null), eq(null), eq(null), eq(null), eq(""), any(Instant.class), eq(null), eq(null)))
                 .thenReturn(List.of(1L, 2L, 3L, 4L));
-        when(itemRepository.countPublicBrowseItems(eq(null), eq(null), eq(null), eq(null), eq(""), any(Instant.class)))
+        when(itemRepository.countPublicBrowseItems(
+                        eq(null), eq(null), eq(null), eq(null), eq(""), any(Instant.class), eq(null), eq(null)))
                 .thenReturn(7L);
         // findAllById không giữ thứ tự: trả lộn xộn để kiểm service tự sắp lại theo vòng xoay
         when(itemRepository.findAllById(List.of(1L, 2L, 3L)))
@@ -1165,6 +1334,8 @@ class ItemServiceTest {
                         eq(null),
                         eq(""),
                         any(Instant.class),
+                        eq(null),
+                        eq(null),
                         eq(List.of(1L, 2L, 3L, 4L)),
                         eq("newest"),
                         eq(1),
@@ -1177,6 +1348,8 @@ class ItemServiceTest {
                         eq(null),
                         eq(""),
                         any(Instant.class),
+                        eq(null),
+                        eq(null),
                         eq(List.of(1L, 2L, 3L, 4L)),
                         eq("newest"),
                         eq(3),

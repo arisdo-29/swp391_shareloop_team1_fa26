@@ -1,11 +1,25 @@
-import { describe, expect, it } from 'vitest';
-import type { NotificationResponse } from '../services/notificationApi';
-import { isFreshPointsNotification, pointsToastMessage } from './usePointsToast';
+// @vitest-environment jsdom
+
+import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { toast } from '../components/toast';
+import { notificationApi, type NotificationResponse } from '../services/notificationApi';
+import { isFreshPointsNotification, pointsToastMessage, usePointsToast } from './usePointsToast';
+
+vi.mock('../components/toast', () => ({ toast: { success: vi.fn(), warning: vi.fn() } }));
+vi.mock('../services/notificationApi', () => ({ notificationApi: { list: vi.fn() } }));
+vi.mock('./useRealtimeRefresh', () => ({ useRealtimeRefresh: vi.fn() }));
+
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+  vi.clearAllMocks();
+});
 
 const base: NotificationResponse = {
   id: 1,
   type: 'POINTS_AWARDED',
-  title: 'Bạn được cộng 10 điểm uy tín',
+  title: 'Bạn được cộng 10 điểm tích luỹ',
   body: 'Cộng 10 điểm hoàn tất giao dịch món “Nồi cơm” (vai trò cho/tặng). Tổng điểm hiện tại: 60.',
   link: '/profile?tab=reputation',
   isRead: false,
@@ -18,12 +32,12 @@ describe('pointsToastMessage', () => {
       ...base,
       body: `${base.body} Chúc mừng, bạn đã lên hạng Bạc!`,
     });
-    expect(message).toBe('Bạn được cộng 10 điểm uy tín. Bạn đã lên hạng Bạc!');
+    expect(message).toBe('Bạn được cộng 10 điểm tích luỹ. Bạn đã lên hạng Bạc!');
   });
 
   it('chỉ dẫn tới trang uy tín khi không lên hạng', () => {
     expect(pointsToastMessage(base)).toBe(
-      'Bạn được cộng 10 điểm uy tín. Xem chi tiết ở Hồ sơ › Uy tín & Hạng.',
+      'Bạn được cộng 10 điểm tích luỹ. Xem chi tiết ở Hồ sơ › Hạng và Uy tín.',
     );
   });
 });
@@ -55,5 +69,27 @@ describe('isFreshPointsNotification', () => {
     expect(isFreshPointsNotification({ ...base, createdAt: '2026-11-14T05:00:00Z' }, now)).toBe(
       false,
     );
+  });
+});
+
+describe('usePointsToast', () => {
+  it('hiển thị riêng toast cộng điểm và toast lên hạng từ một giao dịch', async () => {
+    const createdAt = new Date().toISOString();
+    const pointsNotice = { ...base, createdAt };
+    const rankNotice = {
+      ...pointsNotice,
+      id: 2,
+      type: 'RANK_UP',
+      title: 'Bạn đã lên hạng Bạc!',
+      body: 'Còn 100 điểm nữa để lên hạng Vàng.',
+    };
+    vi.mocked(notificationApi.list).mockResolvedValue([rankNotice, pointsNotice]);
+
+    renderHook(() => usePointsToast('api_7'));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(2));
+    expect(toast.success).toHaveBeenNthCalledWith(1, pointsToastMessage(pointsNotice));
+    expect(toast.success).toHaveBeenNthCalledWith(2, 'Bạn đã lên hạng Bạc!');
+    expect(toast.warning).not.toHaveBeenCalled();
   });
 });

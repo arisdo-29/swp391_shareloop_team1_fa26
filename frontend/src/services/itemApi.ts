@@ -22,6 +22,8 @@ export interface ItemListParams {
   areaId?: number;
   condition?: ApiCondition;
   offerType?: OfferType;
+  minPrice?: number;
+  maxPrice?: number;
   page?: number;
   size?: number;
   boosted?: boolean;
@@ -73,6 +75,7 @@ export interface CreateItemRequest {
   offerType: OfferType;
   title: string;
   description: string;
+  referencePrice: number;
   desiredItem: string | null;
   condition: ApiCondition;
   defectNote: string | null;
@@ -82,12 +85,14 @@ export interface CreateItemRequest {
   operatingStatus: OperatingStatus | null;
 }
 
-export type UpdateItemRequest = Omit<CreateItemRequest, 'images' | 'defectImages'> & {
+export type UpdateItemRequest = Omit<CreateItemRequest, 'images' | 'defectImages' | 'referencePrice'> & {
+  referencePrice?: number;
   images?: string[];
   defectImages?: string[] | null;
 };
 
-export interface ItemResponse extends CreateItemRequest {
+export interface ItemResponse extends Omit<CreateItemRequest, 'referencePrice'> {
+  referencePrice?: number | null;
   id: number;
   donorId: number;
   images: string[];
@@ -101,11 +106,12 @@ export interface ItemResponse extends CreateItemRequest {
   donorName?: string | null;
   donorTrustStars?: number | null;
   donorRank?: string | null;
-  donorAsDescribedRate?: number | null;
   donorLocked?: boolean | null;
   // Chỉ có khi chủ bài hoặc Admin xem; người khác nhận null (U04).
   hidden?: boolean | null;
   hiddenReason?: string | null;
+  // Lý do Admin từ chối lần gần nhất; chỉ chủ bài hoặc Admin nhận, chỉ khi bài đang Bị từ chối.
+  rejectionReason?: string | null;
   // Thời điểm giao dịch hoàn tất; chỉ có khi bài TRADED (chi tiết và tab DONE của hồ sơ).
   completedAt?: string | null;
   // Bài còn nhận yêu cầu không, backend tính. false thì ẩn nút gửi yêu cầu. null ở các danh sách khác.
@@ -202,6 +208,8 @@ export function itemListUrl(params: ItemListParams = {}): string {
   if (params.areaId !== undefined) query.set('areaId', String(params.areaId));
   if (params.condition !== undefined) query.set('condition', params.condition);
   if (params.offerType !== undefined) query.set('offerType', params.offerType);
+  if (params.minPrice !== undefined) query.set('minPrice', String(params.minPrice));
+  if (params.maxPrice !== undefined) query.set('maxPrice', String(params.maxPrice));
   if (params.boosted !== undefined) query.set('boosted', String(params.boosted));
   if (params.sort !== undefined) query.set('sort', params.sort);
   if (params.page !== undefined) query.set('page', String(params.page));

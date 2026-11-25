@@ -5,18 +5,25 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.user.dto.AdminAccountRole;
 import com.shareloop.user.dto.AdminUserSummary;
 import com.shareloop.user.dto.ContactInfo;
+import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.service.UserService;
 import com.shareloop.wallet.FinanceErrorCode;
 import com.shareloop.wallet.dto.AdminFinanceUserSummary;
 import com.shareloop.wallet.dto.FinanceSummaryResponse;
+import com.shareloop.wallet.dto.TopUpReportItem;
 import com.shareloop.wallet.dto.WalletResponse;
 import com.shareloop.wallet.dto.WalletTransactionResponse;
+import com.shareloop.wallet.entity.PaymentOrder;
+import com.shareloop.wallet.entity.PaymentOrderStatus;
+import com.shareloop.wallet.repository.PaymentOrderRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,13 +35,18 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminFinanceService {
 
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final Instant EARLIEST = Instant.EPOCH;
+    private static final Instant LATEST = Instant.parse("9999-12-31T00:00:00Z");
 
     private final CreditService creditService;
     private final UserService userService;
+    private final PaymentOrderRepository paymentOrderRepository;
 
-    public AdminFinanceService(CreditService creditService, UserService userService) {
+    public AdminFinanceService(
+            CreditService creditService, UserService userService, PaymentOrderRepository paymentOrderRepository) {
         this.creditService = creditService;
         this.userService = userService;
+        this.paymentOrderRepository = paymentOrderRepository;
     }
 
     /**
@@ -104,6 +116,49 @@ public class AdminFinanceService {
                 to != null ? to.plusDays(1).atStartOfDay(VIETNAM_ZONE).toInstant() : null;
 
         return creditService.getFinanceSummary(fromInstant, toInstant);
+    }
+
+    /**
+     * Chi tiết các đơn nạp tiền thành công kèm thông tin họ tên, email thành viên (L02).
+     */
+    @Transactional(readOnly = true)
+    public List<TopUpReportItem> getTopUpReportDetails(LocalDate from, LocalDate to) {
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new BusinessException(FinanceErrorCode.INVALID_DATE_RANGE);
+        }
+
+        Instant fromInstant = from != null ? from.atStartOfDay(VIETNAM_ZONE).toInstant() : null;
+        Instant toInstant =
+                to != null ? to.plusDays(1).atStartOfDay(VIETNAM_ZONE).toInstant() : null;
+
+        Instant rangeStart = fromInstant != null ? fromInstant : EARLIEST;
+        Instant rangeEnd = toInstant != null ? toInstant : LATEST;
+
+        List<PaymentOrder> orders =
+                paymentOrderRepository.findSuccessfulOrders(PaymentOrderStatus.SUCCESS, rangeStart, rangeEnd);
+        if (orders.isEmpty()) {
+            return List.of();
+        }
+
+        Set<Long> userIds = orders.stream().map(PaymentOrder::getUserId).collect(Collectors.toSet());
+        Map<Long, UserBrief> briefs = userService.findBriefs(userIds);
+
+        return orders.stream()
+                .map(o -> {
+                    UserBrief brief = briefs.get(o.getUserId());
+                    String name = brief != null && brief.fullName() != null ? brief.fullName() : "N/A";
+                    String email = brief != null && brief.email() != null ? brief.email() : "N/A";
+                    return new TopUpReportItem(
+                            o.getPaidAt(),
+                            o.getOrderCode(),
+                            o.getUserId(),
+                            name,
+                            email,
+                            o.getAmountVnd(),
+                            o.getCredits(),
+                            o.getProvider());
+                })
+                .toList();
     }
 
     /**

@@ -111,5 +111,49 @@ describe('danh sách yêu cầu ở Bài của tôi', () => {
     // then
     expect(screen.getByRole('link', { name: 'Xem hồ sơ của Tester 2' }).getAttribute('href')).toBe('/users/42');
     expect(screen.getByRole('link', { name: 'Tester 2' }).getAttribute('href')).toBe('/users/42');
+    expect(screen.queryByText(/^Khu vực:/)).toBeNull();
+  });
+
+  it.each([
+    [280000, /Giá tham khảo 280\.000/],
+    [null, /Chưa có giá tham khảo/],
+  ])('hiện khu vực và giá tham khảo của món đề nghị đổi (%s)', async (price, label) => {
+    vi.mocked(catalogApi.areas).mockResolvedValue([
+      { id: 1, name: 'Quận Gò Vấp', parentId: null, level: 2, children: [] },
+      { id: 2, name: 'Quận Bình Thạnh', parentId: null, level: 2, children: [] },
+    ]);
+    vi.mocked(requestApi.forItem).mockResolvedValue([
+      {
+        ...pendingRequest,
+        offeredItemId: 81,
+        offeredItemTitle: 'Bàn phím',
+        offeredItemReferencePrice: price,
+        offeredItemAreaId: 2,
+      },
+    ]);
+    render(<MemoryRouter><Activities /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem 1 yêu cầu' }));
+    expect(screen.getByRole('link', { name: 'Bàn phím' })).toBeTruthy();
+    expect(screen.getByText(label)).toBeTruthy();
+    expect(screen.getByText('Khu vực: Quận Bình Thạnh')).toBeTruthy();
+  });
+
+  it('yêu cầu có cờ cảnh báo hiện nhãn tiếng Việt để chủ bài biết trước khi chọn', async () => {
+    // given
+    vi.mocked(requestApi.forItem).mockResolvedValue([
+      { ...pendingRequest, flags: ['OFFERED_ITEM_BUSY', 'RECEIVER_TOO_BUSY'] },
+    ]);
+    render(
+      <MemoryRouter>
+        <Activities />
+      </MemoryRouter>,
+    );
+
+    // when
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem 1 yêu cầu' }));
+
+    // then
+    expect(screen.getByText('Món người này mang đổi đang nằm trong một giao dịch khác')).toBeTruthy();
+    expect(screen.getByText('Người này đang có quá nhiều giao dịch chưa xong')).toBeTruthy();
   });
 });

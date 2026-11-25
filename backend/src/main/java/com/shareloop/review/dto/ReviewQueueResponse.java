@@ -16,4 +16,7 @@ public record ReviewQueueResponse(
         int page,
 
         @Schema(description = "Số lượng bản ghi mỗi trang", example = "20")
-        int size) {}
+        int size,
+
+        @Schema(description = "Tổng số bài khớp tìm kiếm và bộ lọc")
+        long totalElements) {}

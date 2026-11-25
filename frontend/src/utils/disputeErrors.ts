@@ -19,7 +19,7 @@ const disputeErrorLabels: Record<string, string> = {
   DISPUTE_NOT_A_PARTY: 'Bạn không phải là một bên của giao dịch này.',
   DISPUTE_NOT_RESPONDENT: 'Chỉ người bị khiếu nại mới có thể gửi giải trình.',
   DISPUTE_REQUEST_NOT_COMPLETED: 'Giao dịch chưa hoàn tất nên chưa thể khiếu nại.',
-  DISPUTE_WINDOW_EXPIRED: 'Đã quá thời hạn 24 giờ để khiếu nại giao dịch.',
+  DISPUTE_WINDOW_EXPIRED: 'Đã quá thời hạn để khiếu nại giao dịch.',
   DISPUTE_RESPONSE_WINDOW_EXPIRED: 'Đã hết hạn gửi giải trình.',
   DISPUTE_NOT_FOUND: 'Không tìm thấy khiếu nại này.',
   DISPUTE_ALREADY_CONCLUDED: 'Khiếu nại đã được quản trị viên kết luận.',
@@ -46,3 +46,10 @@ export function disputeErrorMessage(error: unknown) {
     return 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
   return 'Không thể gửi thông tin lúc này. Vui lòng thử lại.';
 }
+
+// Lý do hợp lệ theo loại đối tượng báo cáo, khớp ReportReason.allowedFor ở backend (F7).
+export const reportReasonsByTarget: Record<'ITEM' | 'USER' | 'REQUEST', ReportReason[]> = {
+  ITEM: ['NOT_AS_DESCRIBED', 'COUNTERFEIT', 'PROHIBITED_ITEM', 'OTHER'],
+  USER: ['NO_SHOW', 'WRONG_CONTACT_INFO', 'HARASSMENT', 'OTHER'],
+  REQUEST: ['NOT_AS_DESCRIBED', 'COUNTERFEIT', 'NO_SHOW', 'WRONG_CONTACT_INFO', 'HARASSMENT', 'OTHER'],
+};

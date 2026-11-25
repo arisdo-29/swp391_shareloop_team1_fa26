@@ -10,6 +10,7 @@ import {
   type ReviewQueueItem,
 } from '../../services/adminModerationApi';
 import { adminChecklistApi } from '../../services/adminChecklistApi';
+import { catalogApi } from '../../services/catalogApi';
 import { AdminModerationDetail } from './AdminModerationDetail';
 import { AdminModerationList } from './AdminModerationList';
 
@@ -26,6 +27,8 @@ vi.mock('../../services/adminModerationApi', () => ({
 vi.mock('../../services/adminChecklistApi', () => ({
   adminChecklistApi: { list: vi.fn() },
 }));
+
+vi.mock('../../services/catalogApi', () => ({ catalogApi: { categories: vi.fn() } }));
 
 const checklist = [
   { id: 11, key: 'real_photos', statement: 'Ảnh là ảnh thật của đúng món đồ' },
@@ -112,6 +115,12 @@ function renderDetail() {
   );
 }
 
+beforeEach(() => {
+  vi.mocked(catalogApi.categories).mockResolvedValue([
+    { id: 7, name: 'Điện tử', parentId: null, restricted: false, boostable: true, sortOrder: 1, activeItemCount: 1 },
+  ]);
+});
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -138,7 +147,7 @@ describe('AdminModerationList', () => {
     expect(screen.getByText('Nguyễn Văn A')).toBeTruthy();
     expect(screen.getByText('Cần xem kỹ')).toBeTruthy();
     expect(screen.getByText('Có từ khoá cần xem xét: zalo')).toBeTruthy();
-    expect(screen.getByText('3/5 sao')).toBeTruthy();
+    expect(screen.getByRole('img', { name: '3 trên 5 sao' })).toBeTruthy();
     const thumbnail = screen.getByRole('img', { name: 'Ảnh Áo khoác gió nam' });
     expect(thumbnail.getAttribute('src')).toContain('/api/v1/media/101');
     expect(screen.getByRole('img', { name: 'Ảnh Bàn học gỗ' }).tagName).toBe('DIV');
@@ -212,7 +221,7 @@ describe('AdminModerationList', () => {
     expect(adminModerationApi.detail).toHaveBeenCalledWith(42);
   });
 
-  it('nút Xem chi tiết & duyệt dẫn sang trang riêng của bài, không mở popup', async () => {
+  it('nút Xem chi tiết và duyệt dẫn sang trang riêng của bài, không mở popup', async () => {
     render(
       <MemoryRouter>
         <AdminModerationList />
@@ -220,7 +229,7 @@ describe('AdminModerationList', () => {
     );
 
     await screen.findByText('Áo khoác gió nam');
-    const links = screen.getAllByRole('link', { name: 'Xem chi tiết & duyệt' });
+    const links = screen.getAllByRole('link', { name: 'Xem chi tiết và duyệt' });
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/admin/moderation/42',
       '/admin/moderation/43',
@@ -228,8 +237,14 @@ describe('AdminModerationList', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('tìm theo tên người đăng', async () => {
+  it('gửi từ khóa tiêu đề và kết hợp danh mục với dấu hiệu rủi ro', async () => {
     const user = userEvent.setup();
+    vi.mocked(adminModerationApi.pendingReviews).mockImplementation(async (params) => ({
+      items: params?.q === 'trần thị' ? [] : queueItems,
+      checklist,
+      page: 0,
+      size: 100,
+    }));
     render(
       <MemoryRouter>
         <AdminModerationList />
@@ -239,8 +254,13 @@ describe('AdminModerationList', () => {
 
     await user.type(screen.getByRole('textbox', { name: 'Tìm bài chờ duyệt' }), 'trần thị');
 
-    expect(screen.queryByText('Áo khoác gió nam')).toBeNull();
-    expect(screen.getByText('Bàn học gỗ')).toBeTruthy();
+    expect(await screen.findByText('Không tìm thấy bài phù hợp')).toBeTruthy();
+    await user.selectOptions(screen.getByLabelText('Danh mục'), '7');
+    await user.selectOptions(screen.getByLabelText('Dấu hiệu rủi ro'), 'REPEATED_PAIR');
+
+    await waitFor(() => expect(adminModerationApi.pendingReviews).toHaveBeenLastCalledWith({
+      q: 'trần thị', categoryId: 7, risk: 'REPEATED_PAIR', page: 0, size: 100,
+    }));
   });
 
   it('hiện thông báo kết quả duyệt gửi từ trang chi tiết', async () => {
@@ -346,9 +366,9 @@ describe('AdminModerationDetail', () => {
 
     await screen.findByRole('heading', { name: 'Áo khoác gió nam' });
     expect(adminModerationApi.detail).toHaveBeenCalledWith(42);
+    expect(screen.getByRole('img', { name: '3 trên 5 sao' })).toBeTruthy();
     for (const text of [
       'Nguyễn Văn A',
-      '3/5 sao',
       'Quần áo',
       'Quận 1',
       'Đã dùng nhiều',
@@ -482,15 +502,15 @@ describe('AdminModerationDetail', () => {
 
   it('hàng chờ hiện nhãn Đã chỉnh sửa (lần N) và cho phép lọc bài mới / bài sửa', async () => {
     const user = userEvent.setup();
-    vi.mocked(adminModerationApi.pendingReviews).mockResolvedValue({
+    vi.mocked(adminModerationApi.pendingReviews).mockImplementation(async (params) => ({
       items: [
         { ...queueItems[0], id: 101, title: 'Bài viết mới tinh', isEdited: false, editCount: 0 },
         { ...queueItems[1], id: 102, title: 'Bài viết đã sửa', isEdited: true, editCount: 2 },
-      ],
+      ].filter((item) => params?.edited === undefined || item.isEdited === params.edited),
       checklist,
       page: 0,
       size: 100,
-    });
+    }));
     render(
       <MemoryRouter>
         <AdminModerationList />
@@ -503,12 +523,12 @@ describe('AdminModerationDetail', () => {
 
     const select = screen.getByLabelText('Lọc theo loại bài');
     await user.selectOptions(select, 'new');
-    expect(screen.getByText('Bài viết mới tinh')).toBeTruthy();
+    expect(await screen.findByText('Bài viết mới tinh')).toBeTruthy();
     expect(screen.queryByText('Bài viết đã sửa')).toBeNull();
 
     await user.selectOptions(select, 'edited');
+    expect(await screen.findByText('Bài viết đã sửa')).toBeTruthy();
     expect(screen.queryByText('Bài viết mới tinh')).toBeNull();
-    expect(screen.getByText('Bài viết đã sửa')).toBeTruthy();
   });
 
   it('chi tiết bài hiện nhãn Đã chỉnh sửa (lần N) cạnh tiêu đề', async () => {

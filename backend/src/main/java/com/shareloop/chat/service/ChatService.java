@@ -154,8 +154,10 @@ public class ChatService {
             if (context.status() == RequestStatus.RESERVED || context.status() == RequestStatus.AWAITING_LOGISTICS) {
                 throw new BusinessException(ChatErrorCode.CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN);
             }
-            // Gắn ảnh qua MediaService để đảm bảo quyền sở hữu và chuyển sang ATTACHED
-            mediaService.attach(List.of(request.mediaId()), currentUserId);
+            // Gắn ảnh qua MediaService để đảm bảo quyền sở hữu, chuyển sang ATTACHED và riêng tư: ảnh chat chỉ hai bên
+            // và
+            // Admin xem được qua /requests/{id}/media/{mediaId} (D2)
+            mediaService.attachPrivate(List.of(request.mediaId()), currentUserId);
         }
 
         // Kiểm tra bài đăng khi chia sẻ thẻ bài (CH-06)
@@ -239,6 +241,20 @@ public class ChatService {
                     }
                     return MessageMapper.toResponse(m, card);
                 })
+                .toList();
+    }
+
+    /**
+     * Toàn bộ tin nhắn đã qua kiểm duyệt của một giao dịch, cũ trước, cho Admin đọc khi giao dịch có báo cáo hoặc
+     * khiếu nại. Không kiểm người xem vì Admin không phải một bên; AdminRequestDetailService đã kiểm điều kiện và ghi
+     * nhật ký mỗi lần xem.
+     */
+    @Transactional(readOnly = true)
+    public List<MessageResponse> findMessagesForAdmin(long requestId) {
+        return messageRepository.findByRequestIdOrderByIdAsc(requestId).stream()
+                .filter(m -> m.getModeration() == MessageModeration.PASS)
+                .map(m -> MessageMapper.toResponse(
+                        m, m.getRefItemId() == null ? null : findItemCardSafely(m.getRefItemId())))
                 .toList();
     }
 
@@ -385,6 +401,22 @@ public class ChatService {
         }
     }
 
+    /**
+     * Thêm một dòng tin hệ thống vào khung chat khi giao dịch bị khiếu nại (D-04). Không ghi ai khiếu nại để tin giống
+     * nhau cho cả hai bên; banner trên ô soạn tin mới phân biệt bên khiếu nại và bên bị khiếu nại.
+     *
+     * @param requestId giao dịch bị khiếu nại
+     * @param responseHours số giờ bên bị khiếu nại được giải trình
+     */
+    // REQUIRES_NEW: listener gọi hàm này sau khi khiếu nại đã commit, nên cần một transaction riêng để lưu tin.
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void postDisputeOpenedNotice(long requestId, int responseHours) {
+        messageRepository.save(Message.system(
+                requestId,
+                "Giao dịch đang có khiếu nại. Bên bị khiếu nại có " + responseHours
+                        + " giờ để giải trình, sau đó Admin kết luận."));
+    }
+
     // Chuyển mọi đề nghị đổi món PENDING của giao dịch sang DECLINED, trả về số đề nghị đã huỷ. Dùng khi có đề nghị mới
     // (mỗi giao dịch chỉ giữ tối đa một đề nghị PENDING) và khi giao dịch rời giai đoạn thương lượng.
     private int declinePendingOffers(long requestId) {
@@ -462,6 +494,14 @@ public class ChatService {
                 recordViolation(context, senderId, content, e.getMessage());
             }
             throw e;
+        }
+        // Tin hợp lệ nhưng nhắc tới mạng xã hội (mức REVIEW): vẫn gửi, chỉ gắn cờ cho Admin (D3).
+        chatContactFilter.findReviewMatch(content).ifPresent(keyword -> flagForReview(context, senderId, keyword));
+    }
+
+    private void flagForReview(RequestChatContext context, Long senderId, String keyword) {
+        if (chatViolationRecorder != null) {
+            chatViolationRecorder.flagForAdminReview(context.requestId(), senderId, keyword);
         }
     }
 

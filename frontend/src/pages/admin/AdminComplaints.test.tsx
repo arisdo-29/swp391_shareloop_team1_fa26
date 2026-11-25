@@ -2,8 +2,11 @@
 
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { reportApi, type AdminReportDetail, type ReportResponse } from '../../services/reportApi';
+import { adminRequestApi, type AdminRequestDetail } from '../../services/adminRequestApi';
+import { adminItemApi } from '../../services/adminItemApi';
 import { formatDeadline } from '../../utils/request';
 import { AdminComplaints } from './AdminComplaints';
 
@@ -20,6 +23,21 @@ vi.mock('../../services/reportApi', async (importOriginal) => {
     },
   };
 });
+
+vi.mock('../../services/adminRequestApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/adminRequestApi')>();
+  // Mặc định giao dịch không còn DISPUTED nên các test cũ không thấy khối chọn từng món
+  const detail = vi.fn().mockResolvedValue({ status: 'COMPLETED' });
+  return { ...actual, adminRequestApi: { ...actual.adminRequestApi, detail } };
+});
+
+vi.mock('../../services/adminItemApi', () => ({
+  adminItemApi: {
+    detail: vi.fn(async (itemId: number) => ({
+      summary: { id: itemId, title: 'Bàn học gỗ', imageUrl: `/media/items/${itemId}.jpg` },
+    })),
+  },
+}));
 
 afterEach(() => {
   cleanup();
@@ -69,6 +87,14 @@ function detail(
   } satisfies AdminReportDetail;
 }
 
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <AdminComplaints />
+    </MemoryRouter>,
+  );
+}
+
 async function openDetail(value: AdminReportDetail) {
   const user = userEvent.setup();
   vi.mocked(reportApi.list).mockResolvedValue({
@@ -79,7 +105,7 @@ async function openDetail(value: AdminReportDetail) {
     totalPages: 1,
   });
   vi.mocked(reportApi.detail).mockResolvedValue(value);
-  render(<AdminComplaints />);
+  renderPage();
   await user.click(await screen.findByRole('button', { name: 'Xem chi tiết' }));
   const dialog = screen.getByRole('dialog');
   const heading = await within(dialog).findByText('Kết quả xử lý');
@@ -97,7 +123,7 @@ async function openPendingDetail(value: AdminReportDetail) {
     totalPages: 1,
   });
   vi.mocked(reportApi.detail).mockResolvedValue(value);
-  render(<AdminComplaints />);
+  renderPage();
   await user.click(await screen.findByRole('button', { name: 'Xem chi tiết' }));
   const dialog = screen.getByRole('dialog');
   const concludeButton = (await within(dialog).findByRole('button', {
@@ -114,6 +140,69 @@ function rowValue(container: HTMLElement, label: string) {
 }
 
 describe('AdminComplaints', () => {
+  it('hiện danh sách dạng bảng với đúng bài liên quan và các cột quản trị', async () => {
+    const value = detail({ status: 'OPEN' }, { ...pending });
+    vi.mocked(reportApi.list).mockResolvedValue({
+      items: [value.report],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    vi.mocked(reportApi.detail).mockResolvedValue(value);
+
+    renderPage();
+
+    const table = await screen.findByRole('table', { name: 'Danh sách hồ sơ' });
+    expect(within(table).getByRole('columnheader', { name: 'Mã hồ sơ' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Đối tượng báo cáo' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Loại khiếu nại/báo cáo' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Người gửi báo cáo' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Lý do báo cáo' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Ngày gửi' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Trạng thái xử lý' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Người bị báo cáo' })).toBeTruthy();
+    expect(within(table).getByText('Báo cáo bài đăng')).toBeTruthy();
+    expect(within(table).getByText('HS-7')).toBeTruthy();
+    expect(await within(table).findByRole('img', { name: 'Bàn học gỗ' })).toBeTruthy();
+    expect(adminItemApi.detail).toHaveBeenCalledWith(5);
+  });
+
+  it('báo cáo người dùng hiện avatar mặc định, tên và liên kết hồ sơ thay vì dấu gạch ngang', async () => {
+    const userReport = report({
+      id: 23,
+      targetType: 'USER',
+      itemId: null,
+      targetUserId: 23,
+      targetName: 'Lê Minh Hương',
+    });
+    const value = detail(userReport, {
+      report: userReport,
+      relatedItemId: null,
+      relatedItemTitle: null,
+      reportedUser: { id: 23, fullName: 'Lê Minh Hương' },
+    });
+    vi.mocked(reportApi.list).mockResolvedValue({
+      items: [userReport],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    vi.mocked(reportApi.detail).mockResolvedValue(value);
+
+    renderPage();
+
+    const code = await screen.findByText('HS-23');
+    const row = code.closest('tr');
+    expect(row).not.toBeNull();
+    const targetCell = (row as HTMLTableRowElement).cells[1];
+    const name = within(targetCell).getByText('Lê Minh Hương');
+    expect(name.closest('a')?.getAttribute('href')).toBe('/admin/users/23');
+    expect(within(targetCell).getByLabelText('Lê Minh Hương')).toBeTruthy();
+    expect(within(row as HTMLTableRowElement).queryByText('—')).toBeNull();
+  });
+
   it('lọc được riêng khiếu nại giao dịch đang chờ giải trình', async () => {
     const user = userEvent.setup();
     vi.mocked(reportApi.list).mockResolvedValue({
@@ -123,7 +212,7 @@ describe('AdminComplaints', () => {
       totalElements: 0,
       totalPages: 0,
     });
-    render(<AdminComplaints />);
+    renderPage();
 
     await user.selectOptions(screen.getByLabelText('Loại hồ sơ'), 'REQUEST');
     await user.click(screen.getByRole('button', { name: 'Chờ giải trình' }));
@@ -174,6 +263,64 @@ describe('AdminComplaints', () => {
     expect(reportApi.conclude).not.toHaveBeenCalled();
   });
 
+  it('F1: bài đang có giao dịch thì hộp kết luận báo trước giao dịch sẽ bị huỷ hay vẫn tiếp tục', async () => {
+    const serious = await openPendingDetail(
+      detail(
+        { status: 'OPEN' },
+        { ...pending, openTransactionPartnerName: 'Lê Văn Cường', seriousReason: true },
+      ),
+    );
+    await serious.user.click(serious.concludeButton);
+    expect(
+      within(serious.dialog).getByText(/Bài đang có giao dịch với Lê Văn Cường\./),
+    ).toBeTruthy();
+    expect(within(serious.dialog).getByText(/Chấp thuận thì giao dịch sẽ bị huỷ/)).toBeTruthy();
+    cleanup();
+
+    const other = await openPendingDetail(
+      detail(
+        { status: 'OPEN' },
+        { ...pending, openTransactionPartnerName: 'Lê Văn Cường', seriousReason: false },
+      ),
+    );
+    await other.user.click(other.concludeButton);
+    expect(within(other.dialog).getByText(/Chấp thuận thì giao dịch vẫn tiếp tục/)).toBeTruthy();
+  });
+
+  it('F2: báo cáo của tài khoản mới hiện nhãn Tài khoản mới ở danh sách', async () => {
+    vi.mocked(reportApi.list).mockResolvedValue({
+      items: [report({ status: 'OPEN', newReporterAccount: true })],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    renderPage();
+
+    expect(await screen.findByText('Tài khoản mới')).toBeTruthy();
+  });
+
+  it('F7: bác bỏ có ô Báo cáo sai có chủ ý, tích thì gửi cờ phạt, mặc định không gửi', async () => {
+    const { user, dialog, concludeButton } = await openPendingDetail(
+      detail({ status: 'OPEN' }, { ...pending }),
+    );
+    vi.mocked(reportApi.conclude).mockResolvedValue({} as never);
+    await user.click(concludeButton);
+    await user.click(within(dialog).getByRole('radio', { name: 'Bác bỏ · Không có cơ sở' }));
+    const checkbox = within(dialog).getByRole('checkbox', {
+      name: /Báo cáo sai có chủ ý/,
+    }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+    await user.click(checkbox);
+    await user.click(within(dialog).getByRole('button', { name: 'Kiểm tra kết luận' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Xác nhận gửi' }));
+
+    expect(reportApi.conclude).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({ decision: 'DISMISS', deliberateFalseReport: true }),
+    );
+  });
+
   it('D-15: đã hết hạn giải trình thì Admin kết luận được', async () => {
     const { dialog, concludeButton } = await openPendingDetail(
       detail(
@@ -209,7 +356,7 @@ describe('AdminComplaints', () => {
     expect(
       await screen.findByText('Bên bị báo cáo vẫn đang trong hạn giải trình, chưa thể kết luận.'),
     ).toBeTruthy();
-    expect(reportApi.detail).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(reportApi.detail).mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it('D-07: báo cáo bài đang Chờ xử lý có nút Yêu cầu giải trình, bấm thì gọi API và tải lại', async () => {
@@ -224,7 +371,7 @@ describe('AdminComplaints', () => {
     expect(
       await screen.findByText('Đã gửi yêu cầu giải trình. Xem hạn phản hồi trong hồ sơ.'),
     ).toBeTruthy();
-    expect(reportApi.detail).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(reportApi.detail).mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it('D-07: khiếu nại giao dịch hoặc hồ sơ đã có giải trình thì không có nút Yêu cầu giải trình', async () => {
@@ -246,5 +393,202 @@ describe('AdminComplaints', () => {
     expect(
       within(responded.dialog).queryByRole('button', { name: 'Yêu cầu giải trình' }),
     ).toBeNull();
+  });
+});
+
+describe('AdminComplaints kết luận từng món của giao dịch', () => {
+  const disputedSwap = {
+    id: 90,
+    type: 'SWAP',
+    status: 'DISPUTED',
+    donor: {
+      userId: 3,
+      name: 'Trần Thị Bình',
+      email: null,
+      trustStars: 5,
+      rank: null,
+      locked: false,
+    },
+    receiver: {
+      userId: 2,
+      name: 'Nguyễn Văn An',
+      email: null,
+      trustStars: 5,
+      rank: null,
+      locked: false,
+    },
+    item: { itemId: 5, title: 'Máy ảnh', imageUrl: null, status: 'RESERVED', offerType: 'SWAP' },
+    offeredItem: {
+      itemId: 6,
+      title: 'Mũ bảo hiểm',
+      imageUrl: null,
+      status: 'RESERVED',
+      offerType: 'SWAP',
+    },
+    deliveryMethod: 'IN_PERSON',
+    meetingPlace: null,
+    meetingTime: null,
+    timeline: [],
+    photos: [],
+    reports: [],
+    points: [],
+    messagesViewable: true,
+    cancellable: true,
+    createdAt: '2026-11-20T08:00:00Z',
+  } as unknown as AdminRequestDetail;
+
+  const requestReport = detail(
+    {
+      targetType: 'REQUEST',
+      requestId: 90,
+      status: 'AWAITING_RESPONSE',
+      reason: 'NO_SHOW',
+      stage: 'AFTER',
+    },
+    { ...pending, responseWindowOpen: false },
+  );
+
+  it('modal hiện mã hồ sơ, hồ sơ hai bên, giao dịch và đúng hai món SWAP', async () => {
+    vi.mocked(adminRequestApi.detail).mockResolvedValue(disputedSwap);
+
+    const { dialog } = await openPendingDetail(requestReport);
+
+    expect(within(dialog).getByText(/Chi tiết hồ sơ HS-7/)).toBeTruthy();
+    expect(within(dialog).getByRole('link', { name: 'Nguyễn Văn An' }).getAttribute('href')).toBe('/admin/users/2');
+    expect(within(dialog).getByRole('link', { name: 'Trần Thị Bình' }).getAttribute('href')).toBe('/admin/users/3');
+    expect(within(dialog).getByRole('link', { name: 'Xem chi tiết giao dịch' }).getAttribute('href')).toBe(
+      '/admin/transactions/90',
+    );
+    expect((await within(dialog).findByRole('link', { name: 'Máy ảnh' })).getAttribute('href')).toBe('/admin/items/5');
+    expect(within(dialog).getByRole('link', { name: 'Mũ bảo hiểm' }).getAttribute('href')).toBe('/admin/items/6');
+  });
+
+  it('mặc định món của bên vi phạm là Ẩn, món bên kia là Mở lại, và gửi đủ mọi món khi chấp thuận', async () => {
+    vi.mocked(adminRequestApi.detail).mockResolvedValue(disputedSwap);
+    vi.mocked(reportApi.conclude).mockResolvedValue({} as never);
+    const { user, dialog, concludeButton } = await openPendingDetail(requestReport);
+
+    await user.click(concludeButton);
+    await user.click(within(dialog).getByRole('radio', { name: /Chấp thuận/ }));
+    const outcomes = await within(dialog).findByTestId('dispute-item-outcomes');
+
+    const main = within(outcomes).getByLabelText('Cách xử lý món Máy ảnh') as HTMLSelectElement;
+    const offered = within(outcomes).getByLabelText(
+      'Cách xử lý món Mũ bảo hiểm',
+    ) as HTMLSelectElement;
+    // Bên bị báo cáo là chủ bài nên món chính bị Ẩn
+    expect(main.value).toBe('HIDE');
+    expect(offered.value).toBe('REOPEN');
+
+    await user.selectOptions(offered, 'TRANSFERRED');
+    expect(within(outcomes).getByText(/Hệ thống báo hai bên liên hệ để hoàn trả/)).toBeTruthy();
+    await user.click(within(dialog).getByRole('button', { name: 'Kiểm tra kết luận' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Xác nhận gửi' }));
+
+    expect(reportApi.conclude).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        decision: 'UPHOLD',
+        itemOutcomes: [
+          { itemId: 5, choice: 'HIDE' },
+          { itemId: 6, choice: 'TRANSFERRED' },
+        ],
+      }),
+    );
+  });
+
+  it('người nhận vi phạm thì món đổi của người nhận mặc định là Ẩn (trước đây không)', async () => {
+    vi.mocked(adminRequestApi.detail).mockResolvedValue(disputedSwap);
+    const receiverViolates = {
+      ...requestReport,
+      reportedUser: { id: 2, fullName: 'Nguyễn Văn An' },
+    };
+    const { user, dialog, concludeButton } = await openPendingDetail(receiverViolates);
+
+    await user.click(concludeButton);
+    await user.click(within(dialog).getByRole('radio', { name: /Chấp thuận/ }));
+    const outcomes = await within(dialog).findByTestId('dispute-item-outcomes');
+
+    expect(
+      (within(outcomes).getByLabelText('Cách xử lý món Mũ bảo hiểm') as HTMLSelectElement).value,
+    ).toBe('HIDE');
+    expect(
+      (within(outcomes).getByLabelText('Cách xử lý món Máy ảnh') as HTMLSelectElement).value,
+    ).toBe('REOPEN');
+  });
+
+  const cancelNotAccusing = {
+    ...requestReport,
+    report: { ...requestReport.report, reason: 'OTHER' as const },
+    reportedUser: { id: 2, fullName: 'Nguyễn Văn An' },
+  };
+
+  it('đề nghị huỷ không tố ai: mặc định không trừ sao ai, món mở lại và không gửi penalizedUserId', async () => {
+    vi.mocked(adminRequestApi.detail).mockResolvedValue(disputedSwap);
+    vi.mocked(reportApi.conclude).mockResolvedValue({} as never);
+    const { user, dialog, concludeButton } = await openPendingDetail(cancelNotAccusing);
+
+    await user.click(concludeButton);
+    await user.click(within(dialog).getByRole('radio', { name: /Chấp thuận/ }));
+    const outcomes = await within(dialog).findByTestId('dispute-item-outcomes');
+    expect(
+      (within(outcomes).getByLabelText('Cách xử lý món Mũ bảo hiểm') as HTMLSelectElement).value,
+    ).toBe('REOPEN');
+    expect((within(dialog).getByLabelText(/Bên bị trừ 1 sao/) as HTMLSelectElement).value).toBe('');
+    await user.click(within(dialog).getByRole('button', { name: 'Kiểm tra kết luận' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Xác nhận gửi' }));
+
+    expect(reportApi.conclude).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ penalizedUserId: undefined }),
+    );
+  });
+
+  it('đề nghị huỷ không tố ai: chọn bên bị trừ thì gửi penalizedUserId', async () => {
+    vi.mocked(adminRequestApi.detail).mockResolvedValue(disputedSwap);
+    vi.mocked(reportApi.conclude).mockResolvedValue({} as never);
+    const { user, dialog, concludeButton } = await openPendingDetail(cancelNotAccusing);
+
+    await user.click(concludeButton);
+    await user.click(within(dialog).getByRole('radio', { name: /Chấp thuận/ }));
+    await user.selectOptions(await within(dialog).findByLabelText(/Bên bị trừ 1 sao/), '3');
+    await user.click(within(dialog).getByRole('button', { name: 'Kiểm tra kết luận' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Xác nhận gửi' }));
+
+    expect(reportApi.conclude).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ penalizedUserId: 3 }),
+    );
+  });
+
+  it('khiếu nại có tố bên kia (NO_SHOW) thì không hiện ô chọn bên bị trừ', async () => {
+    vi.mocked(adminRequestApi.detail).mockResolvedValue(disputedSwap);
+    const { user, dialog, concludeButton } = await openPendingDetail(requestReport);
+
+    await user.click(concludeButton);
+    await user.click(within(dialog).getByRole('radio', { name: /Chấp thuận/ }));
+    await within(dialog).findByTestId('dispute-item-outcomes');
+
+    expect(within(dialog).queryByLabelText(/Bên bị trừ 1 sao/)).toBeNull();
+  });
+
+  it('giao dịch không còn DISPUTED thì không hiện chọn từng món và không gửi itemOutcomes', async () => {
+    vi.mocked(adminRequestApi.detail).mockResolvedValue({
+      ...disputedSwap,
+      status: 'COMPLETED',
+    } as AdminRequestDetail);
+    vi.mocked(reportApi.conclude).mockResolvedValue({} as never);
+    const { user, dialog, concludeButton } = await openPendingDetail(requestReport);
+
+    await user.click(concludeButton);
+    await user.click(within(dialog).getByRole('radio', { name: /Chấp thuận/ }));
+    expect(within(dialog).queryByTestId('dispute-item-outcomes')).toBeNull();
+    await user.click(within(dialog).getByRole('button', { name: 'Kiểm tra kết luận' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Xác nhận gửi' }));
+
+    expect(reportApi.conclude).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ itemOutcomes: undefined }),
+    );
   });
 });

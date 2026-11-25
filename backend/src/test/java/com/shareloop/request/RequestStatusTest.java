@@ -19,11 +19,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * Unit test kiểm thử toàn diện máy trạng thái RequestStatus (SRS mục 3.9; Spike S8; Issue #127).
- * Kiểm tra đầy đủ 14 mũi tên hợp lệ và toàn bộ các chuyển trạng thái không hợp lệ trong ma trận 81 ô.
+ * Kiểm tra đầy đủ 17 mũi tên hợp lệ và toàn bộ các chuyển trạng thái không hợp lệ trong ma trận 81 ô.
  */
 class RequestStatusTest {
 
-    // Tập hợp 14 mũi tên hợp lệ theo sơ đồ vòng đời Request (SRS mục 3.9)
+    // Tập hợp 17 mũi tên hợp lệ theo sơ đồ vòng đời Request (SRS mục 3.9)
     private static final Set<String> VALID_TRANSITION_KEYS = Set.of(
             "PENDING->RESERVED",
             "PENDING->REJECTED",
@@ -34,11 +34,16 @@ class RequestStatusTest {
             "AWAITING_LOGISTICS->CANCELLED",
             "LOGISTICS_CONFIRMED->AWAITING_HANDOVER",
             "LOGISTICS_CONFIRMED->CANCELLED",
+            // Cạnh thứ 15: chỉ dành cho "không đồng ý đề nghị huỷ" (GN-06)
+            "LOGISTICS_CONFIRMED->DISPUTED",
             "AWAITING_HANDOVER->COMPLETED",
             "AWAITING_HANDOVER->DISPUTED",
             "AWAITING_HANDOVER->CANCELLED",
             "DISPUTED->COMPLETED",
-            "DISPUTED->CANCELLED");
+            "DISPUTED->CANCELLED",
+            // Hai cạnh 16 và 17: chỉ dành cho Admin bác khiếu nại đề nghị huỷ không tố ai (GN-06)
+            "DISPUTED->LOGISTICS_CONFIRMED",
+            "DISPUTED->AWAITING_HANDOVER");
 
     private static String key(RequestStatus from, RequestStatus to) {
         return from.name() + "->" + to.name();
@@ -95,7 +100,15 @@ class RequestStatusTest {
                 Arguments.of(
                         RequestStatus.DISPUTED,
                         RequestStatus.CANCELLED,
-                        "Admin phân xử huỷ giao dịch và hoàn trả (F16, Hình 19)"));
+                        "Admin phân xử huỷ giao dịch và hoàn trả (F16, Hình 19)"),
+                Arguments.of(
+                        RequestStatus.DISPUTED,
+                        RequestStatus.LOGISTICS_CONFIRMED,
+                        "Admin bác khiếu nại đề nghị huỷ không tố ai, giao dịch tiếp tục (GN-06)"),
+                Arguments.of(
+                        RequestStatus.DISPUTED,
+                        RequestStatus.AWAITING_HANDOVER,
+                        "Như trên khi đã có bên bấm hoàn tất (GN-06)"));
     }
 
     static Stream<Arguments> provideInvalidTransitions() {
@@ -176,6 +189,13 @@ class RequestStatusTest {
 
         @Test
         @DisplayName(
+                "Mũi tên 15: LOGISTICS_CONFIRMED -> DISPUTED chỉ dành cho không đồng ý đề nghị huỷ (GN-06), xem RequestCancelRequestTest")
+        void transition_LogisticsConfirmed_To_Disputed() {
+            assertTrue(RequestStatus.canTransition(RequestStatus.LOGISTICS_CONFIRMED, RequestStatus.DISPUTED));
+        }
+
+        @Test
+        @DisplayName(
                 "Mũi tên 10: AWAITING_HANDOVER -> COMPLETED khi cả 2 bên xác nhận hoặc tự hoàn tất sau 3 ngày (GN-06, GN-08, GN-09)")
         void transition_AwaitingHandover_To_Completed() {
             assertTrue(RequestStatus.canTransition(RequestStatus.AWAITING_HANDOVER, RequestStatus.COMPLETED));
@@ -209,7 +229,7 @@ class RequestStatusTest {
 
         @ParameterizedTest(name = "[{index}] {0} -> {1}: {2}")
         @MethodSource("com.shareloop.request.RequestStatusTest#provideValidTransitions")
-        @DisplayName("Tất cả 14 mũi tên hợp lệ đều trả về true")
+        @DisplayName("Tất cả 17 mũi tên hợp lệ đều trả về true")
         void allValidTransitionsReturnTrue(RequestStatus from, RequestStatus to, String description) {
             assertThat(RequestStatus.canTransition(from, to))
                     .as("Chuyển từ %s sang %s phải hợp lệ (%s)", from, to, description)
@@ -223,7 +243,7 @@ class RequestStatusTest {
 
         @ParameterizedTest(name = "[{index}] {0} -> {1} phải bị từ chối")
         @MethodSource("com.shareloop.request.RequestStatusTest#provideInvalidTransitions")
-        @DisplayName("Tất cả 67 ô không hợp lệ (gồm 9 ô chuyển sang chính nó) đều trả về false")
+        @DisplayName("Tất cả 64 ô không hợp lệ (gồm 9 ô chuyển sang chính nó) đều trả về false")
         void allInvalidTransitionsReturnFalse(RequestStatus from, RequestStatus to) {
             assertThat(RequestStatus.canTransition(from, to))
                     .as("Chuyển từ %s sang %s không hợp lệ và phải trả về false", from, to)
@@ -231,7 +251,7 @@ class RequestStatusTest {
         }
 
         @Test
-        @DisplayName("Tổng số mũi tên hợp lệ phải đúng bằng 14 và số ô không hợp lệ là 67")
+        @DisplayName("Tổng số mũi tên hợp lệ phải đúng bằng 17 và số ô không hợp lệ là 64")
         void transitionMatrixTotals() {
             int validCount = 0;
             int invalidCount = 0;
@@ -244,10 +264,10 @@ class RequestStatusTest {
                     }
                 }
             }
-            assertThat(validCount).as("Số mũi tên hợp lệ phải đúng bằng 14").isEqualTo(14);
+            assertThat(validCount).as("Số mũi tên hợp lệ phải đúng bằng 17").isEqualTo(17);
             assertThat(invalidCount)
-                    .as("Số ô không hợp lệ phải đúng bằng 81 - 14 = 67")
-                    .isEqualTo(67);
+                    .as("Số ô không hợp lệ phải đúng bằng 81 - 17 = 64")
+                    .isEqualTo(64);
         }
     }
 

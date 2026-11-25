@@ -4,7 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.shareloop.wallet.dto.FinanceSummaryResponse;
 import com.shareloop.wallet.dto.TopUpReconciliation;
+import com.shareloop.wallet.dto.TopUpReportItem;
+import com.shareloop.wallet.entity.PaymentProvider;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -52,7 +55,62 @@ class FinanceReportCsvWriterTest {
                         "Đối chiếu nạp Credit",
                         "Credit quy đổi từ tiền mặt,Credit nạp ghi sổ,Chênh lệch,Kết quả",
                         "50,40,10,Lệch",
+                        "",
+                        "Chi tiết nạp tiền",
+                        "Thời gian,Mã đơn,Họ tên,Email,Số tiền (VND),Credit nhận,Cổng thanh toán",
+                        "",
+                        "Theo thành viên",
+                        "Họ tên,Email,Tổng tiền (VND),Tổng Credit nhận,Số đơn nạp",
                         "");
+    }
+
+    @Test
+    @DisplayName("Ghi chi tiết đơn nạp tiền và tổng hợp theo từng thành viên (L02)")
+    void write_withTopUpDetails_writesDetailedRowsAndMemberSummaries() {
+        FinanceSummaryResponse report = new FinanceSummaryResponse(
+                null,
+                null,
+                2L,
+                50000L,
+                50L,
+                List.of(),
+                0L,
+                List.of(),
+                new TopUpReconciliation(50L, 50L, 0L, true),
+                List.of());
+
+        List<TopUpReportItem> details = List.of(
+                new TopUpReportItem(
+                        Instant.parse("2026-10-15T08:30:00Z"),
+                        "ORD-001",
+                        1L,
+                        "Nguyễn Văn A",
+                        "a@test.com",
+                        20000L,
+                        20,
+                        PaymentProvider.VNPAY),
+                new TopUpReportItem(
+                        Instant.parse("2026-10-16T09:00:00Z"),
+                        "ORD-002",
+                        1L,
+                        "Nguyễn Văn A",
+                        "a@test.com",
+                        30000L,
+                        30,
+                        PaymentProvider.MOCK));
+
+        String csv = new String(writer.write(report, details, null, null), StandardCharsets.UTF_8);
+
+        assertThat(csv.substring(1).split("\r\n", -1))
+                .contains(
+                        "Chi tiết nạp tiền",
+                        "Thời gian,Mã đơn,Họ tên,Email,Số tiền (VND),Credit nhận,Cổng thanh toán",
+                        "15/10/2026 15:30,ORD-001,Nguyễn Văn A,a@test.com,20000,20,VNPAY",
+                        "16/10/2026 16:00,ORD-002,Nguyễn Văn A,a@test.com,30000,30,MOCK")
+                .contains(
+                        "Theo thành viên",
+                        "Họ tên,Email,Tổng tiền (VND),Tổng Credit nhận,Số đơn nạp",
+                        "Nguyễn Văn A,a@test.com,50000,50,2");
     }
 
     @Test

@@ -190,6 +190,56 @@ class ActivityLogQueryServiceTest {
     }
 
     @Test
+    void search_whenConfigUpdateHasNote_detailShowsNoteAfterChange() {
+        // given: khoá đồng bộ có note "Đồng bộ theo ..."
+        givenLogs(List.of(newLog(
+                1L,
+                ActivityType.CONFIG_UPDATE,
+                3L,
+                "CONFIG",
+                null,
+                Map.of(
+                        "key",
+                        "boost_max_days",
+                        "oldValue",
+                        "6",
+                        "newValue",
+                        "8",
+                        "syncedFrom",
+                        "boost_days",
+                        "note",
+                        "Đồng bộ theo Số ngày mỗi gói đẩy bài"),
+                "Đổi gói đẩy")));
+
+        // when
+        List<ActivityLogDto> rows =
+                service.search(null, null, null, null, 0, 20).getContent();
+
+        // then: note được hiện trong ngoặc, không lộ key thô
+        assertThat(rows.get(0).detail()).isEqualTo("Số ngày đẩy tối đa: 6 → 8 (Đồng bộ theo Số ngày mỗi gói đẩy bài)");
+    }
+
+    @Test
+    void search_whenConfigUpdateHasNoNote_detailIsUnchanged() {
+        // given: log cũ, không có note
+        givenLogs(List.of(newLog(
+                1L,
+                ActivityType.CONFIG_UPDATE,
+                3L,
+                "CONFIG",
+                null,
+                Map.of("key", "boost_days", "oldValue", "3", "newValue", "4"),
+                null)));
+
+        // when
+        List<ActivityLogDto> rows =
+                service.search(null, null, null, null, 0, 20).getContent();
+
+        // then
+        assertThat(rows.get(0).detail()).isEqualTo("Số ngày mỗi gói đẩy bài: 3 → 4");
+    }
+
+    @Test
     void search_whenReviewApprove_detailIsApproveLabel() {
         // given
         Map<String, Object> snapshot = Map.of("checks", List.of());

@@ -7,7 +7,7 @@ Người sở hữu: BE3 (@dwargon73-sketch).
 
 ---
 
-## Vòng đời trạng thái (14 cạnh hợp lệ)
+## Vòng đời trạng thái (17 cạnh hợp lệ)
 
 Mọi đổi trạng thái đi qua `RequestStatus.canTransition`; cạnh không có trong bảng trả `409 REQUEST_INVALID_STATE_TRANSITION`.
 
@@ -20,15 +20,20 @@ Mọi đổi trạng thái đi qua `RequestStatus.canTransition`; cạnh không 
 | `RESERVED` | `CANCELLED` | Huỷ giao dịch, job quá 10 ngày chưa chốt lịch, khoá tài khoản |
 | `AWAITING_LOGISTICS` | `LOGISTICS_CONFIRMED` | Hai bên chốt lịch |
 | `AWAITING_LOGISTICS` | `CANCELLED` | Như `RESERVED` |
-| `LOGISTICS_CONFIRMED` | `AWAITING_HANDOVER` | Một bên xác nhận bàn giao |
-| `LOGISTICS_CONFIRMED` | `CANCELLED` | Huỷ giao dịch, khoá tài khoản |
-| `AWAITING_HANDOVER` | `COMPLETED` | Bên còn lại xác nhận, hoặc job tự xác nhận sau `AUTO_CONFIRM_DAYS` |
-| `AWAITING_HANDOVER` | `DISPUTED` | `POST /requests/{id}/handover-issue` hoặc bên nhận xác nhận không đúng mô tả |
-| `AWAITING_HANDOVER` | `CANCELLED` | Huỷ giao dịch, khoá tài khoản |
-| `DISPUTED` | `COMPLETED` | Admin bác bỏ khiếu nại (`DISMISS`) |
-| `DISPUTED` | `CANCELLED` | Admin chấp nhận khiếu nại (`UPHOLD`), hoặc Admin huỷ giao dịch kẹt. Chấp nhận khiếu nại mà người bị khiếu nại là chủ bài thì bài chính bị ẩn (`is_active = false`), món đổi vẫn mở lại (16/11/2026) |
+| `LOGISTICS_CONFIRMED` | `AWAITING_HANDOVER` | Một bên bấm "Đã giao nhận xong" (Gặp trực tiếp), hoặc chiều Giao hàng đầu tiên được báo Đã gửi |
+| `LOGISTICS_CONFIRMED` | `DISPUTED` | Chỉ một đường: bên kia **không đồng ý** đề nghị huỷ (`POST /requests/{id}/cancel-request/reject`) hoặc bấm đã giao nhận xong khi có đề nghị huỷ đang chờ (GN-06, 23/11/2026). Không đường nào khác được đi cạnh này |
+| `LOGISTICS_CONFIRMED` | `CANCELLED` | Bên kia đồng ý hoặc im lặng quá hạn trước đề nghị huỷ, `refuse-handover`, Admin huỷ, khoá tài khoản, tự huỷ giao dịch kẹt (GN-12) |
+| `AWAITING_HANDOVER` | `COMPLETED` | Gặp trực tiếp: bên còn lại bấm hoàn tất, hoặc job tự hoàn tất sau `auto_confirm_days`. Giao hàng: mọi chiều đã Đã nhận (bên nhận bấm, hoặc job tự ghi nhận chiều đã gửi sau `auto_confirm_days_shipping` ngày kể từ lúc gửi) |
+| `AWAITING_HANDOVER` | `DISPUTED` | `POST /requests/{id}/handover-failed` khi bên kia đã bấm hoàn tất hoặc chiều của mình đã Đã gửi (sự cố giao nhận, chờ Admin xác minh), hoặc job mở khi một chiều Giao hàng đã nhận mà chiều kia không được gửi quá hạn |
+| `AWAITING_HANDOVER` | `CANCELLED` | Bên kia đồng ý hoặc im lặng quá hạn trước đề nghị huỷ, `POST /requests/{id}/refuse-handover` (từ chối nhận), Admin huỷ, khoá tài khoản |
+| `DISPUTED` | `COMPLETED` | Admin bác bỏ (`DISMISS`) khiếu nại sự cố giao nhận hoặc khiếu nại có tố bên kia (không đến, chưa gửi hàng, không liên hệ được): việc giao nhận được công nhận đã diễn ra |
+| `DISPUTED` | `CANCELLED` | Admin chấp nhận khiếu nại (`UPHOLD`), hoặc Admin huỷ giao dịch kẹt. Admin chọn cách xử lý từng món: Mở lại, Ẩn hoặc Đã đổi chủ (GN-14, xem `report.md`) |
+| `DISPUTED` | `LOGISTICS_CONFIRMED` | Cạnh 16: Admin **bác** khiếu nại sinh ra từ đề nghị huỷ **không tố ai** (`BUSY`, `NO_LONGER_NEEDED`, `OTHER`). Giao dịch tiếp tục, xoá đề nghị huỷ (`Request.resumeAfterRejectedCancel`) |
+| `DISPUTED` | `AWAITING_HANDOVER` | Cạnh 17: như cạnh 16 khi đã có bên bấm hoàn tất hoặc đã nhận hàng trước khi sang tranh chấp |
 
-`COMPLETED`, `REJECTED`, `CANCELLED` là trạng thái cuối. Không có cạnh `LOGISTICS_CONFIRMED -> DISPUTED`.
+`COMPLETED`, `REJECTED`, `CANCELLED` là trạng thái cuối. Từ chối nhận không bao giờ đi qua `DISPUTED`: việc trao đồ không
+xảy ra nên giao dịch huỷ ngay, Admin chỉ kết luận ai có lỗi qua báo cáo vi phạm (21/11/2026). `DISPUTED` dùng cho
+sự cố giao nhận và cho đề nghị huỷ bị bên kia không đồng ý, vì chưa biết việc trao đồ có xảy ra hay không.
 
 ### Chuyển đổi hình thức Cho ↔ Trao đổi (CD-01 … CD-07, D-02)
 
@@ -95,6 +100,7 @@ nếu chọn yêu cầu này (giao dịch chuyển sang Trao đổi).
   - `403 REQUEST_REPUTATION_BLOCKED`: Tài khoản có 0 sao uy tín, bị vô hiệu hoá quyền gửi yêu cầu giao dịch (YC-02).
   - `404 REQUEST_ITEM_NOT_FOUND`: Không tìm thấy bài đăng hoặc món đề nghị không tồn tại.
   - `409 REQUEST_ITEM_NOT_AVAILABLE`: Bài đăng hoặc món đề nghị không ở trạng thái sẵn sàng (không phải APPROVED, bị ẩn, hoặc không thuộc sở hữu người gửi).
+  - `409 REQUEST_ITEM_CATEGORY_DISABLED`: Danh mục hoặc khu vực của bài đã bị Admin tắt ("Danh mục của bài đang tạm ngưng").
   - `409 REQUEST_ALREADY_EXISTS`: Đã có yêu cầu đang hoạt động cho bài này (YC-03).
 
 ---
@@ -105,7 +111,7 @@ Chủ bài xem danh sách các yêu cầu gửi tới bài đăng của mình (F
 
 - **Xác thực:** Bắt buộc JWT (phải là chủ bài đăng).
 - **Path variable:** `itemId` (id bài đăng).
-- **Thành công:** `200 OK`, mảng `RequestResponse` (sắp xếp theo thời gian tạo mới nhất lên trước). Mỗi phần tử đính kèm thông tin uy tín của người gửi yêu cầu: `receiverTrustStars`, `receiverRank`, `receiverAsDescribedRate` (đồng thời hỗ trợ alias `trustStars`, `rank`, `asDescribedRate`).
+- **Thành công:** `200 OK`, mảng `RequestResponse` (sắp xếp theo thời gian tạo mới nhất lên trước). Mỗi phần tử đính kèm thông tin uy tín của người gửi yêu cầu: `receiverTrustStars`, `receiverRank` (đồng thời hỗ trợ alias `trustStars`, `rank`). Không còn tỉ lệ đúng mô tả (21/11/2026).
 - **Ví dụ Response:**
 
 ```json
@@ -117,10 +123,8 @@ Chủ bài xem danh sách các yêu cầu gửi tới bài đăng của mình (F
     "receiverName": "Nguyễn Văn A",
     "receiverTrustStars": 5,
     "receiverRank": "BRONZE",
-    "receiverAsDescribedRate": 1.0,
     "trustStars": 5,
     "rank": "BRONZE",
-    "asDescribedRate": 1.0,
     "offeredItemId": null,
     "type": "GIVE",
     "status": "PENDING",
@@ -183,6 +187,12 @@ Chủ bài đăng chọn đúng một người nhận cho bài đăng (F10 bư�
   - Request được chọn chuyển sang trạng thái `RESERVED` (`reservedAt` được ghi nhận).
   - Tất cả các Request khác gửi tới cùng bài đăng đang ở trạng thái `PENDING` sẽ tự động chuyển sang `REJECTED`.
   - Các yêu cầu PENDING khác ở các bài khác đang dùng cùng món đề nghị `offeredItemId` tự động bị `CANCELLED` (YC-04, YC-07).
+  - **Kiểm trước khi chọn (22/11/2026):** bài chính đang `PENDING_REVIEW` (vừa sửa, chờ duyệt lại) thì trả
+    `409 REQUEST_ITEM_UNDER_REVIEW`. Yêu cầu có món đề nghị thì món đó phải vẫn là của người gửi, `APPROVED` và đang
+    hiển thị; nếu không trả `409 REQUEST_OFFERED_ITEM_UNAVAILABLE`. Hai bước kiểm này chạy **trước** bước đổi hình thức
+    và trừ phí, nên lỗi không trừ Credit của chủ bài.
+  - **CD-04:** chọn yêu cầu không kèm món ở bài Trao đổi thì bài chuyển sang Cho tặng, phí đăng đã trả không được hoàn.
+    Giao diện hiện rõ câu "Bài sẽ chuyển sang Cho tặng, phí đăng đã trả không được hoàn." trong hộp xác nhận.
   - Điểm uy tín khi hoàn tất (`COMPLETED`): tự động tính theo `requests.type` sau chuyển đổi (CD-07).
   - Khi giao dịch bị huỷ (người dùng, job hết hạn), các món đã giữ chỗ được nhả về `APPROVED`.
   - Người nhận được chọn nhận thông báo `REQUEST_ACCEPTED`.
@@ -194,7 +204,27 @@ Chủ bài đăng chọn đúng một người nhận cho bài đăng (F10 bư�
   - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
   - `404 REQUEST_ITEM_NOT_FOUND`: Không tìm thấy bài đăng liên quan.
   - `409 REQUEST_INVALID_STATE_TRANSITION`: Yêu cầu không còn ở trạng thái `PENDING` để chọn.
+  - `409 REQUEST_ITEM_UNDER_REVIEW`: Bài đang chờ duyệt lại sau khi sửa, chủ bài chọn người sau khi bài được duyệt.
+  - `409 REQUEST_OFFERED_ITEM_UNAVAILABLE`: Món người này đề nghị đổi không còn khả dụng (bị giữ chỗ ở giao dịch khác,
+    bị xoá, bị ẩn, đang chờ duyệt lại hoặc hết hạn).
+  - `409 ITEM_HIDDEN`: Bài đang tạm ẩn nên chưa giữ chỗ được (do `ItemService.reserve`).
   - `409 ITEM_INVALID_STATUS_TRANSITION`: Món đồ (bài chính hoặc món đề nghị) không còn ở trạng thái `APPROVED` để giữ chỗ.
+
+### Yêu cầu tự huỷ khi món đem đổi không còn dùng được (22/11/2026)
+
+Module item phát `ItemUnavailableEvent(itemId, reason)` khi một bài rời trạng thái "APPROVED và đang hiển thị":
+giữ chỗ (`RESERVED`), xoá (`REMOVED`), ẩn kể cả khi khoá tài khoản hoặc 0 sao (`HIDDEN`), chủ bài sửa bài đang APPROVED
+(`EDITED`), hết hạn (`EXPIRED`). Nhả giữ chỗ (`release`) và duyệt lại (`markApproved`) không phát event này.
+`ItemUnavailableRequestListener` (`@EventListener`, cùng transaction) xử lý:
+
+- Mọi lý do: huỷ các Request `PENDING` có `offered_item_id = itemId`, `cancelReason` là
+  `"[Hệ thống] Món bạn đề nghị đổi không còn khả dụng"`. Người gửi và chủ bài đích nhận `REQUEST_CANCELLED`. Request đã
+  được chọn (`RESERVED`) không bị lấy ra. Lúc chọn người, `selectReceiver` tự huỷ các yêu cầu dùng chung món đổi trước
+  khi giữ chỗ món đó, nên listener không huỷ lại và không ai nhận hai thông báo cho cùng một yêu cầu. Ở đường này
+  người gửi và chủ bài đích cũng đều nhận `REQUEST_CANCELLED`, chủ bài đích đọc được câu "Yêu cầu của {tên người gửi}
+  cho bài «{tiêu đề}» đã tự huỷ vì món đề nghị đổi đã được chọn ở một giao dịch khác."
+- `EDITED`: người có Request `PENDING` tới bài nhận `REQUEST_ITEM_EDITED` "Chủ bài vừa sửa bài, bài đang chờ duyệt lại."
+  Yêu cầu không bị huỷ. Sửa lại bài đang `REJECTED` hoặc `PENDING_REVIEW` không gửi thông báo này.
 
 ---
 
@@ -231,7 +261,7 @@ Xem chi tiết thông tin của một yêu cầu giao dịch (F10, UC-26).
   "deliveryMethod": "IN_PERSON", // "IN_PERSON" hoặc "SHIPPING"
   "meetingPlace": "Cổng trường ĐH FPT",
   "meetingTime": "2026-10-20T10:00:00Z",
-  "agreeToWaiver": true // Tuỳ chọn, bắt buộc khi xác nhận Shipping
+  "agreeToWaiver": true // Bắt buộc cho cả IN_PERSON và SHIPPING
 }
 ```
 
@@ -239,11 +269,12 @@ Xem chi tiết thông tin của một yêu cầu giao dịch (F10, UC-26).
   - Request nếu đang `RESERVED` sẽ tự động chuyển sang `AWAITING_LOGISTICS`.
   - Nếu Request đã ở `LOGISTICS_CONFIRMED` trở lên thì bị khoá không cho sửa lịch (GN-03).
   - Thời gian hẹn phải ở tương lai.
-  - Bên gửi đề xuất tự động được ghi nhận đồng ý lịch mới (`donorScheduleOkAt` hoặc `receiverScheduleOkAt`), bên còn lại bị reset để xác nhận lại.
+  - Bên đề xuất được ghi nhận đồng ý và cam kết cho lịch mới. Hệ thống xoá thời điểm đồng ý và cam kết của bên còn lại.
   - Gửi thông báo `SCHEDULE_UPDATED` cho bên còn lại.
 - **Thành công:** `200 OK`, trả về `RequestResponse`.
 - **Lỗi:**
   - `400 REQUEST_SCHEDULE_PAST_TIME`: Thời gian hẹn ở quá khứ.
+  - `400 REQUEST_WAIVER_REQUIRED`: Thiếu cam kết trách nhiệm giao nhận.
   - `403 REQUEST_FORBIDDEN`: Không phải thành viên tham gia giao dịch.
   - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
   - `409 REQUEST_SCHEDULE_LOCKED`: Lịch hẹn đã chốt, không thể chỉnh sửa.
@@ -260,19 +291,19 @@ Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (GN-02, GN-03,
 
 ```json
 {
-  "agreeToWaiver": true // Bắt buộc true nếu deliveryMethod là SHIPPING
+  "agreeToWaiver": true // Bắt buộc nếu bên gọi chưa cam kết cho lịch đang lưu
 }
 ```
 
 - **Hành vi nghiệp vụ:**
   - Ghi nhận bên gọi đã đồng ý lịch hẹn.
-  - Với hình thức `SHIPPING`, bắt buộc phải đồng ý cam kết trách nhiệm (GN-02, GN-11: hệ thống không can thiệp hay bồi thường hàng hoá và phí vận chuyển).
-  - Khi cả hai bên đều đã đồng ý lịch (và cam kết trách nhiệm nếu là `SHIPPING`), Request tự động chuyển sang `LOGISTICS_CONFIRMED` và ghi nhận `contactRevealedAt`.
+  - Cả `IN_PERSON` và `SHIPPING` đều yêu cầu cam kết trách nhiệm (GN-02). Bên chưa có thời điểm cam kết cho lịch đang lưu phải gửi `agreeToWaiver: true`.
+  - Khi cả hai bên đều đã đồng ý lịch và cam kết trách nhiệm, Request tự động chuyển sang `LOGISTICS_CONFIRMED` và ghi nhận `contactRevealedAt`.
   - Gửi thông báo `LOGISTICS_CONFIRMED` cho đối phương.
 - **Thành công:** `200 OK`, trả về `RequestResponse`.
 - **Lỗi:**
   - `400 REQUEST_SCHEDULE_NOT_SET`: Chưa có lịch hẹn để xác nhận.
-  - `400 REQUEST_WAIVER_REQUIRED`: Chưa đồng ý cam kết trách nhiệm khi chọn giao hàng (Shipping).
+  - `400 REQUEST_WAIVER_REQUIRED`: Thiếu cam kết trách nhiệm giao nhận.
   - `403 REQUEST_FORBIDDEN`: Không phải thành viên tham gia giao dịch.
   - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
   - `409 REQUEST_INVALID_STATE_TRANSITION`: Trạng thái yêu cầu không phải AWAITING_LOGISTICS.
@@ -310,16 +341,14 @@ Lấy thông tin liên lạc (họ tên, email, số điện thoại) của đ�
 
 ## 10. POST /api/v1/requests/{id}/confirm-handover
 
-Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (GN-06, GN-07, GN-08, UC-27).
+Nút "Đã giao nhận xong" (Gặp trực tiếp) hoặc "Tôi đã nhận được hàng" (Giao hàng) (GN-06, GN-08, GN-12, UC-27). Không còn câu hỏi "đúng mô tả?" (21/11/2026).
 
 - **Xác thực:** Bắt buộc JWT (chủ bài đăng `donorId` hoặc người nhận `receiverId`).
 - **Path variable:** `id` (id của request).
-- **Request body:**
+- **Request body (tuỳ chọn):**
 
 ```json
 {
-  "asDescribed": true,
-  "notAsDescribedReason": "Món đồ bị vỡ một góc không giống trong ảnh", // Bắt buộc nếu người nhận chọn asDescribed = false, tối đa 1000 ký tự (BC-01)
   "mediaIds": [1, 2] // Tuỳ chọn: danh sách ID ảnh/video minh chứng khi giao nhận (GN-10)
 }
 ```
@@ -327,21 +356,18 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (GN-
 - **Hành vi nghiệp vụ:**
   - Chỉ áp dụng khi Request đang ở trạng thái `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER`.
   - Nếu có truyền `mediaIds`: gọi `MediaService.attach(mediaIds, currentUserId)` và lưu vào `request_media_mappings` với stage `HANDOVER` (GN-10).
-  - Bên cho xác nhận -> ghi nhận `donorHandoverAt`.
-  - Bên nhận xác nhận -> bắt buộc trả lời `asDescribed` (nếu chọn `false` bắt buộc có lý do); ghi nhận `receiverHandoverAt` và `asDescribed`.
-  - Bên nhận chọn `asDescribed = false`: sau khi giao dịch commit, `RequestService` phát event `NotAsDescribedReportedEvent` (`requestId`, `receiverId`, `reason`) và module report tự mở một report `NOT_AS_DESCRIBED`, mô tả là `notAsDescribedReason` (GN-07, xem [report.md](report.md)). Request không gọi thẳng `ReportService` để tránh vòng phụ thuộc. Lỗi mở report không làm mất câu trả lời của bên nhận, chỉ được ghi log.
-  - Giao dịch đã có report thì job tự hoàn tất sau `auto_confirm_days` ngày bỏ qua, không tự `COMPLETED` (GN-09). Giao dịch ở lại `AWAITING_HANDOVER` cho đến khi bên còn lại tự xác nhận.
+  - Bên cho bấm: ghi `donorHandoverAt`. Bên nhận bấm: ghi `receiverHandoverAt`. Hàm này không bao giờ chuyển sang `DISPUTED`.
+  - Giao hàng (`SHIPPING`, 23/11/2026): nút này luôn là của **bên nhận** từng chiều, bấm sau khi chiều đó Đã gửi (`409 REQUEST_LEG_NOT_SHIPPED` nếu chưa). Người gửi báo đã gửi bằng `POST /shipment` (mục 18). Người nhận món chính ghi `receiverHandoverAt`, chủ bài nhận món đổi ghi `donorHandoverAt`.
+  - Có đề nghị huỷ đang chờ mà bên được hỏi bấm nút này thì coi như không đồng ý: giao dịch sang `DISPUTED` (mục 16). Người đề nghị không bấm được (`409 REQUEST_CANCEL_REQUEST_PENDING`).
   - Một bên xác nhận: Request chuyển sang trạng thái `AWAITING_HANDOVER` (GN-08).
+  - Bên kia im lặng quá hạn và giao dịch không có report thì job tự hoàn tất (GN-09): Gặp trực tiếp sau `auto_confirm_days` (3 ngày) kể từ lúc một bên bấm. Giao hàng tính **từng chiều**: chiều đã gửi mà bên nhận im lặng `auto_confirm_days_shipping` (7 ngày) kể từ lúc gửi thì tự ghi nhận Đã nhận. `delivery_method` rỗng được tính như Gặp trực tiếp.
   - Cả hai bên đều đã xác nhận:
     - Request chuyển sang trạng thái `COMPLETED` và ghi nhận `completedAt`.
     - Bài đăng chuyển sang trạng thái `TRADED` qua `ItemService.markTraded(itemId)` (nếu là SWAP thì cả 2 bài đều chuyển sang TRADED).
     - Gửi sự kiện tới `ReputationService.onCompleted(requestId)` để xử lý uy tín.
-    - Gửi thông báo `TRANSACTION_COMPLETED` cho cả hai bên.
+    - Gửi thông báo `TRANSACTION_COMPLETED` cho cả hai bên, kèm hạn khiếu nại 24 giờ.
 - **Thành công:** `200 OK`, trả về `RequestResponse`.
 - **Lỗi:**
-  - `400 VALIDATION_FAILED`: Lý do không đúng mô tả vượt quá 1000 ký tự (BC-01).
-  - `400 REQUEST_AS_DESCRIBED_REQUIRED`: Bên nhận chưa trả lời câu hỏi món đồ có đúng mô tả không.
-  - `400 REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED`: Thiếu lý do khi chọn không đúng mô tả.
   - `403 REQUEST_FORBIDDEN`: Không phải thành viên tham gia giao dịch.
   - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
   - `409 REQUEST_INVALID_STATE_TRANSITION`: Yêu cầu chưa chốt lịch hoặc đã hoàn thành.
@@ -410,13 +436,14 @@ Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (G
 
 ## 13. POST /api/v1/requests/{id}/cancel-transaction
 
-Chủ bài hoặc người nhận huỷ giao dịch sau khi chủ bài đã chọn người nhận.
+Chủ bài hoặc người nhận huỷ giao dịch sau khi chủ bài đã chọn người nhận và trước khi chốt lịch.
 
 - **Xác thực:** Bắt buộc JWT (phải là chủ bài `donorId` hoặc người nhận `receiverId` của giao dịch).
 - **Path variable:** `id` (id của request).
 - **Body:** `CancelTransactionRequest` (`reason` bắt buộc, 5 đến 500 ký tự).
-- **Trạng thái được huỷ:** `RESERVED`, `AWAITING_LOGISTICS`, `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER`.
-  `PENDING` huỷ qua `POST /requests/{id}/cancel` (mục 4). `COMPLETED`, `DISPUTED`, `CANCELLED`, `REJECTED` trả `409`.
+- **Trạng thái được huỷ:** `RESERVED`, `AWAITING_LOGISTICS`. Từ `LOGISTICS_CONFIRMED` trở đi hai bên dùng
+  `POST /requests/{id}/handover-failed` (mục 14) để không có hai nút trùng ý (21/11/2026).
+  `PENDING` huỷ qua `POST /requests/{id}/cancel` (mục 4). Các trạng thái khác trả `409`.
 - **Hành vi nghiệp vụ:**
   - Request chuyển sang `CANCELLED`. `cancelReason` lưu `"[Chủ bài] "` hoặc `"[Người nhận] "` cộng lý do đã cắt khoảng trắng
     hai đầu (tối đa 600 ký tự). Không có cột riêng cho người huỷ.
@@ -424,6 +451,10 @@ Chủ bài hoặc người nhận huỷ giao dịch sau khi chủ bài đã ch�
     vì bài không qua duyệt lần nữa.
   - Bên còn lại nhận thông báo `TRANSACTION_CANCELLED` kèm lý do.
   - Ghi activity log `REQUEST_CANCEL` (`targetType = REQUEST`, `reason` là `cancelReason`).
+  - Bài chính mở lại nên những người có Request `REJECTED` ở bài đó nhận thông báo `REQUESTED_ITEM_REOPENED`
+    "Món bạn từng yêu cầu đã mở lại" (mỗi người một lần, trừ người nhận của giao dịch vừa huỷ). Khác `ITEM_REOPENED`
+    của module report (báo chủ bài khi bài được hiện lại sau báo cáo). Cùng hành vi ở nhánh huỷ của
+    `handover-failed` (mục 14), Admin huỷ giao dịch và job tự huỷ giao dịch quá hạn chốt lịch (22/11/2026).
 - **Thành công:** `200 OK`, trả về `RequestResponse` với `status = CANCELLED`.
 - **Lỗi:**
   - `400 VALIDATION_FAILED`: `reason` trống hoặc ngoài 5 đến 500 ký tự.
@@ -433,27 +464,64 @@ Chủ bài hoặc người nhận huỷ giao dịch sau khi chủ bài đã ch�
 
 ---
 
-## 14. POST /api/v1/requests/{id}/handover-issue
+## 14. POST /api/v1/requests/{id}/handover-failed
 
-Báo "Tôi chưa nhận được đồ" (người nhận) hoặc "Tôi chưa giao được" (chủ bài) khi bên kia đã xác nhận bàn giao còn mình
-thì chưa.
+Nút "Giao nhận không thành công" (GN-06, GN-07, GN-12). Luật 23/11/2026 thay luật 21/11: bên kia chưa bấm hoàn tất thì **không huỷ ngay**, mà tạo đề nghị huỷ chờ bên kia phản hồi.
 
 - **Xác thực:** Bắt buộc JWT (chủ bài hoặc người nhận của giao dịch).
 - **Path variable:** `id` (id của request).
-- **Body:** `HandoverIssueRequest` (`note` bắt buộc 5 đến 1000 ký tự, `evidenceMediaIds` tuỳ chọn).
-- **Điều kiện:** Request đang `AWAITING_HANDOVER`, bên kia **đã** xác nhận bàn giao và người gọi **chưa**. Mọi trường hợp
-  khác (kể cả `LOGISTICS_CONFIRMED`, vì lúc đó chưa bên nào xác nhận) trả `409`.
-- **Hành vi nghiệp vụ:**
-  - Request chuyển `AWAITING_HANDOVER` sang `DISPUTED`.
-  - Mở khiếu nại `NO_SHOW` cho giao dịch qua module report, xem `report.md` mục "Report tự mở khi báo chưa nhận được".
-    Bên còn lại nhận thông báo `DISPUTE_OPENED`.
-  - Job tự xác nhận sau `AUTO_CONFIRM_DAYS` ngày chỉ xử lý `AWAITING_HANDOVER` nên bỏ qua giao dịch `DISPUTED`.
-- **Thành công:** `200 OK`, trả về `RequestResponse` với `status = DISPUTED`.
+- **Body:** `HandoverFailedRequest` (`code` mã lý do tuỳ chọn, `reason` từ 5 đến 500 ký tự, bắt buộc khi `code` bỏ trống hoặc là `OTHER`, `evidenceMediaIds` tuỳ chọn).
+- **Điều kiện:** Request đang `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER`, người gọi **chưa** bấm hoàn tất, và đã **từ giờ hẹn** (Giao hàng: theo chiều, xem mục 18). Trước giờ hẹn trả `409 REQUEST_BEFORE_MEETING_TIME`, dùng `cancel-request` (mục 16).
+- **Hành vi nghiệp vụ:** backend tự chọn nhánh theo việc bên kia đã bấm hoàn tất hay chưa.
+  - Bên kia **chưa** bấm: tạo đề nghị huỷ (mục 16). Giao dịch giữ nguyên trạng thái, bên kia nhận `CANCEL_REQUESTED` và có `cancel_request_response_hours` giờ để Đồng ý hoặc Không đồng ý. Đồng ý hoặc im lặng thì `CANCELLED` không phạt ai. Không đồng ý thì `DISPUTED`.
+  - Bên kia **đã** bấm (Giao hàng: chiều của người báo đã Đã gửi hoặc chiều kia đã nhận): `DISPUTED` ngay, mở khiếu nại `NO_SHOW` qua module report trong cùng transaction (xem `report.md`). Bên kia nhận `DISPUTE_OPENED` và có 48 giờ giải trình. Job tự hoàn tất chỉ xử lý `AWAITING_HANDOVER` nên bỏ qua giao dịch `DISPUTED`.
+- **Khi bên kia không đồng ý đề nghị huỷ** (`POST /cancel-request/reject`), khiếu nại mở ra phụ thuộc mã lý do của người đề nghị, và bên từ chối **không bao giờ bị trừ sao chỉ vì từ chối**:
+  - `COUNTERPART_NO_SHOW`, `COUNTERPART_NOT_SHIPPED`, `CANNOT_CONTACT` (tố bên kia): khiếu nại lý do `NO_SHOW`, người đề nghị là người khiếu nại. Admin chấp thuận thì trừ 1 sao bên bị tố. Admin bác thì giao dịch được công nhận hoàn tất.
+  - `BUSY`, `NO_LONGER_NEEDED`, `OTHER` (không tố ai): khiếu nại lý do chung `OTHER`. Admin chấp thuận thì huỷ giao dịch, mặc định **không trừ sao ai**, hoặc chọn rõ một bên bị trừ qua `penalizedUserId` (`report.md`). Admin bác thì giao dịch **tiếp tục** (`DISPUTED` về `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER`), xoá đề nghị huỷ, hai bên nhận `TRANSACTION_RESUMED`.
+- **Thành công:** `200 OK`, trả về `RequestResponse` (`status` giữ nguyên khi tạo đề nghị, hoặc `DISPUTED`).
 - **Lỗi:**
-  - `400 VALIDATION_FAILED`: `note` trống hoặc ngoài 5 đến 1000 ký tự.
+  - `400 VALIDATION_FAILED`: `reason` ngoài 5 đến 500 ký tự.
+  - `400 REQUEST_CANCEL_REASON_INVALID`: mã lý do không dùng được ở thời điểm này.
   - `403 REQUEST_FORBIDDEN`: Không phải chủ bài hoặc người nhận.
   - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
-  - `409 REQUEST_INVALID_STATE_TRANSITION`: Sai trạng thái hoặc sai điều kiện xác nhận bàn giao.
+  - `409 REQUEST_BEFORE_MEETING_TIME`: Chưa tới giờ hẹn.
+  - `409 REQUEST_SEND_DEADLINE_NOT_PASSED`: Giao hàng, chiều chưa gửi và chưa quá hạn gửi.
+  - `409 REQUEST_CANCEL_REQUEST_PENDING`: Đã có đề nghị huỷ đang chờ.
+  - `409 REQUEST_INVALID_STATE_TRANSITION`: Sai trạng thái hoặc người gọi đã bấm hoàn tất.
+
+---
+
+## 15. POST /api/v1/requests/{id}/refuse-handover
+
+Nút "Từ chối giao nhận" của bên nhận món đồ (GN-07, BC-09). Từ 21/11/2026 đây là **huỷ giao dịch kèm báo cáo vi phạm**,
+không phải khiếu nại: việc trao đồ không xảy ra nên giao dịch luôn kết thúc ở `CANCELLED`, không bao giờ `COMPLETED`,
+không đánh dấu bài đã trao, không cộng điểm tích luỹ hoàn tất cho ai. Từ 23/11/2026 chỉ dùng được **từ giờ hẹn** (Giao hàng:
+sau khi chiều đó Đã gửi), trước đó trả `409 REQUEST_BEFORE_MEETING_TIME`. Từ chối nhận không cần bên kia xác nhận.
+
+- **Xác thực:** Bắt buộc JWT. Cho tặng: chỉ người nhận `receiverId`. Trao đổi (giao dịch có `offeredItemId`): cả hai bên,
+  vì mỗi bên đều nhận một món.
+- **Path variable:** `id` (id của request).
+- **Body:** `RefuseHandoverRequest` (`reason` là mô tả bắt buộc 5 đến 1000 ký tự, `evidenceMediaIds` tuỳ chọn). Lý do báo
+  cáo luôn là `NOT_AS_DESCRIBED`.
+- **Điều kiện:** Request đang `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER`, người gọi **chưa** bấm hoàn tất, đã từ giờ hẹn.
+- **Hành vi nghiệp vụ** (cùng một transaction):
+  - Request sang `CANCELLED` ngay, `cancelReason` = tiền tố người huỷ + `Từ chối nhận vì món không đúng mô tả. ` + mô tả.
+  - Món bị từ chối tạm ẩn ngay (`is_active = false`, cơ chế ẩn bài hiện có): người nhận từ chối thì ẩn bài chính, chủ bài
+    từ chối ở Trao đổi thì ẩn món đổi. Món còn lại (của người từ chối) mở lại về `APPROVED` như khi huỷ giao dịch.
+  - Phát `NotAsDescribedReportedEvent(requestId, reporterId, refusedItemId, reportedUserId, reason, evidenceMediaIds)`.
+    Module report mở **báo cáo bài** (`targetType = ITEM`, `itemId` = món bị từ chối, `targetUserId` = chủ món đó,
+    `requestId` = giao dịch, `reason = NOT_AS_DESCRIBED`, `status = OPEN`, không có hạn giải trình). Xem `report.md`.
+  - Cả hai bên nhận `TRANSACTION_CANCELLED`: người từ chối biết báo cáo đã gửi, bên bị báo cáo biết món đang tạm ẩn và có
+    thể gửi giải trình (không bắt buộc).
+  - Admin kết luận báo cáo ở trang Khiếu nại, giao dịch vẫn `CANCELLED` trong mọi trường hợp (xem `report.md` mục 5).
+- **Thành công:** `200 OK`, trả về `RequestResponse` với `status = CANCELLED` và `refusalReport` của người gọi.
+- **Lỗi:**
+  - `400 VALIDATION_FAILED`: `reason` trống hoặc ngoài 5 đến 1000 ký tự.
+  - `403 REQUEST_FORBIDDEN`: Không phải chủ bài hoặc người nhận.
+  - `403 REQUEST_REFUSE_NOT_ALLOWED`: Chủ bài ở giao dịch Cho tặng.
+  - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
+  - `409 REQUEST_BEFORE_MEETING_TIME`: Chưa tới giờ hẹn.
+  - `409 REQUEST_INVALID_STATE_TRANSITION`: Sai trạng thái hoặc người gọi đã bấm hoàn tất.
 
 ---
 
@@ -469,6 +537,20 @@ thì chưa.
 | `uploadedBy` | number | ID người tải lên |
 | `createdAt` | string | Thời điểm đính kèm ISO-8601 UTC |
 
+### RequestDisputeSummary
+
+Backend tính sẵn theo người đang gọi API, frontend không tự so giờ.
+
+| Trường | Kiểu | Ý nghĩa |
+|---|---|---|
+| `id` | number | Mã khiếu nại, dùng cho `POST /api/v1/disputes/{id}/response` |
+| `reason` | string | Mã lý do (`NOT_AS_DESCRIBED`, `NO_SHOW`...) |
+| `openedByMe` | boolean | Người xem là bên khiếu nại |
+| `status` | string | `OPEN`, `AWAITING_RESPONSE`, `RESOLVED`, `DISMISSED` |
+| `responseDueAt` | string? | Hạn giải trình ISO-8601 UTC |
+| `respondedAt` | string? | Thời điểm bên bị khiếu nại đã giải trình |
+| `canRespond` | boolean | `true` khi người xem là bên bị khiếu nại, chưa giải trình, khiếu nại chưa kết luận và còn trong hạn |
+
 ### RequestResponse
 
 | Trường | Kiểu | Ý nghĩa |
@@ -477,6 +559,8 @@ thì chưa.
 | `itemId` | number | Id bài đăng được xin / đề nghị đổi |
 | `receiverId` | number | Id người gửi yêu cầu |
 | `offeredItemId` | number? | Id bài đăng đề nghị đem đổi (SWAP) |
+| `offeredItemReferencePrice` | number? | Giá tham khảo hiện tại, bằng đồng, của món đem đổi. Rỗng nếu không kèm món hoặc món chưa có giá |
+| `offeredItemAreaId` | number? | Khu vực công khai của bài đăng được đem đổi. Rỗng nếu không kèm món hoặc không tra được bài |
 | `type` | string | Loại **giao dịch**, `GIVE` hoặc `SWAP`. Lúc tạo bằng loại bài; đổi khi chủ bài chọn người hoặc đồng ý đề nghị đổi món trong chat |
 | `itemOfferType` | string? | Hình thức **hiện tại** của bài chính, `GIVE` hoặc `SWAP`. Khác `type` khi người xin gửi chéo loại (CD-01) và chưa được chọn. `null` khi không tra được bài |
 | `conversionFee` | number? | Số Credit chủ bài sẽ trả nếu giao dịch chuyển sang Trao đổi: bằng `post_fee` khi `itemOfferType = GIVE`, bằng `0` khi `SWAP`. Đọc từ cấu hình, frontend không tự viết cứng. Không phải số dư ví. `null` khi `itemOfferType = null` |
@@ -491,7 +575,6 @@ thì chưa.
 | `contactRevealedAt` | string? | Thời điểm mở thông tin liên lạc ISO-8601 UTC |
 | `donorHandoverAt` | string? | Thời điểm người giao xác nhận đã giao ISO-8601 UTC |
 | `receiverHandoverAt` | string? | Thời điểm người nhận xác nhận đã nhận ISO-8601 UTC |
-| `asDescribed` | boolean? | Người nhận đánh giá món đồ đúng mô tả hay không |
 | `completedAt` | string? | Thời điểm hoàn tất giao dịch ISO-8601 UTC |
 | `complaintDeadline` | string? | Hạn khiếu nại = `completedAt` + `complaint_window_hours` (24 giờ, U08); `null` khi chưa hoàn tất. Thông báo `TRANSACTION_COMPLETED` gửi hai bên ghi `Bạn có 24 giờ, đến HH:mm dd/MM, để khiếu nại nếu có vấn đề.` |
 | `cancelReason` | string? | Lý do huỷ, có tiền tố người huỷ `[Chủ bài] `, `[Người nhận] ` hoặc `[Hệ thống] `. Có khi `status = CANCELLED` |
@@ -504,9 +587,10 @@ thì chưa.
 | `offeredItemTitle` | string? | Tiêu đề món người xin đề nghị đổi (chỉ yêu cầu `SWAP`) |
 | `receiverTrustStars` | number? | Số sao uy tín của người gửi yêu cầu (TrustStars: 1-5). Alias: `trustStars` (YC-06) |
 | `receiverRank` | string? | Hạng uy tín của người gửi yêu cầu (`BRONZE`, `SILVER`, `GOLD`, `DIAMOND`). Alias: `rank` (YC-06) |
-| `receiverAsDescribedRate` | number? | Tỉ lệ giao dịch đúng mô tả của người gửi yêu cầu, thang 0.00 - 1.00 (vd `0.92` là 92%). `null` khi có dưới 3 giao dịch hoàn tất đã được đánh giá "đúng mô tả?". Alias: `asDescribedRate` (YC-06) |
 | `lastMessageAt` | string? | Thời điểm tin nhắn mới nhất trong hội thoại của giao dịch ISO-8601 UTC (U03). `null` khi chưa có tin nhắn nào |
 | `disputeResponseDueAt` | string? | Hạn giải trình của khiếu nại đang mở thuộc giao dịch ISO-8601 UTC (U5-BE, D-04, GN-07). Chỉ có giá trị khi `status = DISPUTED`, các trạng thái khác luôn là `null`. FE dùng để hiển thị thời hạn giải trình |
+| `disputes` | RequestDisputeSummary[]? | Khiếu nại của giao dịch nhìn từ phía người xem (khiếu nại sau hoàn tất và sự cố giao nhận), cũ trước, tối đa hai phần tử (mỗi bên một lần). Không chứa báo cáo từ chối nhận. Có ở `GET /requests/{id}`, `GET /items/{itemId}/requests`, `GET /me/requests` và kết quả của `refuse-handover`, `handover-failed`. Nơi khác là `null`. Xem bảng `RequestDisputeSummary` (21/11/2026) |
+| `refusalReport` | RequestDisputeSummary? | Báo cáo vi phạm khi một bên từ chối nhận (GN-07), nhìn từ phía người xem. Cùng dạng `RequestDisputeSummary`, `responseDueAt` luôn `null`, `canRespond = true` khi người xem là bên bị báo cáo, chưa giải trình và báo cáo chưa kết luận. Có ở cùng các nơi như `disputes`; `null` khi giao dịch không bị từ chối nhận |
 | `donorAvatarUrl` | string? | Ảnh đại diện chủ bài, dạng `/api/v1/media/{id}`; `null` khi chưa có ảnh. Có ở mọi API trả `RequestResponse` |
 | `receiverAvatarUrl` | string? | Ảnh đại diện người nhận, cùng quy ước với `donorAvatarUrl` |
 | `disputeExpired` | boolean | `true` khi giao dịch đã hoàn tất và thời điểm hiện tại đã qua `complaintDeadline` (hết hạn khiếu nại); `false` trong mọi trường hợp khác, kể cả khi chưa hoàn tất. Backend tính từ `complaint_window_hours`, FE không tự so giờ |
@@ -522,7 +606,7 @@ Các trường đã có từ trước và dùng cho màn Tiến trình giao dị
 | `deliveryMethod` | string | Có | `IN_PERSON` hoặc `SHIPPING` |
 | `meetingPlace` | string | Có | Tối đa 255 ký tự; quá giới hạn trả "Địa điểm tối đa 255 ký tự." |
 | `meetingTime` | string | Có | Thời gian hẹn ISO-8601 UTC ở tương lai |
-| `agreeToWaiver` | boolean | Không | Bắt buộc true nếu là SHIPPING |
+| `agreeToWaiver` | boolean | Có | Phải là `true` cho cả `IN_PERSON` và `SHIPPING` |
 
 ### CancelTransactionRequest
 
@@ -530,25 +614,30 @@ Các trường đã có từ trước và dùng cho màn Tiến trình giao dị
 |---|---|---|---|
 | `reason` | string | Có | 5 đến 500 ký tự (sau khi cắt khoảng trắng hai đầu nên dùng `maxLength = 500` ở client) |
 
-### HandoverIssueRequest
+### HandoverFailedRequest
 
 | Trường | Kiểu | Bắt buộc | Ràng buộc |
 |---|---|---|---|
-| `note` | string | Có | 5 đến 1000 ký tự |
+| `reason` | string | Có | 5 đến 500 ký tự |
+| `evidenceMediaIds` | number[] | Không | Id ảnh/video minh chứng đã tải lên |
+
+### RefuseHandoverRequest
+
+| Trường | Kiểu | Bắt buộc | Ràng buộc |
+|---|---|---|---|
+| `reason` | string | Có | 5 đến 1000 ký tự |
 | `evidenceMediaIds` | number[] | Không | Id ảnh/video minh chứng đã tải lên |
 
 ### ConfirmLogisticsRequest
 
 | Trường | Kiểu | Bắt buộc | Ràng buộc |
 |---|---|---|---|
-| `agreeToWaiver` | boolean | Không | Bắt buộc true nếu là SHIPPING |
+| `agreeToWaiver` | boolean | Có điều kiện | Phải là `true` nếu chưa cam kết cho lịch đang lưu |
 
 ### HandoverConfirmRequest
 
 | Trường | Kiểu | Bắt buộc | Ràng buộc |
 |---|---|---|---|
-| `asDescribed` | boolean | Bên nhận: Có | Bắt buộc với bên nhận |
-| `notAsDescribedReason` | string | Không | Bắt buộc nếu `asDescribed = false`, tối đa 1000 ký tự |
 | `mediaIds` | number[] | Không | Danh sách ID ảnh/video minh chứng khi giao nhận (GN-10) |
 
 ### AttachMediaRequest
@@ -579,20 +668,23 @@ Các trường đã có từ trước và dùng cho màn Tiến trình giao dị
 | `REQUEST_LIMIT_EXCEEDED` | 400 | Vượt quá 5 yêu cầu đang chờ xử lý (YC-03) |
 | `REQUEST_SWAP_OFFERED_ITEM_REQUIRED` | 400 | Thiếu món đề nghị khi gửi yêu cầu đổi đồ (BD-02) |
 | `REQUEST_SCHEDULE_PAST_TIME` | 400 | Thời gian hẹn ở trong quá khứ |
-| `REQUEST_WAIVER_REQUIRED` | 400 | Chưa đồng ý cam kết miễn trừ trách nhiệm khi chọn Ship (GN-02) |
+| `REQUEST_WAIVER_REQUIRED` | 400 | Thiếu cam kết trách nhiệm giao nhận (GN-02) |
 | `REQUEST_SCHEDULE_NOT_SET` | 400 | Chưa có thông tin lịch hẹn để xác nhận |
-| `REQUEST_AS_DESCRIBED_REQUIRED` | 400 | Bên nhận chưa trả lời câu hỏi món đồ có đúng mô tả hay không (GN-07) |
-| `REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED` | 400 | Thiếu lý do khi bên nhận chọn không đúng mô tả (GN-07) |
 | `REQUEST_MEDIA_REQUIRED` | 400 | Danh sách ảnh/video minh chứng không được rỗng (GN-10) |
 | `REQUEST_MEDIA_STAGE_INVALID` | 400 | Giai đoạn đính kèm minh chứng không hợp lệ |
 | `REQUEST_ITEM_NOT_AVAILABLE` | 409 | Bài đăng không ở trạng thái sẵn sàng (chưa duyệt, đã trao đổi...) |
+| `REQUEST_ITEM_CATEGORY_DISABLED` | 409 | Danh mục hoặc khu vực của bài đã bị tắt, bài không nhận yêu cầu mới |
 | `REQUEST_ALREADY_EXISTS` | 409 | Đã có một yêu cầu đang hoạt động cho bài này (YC-03) |
 | `REQUEST_SCHEDULE_LOCKED` | 409 | Lịch hẹn đã chốt và bị khoá (GN-03) |
 | `REQUEST_CONTACT_NOT_REVEALED` | 409 | Chưa chốt lịch hẹn để xem thông tin liên lạc (GN-04) |
 | `REQUEST_HANDOVER_ALREADY_CONFIRMED` | 409 | Bạn đã xác nhận giao nhận cho yêu cầu này rồi |
 | `REQUEST_INVALID_STATE_TRANSITION` | 409 | Chuyển đổi trạng thái không hợp lệ theo sơ đồ |
+| `REQUEST_OFFERED_ITEM_UNAVAILABLE` | 409 | Chọn người khi món đề nghị đổi không còn là của người gửi, không `APPROVED` hoặc đang ẩn |
+| `REQUEST_ITEM_UNDER_REVIEW` | 409 | Chọn người khi bài đang chờ duyệt lại sau khi sửa |
+| `REQUEST_MESSAGES_NOT_VIEWABLE` | 409 | Admin xem tin nhắn của giao dịch chưa có báo cáo hay khiếu nại (`GET /admin/requests/{id}/messages`, xem `admin.md`) |
 | `REQUEST_OFFER_CHANGE_NOT_ALLOWED` | 409 | Đề nghị hoặc đồng ý đổi món trong chat khi giao dịch không còn là `GIVE` hoặc không ở `RESERVED` / `AWAITING_LOGISTICS` (xem `docs/api/chat.md`) |
 | `REQUEST_FORBIDDEN` | 403 | Không có quyền thao tác trên yêu cầu này (hoặc người ngoài xem minh chứng) |
+| `REQUEST_REFUSE_NOT_ALLOWED` | 403 | Chủ bài ở giao dịch Cho tặng bấm "Từ chối giao nhận" (GN-07) |
 
 
 ## Dành cho module khác: RequestQueryService
@@ -603,6 +695,112 @@ Không phải endpoint HTTP. Module khác đọc dữ kiện về Request qua `c
 | Hàm | Người gọi | Ý nghĩa |
 |-----|-----------|---------|
 | `boolean hasReservedOrHigherRequest(long itemId)` | item | Bài đã có Request từ `RESERVED` trở lên |
+| `boolean hasRequestedItem(long itemId, long userId)` | item (xem chi tiết bài) | Người dùng từng gửi Request tới bài, ở bất kỳ trạng thái nào |
 | `boolean hasActiveDelivery(long userId)` | user | Người dùng đang có giao dịch `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER` (TK-11) |
 | `long countCompletedByUser(long userId)` | user (hồ sơ công khai) | Số Request `COMPLETED` người dùng tham gia, tính cả vai người nhận và chủ bài |
 | `Map<Long, Instant> findCompletedAtByItemIds(Collection<Long> itemIds)` | item (bài `TRADED`) | `completed_at` theo id bài; bài là bài chính (`item_id`) hoặc món đề nghị (`offered_item_id`) đều tính. Bài chưa có Request `COMPLETED` không có trong map |
+
+## Huỷ yêu cầu tới bài không còn chọn được (C1)
+
+Khi bài hết hạn, bị ẩn (Admin ẩn, đủ ngưỡng báo cáo, kết luận báo cáo, khoá tài khoản chủ bài) hoặc bản sửa bị từ chối, mọi yêu cầu `PENDING` tới bài tự huỷ ngay. `cancel_reason` ghi đúng nguyên nhân ("Bài đã hết thời gian hiển thị", "Bài đang tạm ẩn", "Bài đã bị quản trị viên ẩn", "Chủ bài đang bị khoá tài khoản", "Bài đang được chủ bài chỉnh sửa và chưa được duyệt") và người xin nhận một thông báo `REQUEST_CANCELLED`.
+
+- `RequestResponse.flags` (danh sách chuỗi, chỉ điền ở danh sách yêu cầu của một bài cho chủ bài, chỉ với yêu cầu `PENDING`): `OFFERED_ITEM_BUSY` khi món người xin mang đổi đang nằm trong giao dịch khác.
+- `409 REQUEST_OFFERED_ITEM_IN_OTHER_TRANSACTION` ở `POST /requests/{id}/select` khi món mang đổi đang nằm trong một giao dịch khác.
+
+## Bấm cùng lúc (C3)
+
+- Khi chọn người nhận, server khoá dòng bài được xin rồi tới món mang đổi (bài chính trước, món đổi sau) trước khi kiểm tra và ghi. Hai chủ bài chọn cùng lúc hai yêu cầu dùng chung một món đổi thì chỉ một bên thành công, bên còn lại nhận `409 REQUEST_OFFERED_ITEM_IN_OTHER_TRANSACTION`.
+- Database có unique index có điều kiện `ux_requests_active_offered_item` trên `requests(offered_item_id)` cho các giao dịch từ `RESERVED` tới `DISPUTED`.
+- Mọi vi phạm ràng buộc duy nhất lọt tới tầng API trả `409 CONFLICT` với câu "Thao tác vừa được thực hiện ở nơi khác. Vui lòng tải lại trang." và log lỗi gốc ở mức WARN.
+
+## Giới hạn giao dịch đang chạy của người nhận (C4)
+
+Khoá cấu hình `max_active_transactions` (mặc định 5) đếm giao dịch của người đó ở vai người nhận với trạng thái `RESERVED`, `AWAITING_LOGISTICS`, `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER`.
+
+- `POST /items/{id}/requests`: đủ ngưỡng thì `409 REQUEST_TOO_MANY_ACTIVE_TRANSACTIONS` ("Bạn đang có N giao dịch chưa xong. Hoàn tất bớt rồi gửi thêm yêu cầu").
+- `POST /requests/{id}/select`: người nhận đủ ngưỡng thì `409 REQUEST_RECEIVER_TOO_BUSY` ("Người này đang có quá nhiều giao dịch chưa xong").
+- `RequestResponse.flags` của yêu cầu `PENDING` có thêm `RECEIVER_TOO_BUSY` để chủ bài biết trước khi bấm chọn.
+
+## Chống gửi rồi huỷ liên tục (C5)
+
+- Người nhận tự huỷ yêu cầu đang chờ (`POST /requests/{id}/cancel`) thì phải chờ `request_resend_cooldown_hours` giờ (mặc định 24) mới gửi lại cho đúng bài đó. Gửi sớm hơn trả `409 REQUEST_RESEND_COOLDOWN` ("Bạn vừa huỷ yêu cầu cho bài này. Có thể gửi lại sau HH:mm dd/MM"), kèm `details.canResendAt`. Chỉ lần tự huỷ của người nhận mới tính, huỷ do hệ thống (bài hết hạn, bị ẩn, khoá tài khoản) thì không.
+- Yêu cầu tự huỷ trong vòng `request_quiet_cancel_minutes` phút (mặc định 5) sau khi gửi thì không gửi `REQUEST_CANCELLED` cho chủ bài, và thông báo `NEW_REQUEST` của yêu cầu đó được đánh dấu đã đọc (không xoá). Lần huỷ này vẫn tính thời gian chờ gửi lại.
+
+## Độ dài lý do huỷ (E2)
+
+Cột `requests.cancel_reason` dài 600 ký tự (đủ cho lý do 500 ký tự của huỷ giao dịch, huỷ của Admin và sự cố giao nhận cộng tiền tố người huỷ). Lý do "Từ chối giao nhận" vẫn cho nhập tới 1000 ký tự: toàn văn lưu ở báo cáo (cột `reports.description`), còn `cancel_reason` chỉ lưu bản rút gọn ở ranh giới từ kèm "…". Việc rút gọn nằm ở `Request.cancel`, nên mọi đường ghi lý do huỷ đều được bảo vệ.
+
+## Giảm số lượt gọi API (G2)
+
+- `GET /api/v1/me/received-requests?status=A,B` (cần đăng nhập): mọi yêu cầu gửi tới các bài của người gọi trong một lần, mới nhất trước, cùng dạng `RequestResponse` như `GET /items/{id}/requests` (tên và uy tín người xin tra một lần cho mỗi người). `status` tuỳ chọn, nhiều giá trị cách nhau bằng dấu phẩy hoặc lặp tham số, bỏ trống là mọi trạng thái. Trang Tin nhắn dùng endpoint này thay cho gọi từng bài.
+- `GET /admin/requests`: các bộ lọc `status`, `type`, `deliveryMethod`, `from`, `to` và việc sắp xếp, chia trang chạy trong SQL, chỉ dựng dòng cho trang hiện tại. Riêng `q` (khớp tên bài, tên người) và `stuck` (khoá tài khoản, giờ hẹn) vẫn lọc trong bộ nhớ vì dữ liệu nằm ở module khác. Contract và kết quả không đổi.
+
+
+---
+
+# Đợt 3 (23/11/2026): huỷ có xác nhận, dời lịch, nhắc hạn, giao hàng hai chiều
+
+Các mục 16 đến 21 mô tả chi tiết luật đã ghi ở mục 10, 14, 15 và bảng vòng đời phía trên. Không thêm giá trị vào `RequestStatus`, mọi thứ lưu bằng cột trong `requests`.
+
+## 16. Đề nghị huỷ có xác nhận (GN-06)
+
+Cột: `cancel_requested_by`, `cancel_requested_at`, `cancel_request_code`, `cancel_request_reason` (tối đa 500 ký tự). Mã lý do (`CancelRequestCode`, nhãn tiếng Việt do backend giữ):
+
+| Mã | Nhãn | Dùng khi |
+|---|---|---|
+| `BUSY` | Tôi bận đột xuất | Trước giờ hẹn |
+| `NO_LONGER_NEEDED` | Tôi không còn nhu cầu | Trước giờ hẹn |
+| `OTHER` | Lý do khác | Cả hai, bắt buộc có chữ từ 5 ký tự |
+| `COUNTERPART_NO_SHOW` | Bên kia không đến điểm hẹn | Từ giờ hẹn, Gặp trực tiếp |
+| `COUNTERPART_NOT_SHIPPED` | Bên kia chưa gửi hàng | Giao hàng quá hạn gửi |
+| `CANNOT_CONTACT` | Không liên hệ được với bên kia | Từ giờ hẹn |
+
+- `POST /api/v1/requests/{id}/cancel-request` body `{code, reason?}`: đề nghị huỷ **trước giờ hẹn** (Giao hàng: khi chưa chiều nào Đã gửi). Giao dịch chưa huỷ, bên kia được báo "<Tên> đề nghị huỷ giao dịch vì <lý do>. Bạn có đồng ý không? Hạn phản hồi <giờ>". Từ giờ hẹn trả `409 REQUEST_INVALID_STATE_TRANSITION`, mã lý do không hợp lệ trả `400 REQUEST_CANCEL_REASON_INVALID`, đã có đề nghị trả `409 REQUEST_CANCEL_REQUEST_PENDING`.
+- `POST /requests/{id}/handover-failed` body `{code?, reason?, evidenceMediaIds?}` **đổi nghĩa**: trước giờ hẹn trả `409 REQUEST_BEFORE_MEETING_TIME`. Bên kia chưa bấm hoàn tất thì tạo đề nghị huỷ như trên (Giao hàng xem mục 18). Bên kia đã bấm hoàn tất thì giữ nhánh cũ: `DISPUTED` ngay và mở khiếu nại sự cố giao nhận. `reason` bắt buộc từ 5 ký tự khi `code` bỏ trống hoặc là `OTHER`.
+- `POST /requests/{id}/cancel-request/accept`: bên kia đồng ý, giao dịch `CANCELLED`, không phạt ai, nhả bài chính và món đổi (`ItemService.releaseAfterCancel`), báo hai bên.
+- `POST /requests/{id}/cancel-request/reject` body `{explanation, evidenceMediaIds?}`: không đồng ý, giải trình 5 đến 500 ký tự bắt buộc, ảnh không bắt buộc. Giao dịch sang `DISPUTED` và mở khiếu nại gồm lý do của hai bên (người đề nghị là người khiếu nại). Lý do khiếu nại là `NO_SHOW` khi đề nghị tố bên kia (`COUNTERPART_NO_SHOW`, `COUNTERPART_NOT_SHIPPED`, `CANNOT_CONTACT`), là `OTHER` khi không tố ai (`BUSY`, `NO_LONGER_NEEDED`, `OTHER`). Bên từ chối không bao giờ bị trừ sao chỉ vì từ chối, xem mục 14.
+- `DELETE /requests/{id}/cancel-request`: người đề nghị rút lại trước khi bên kia phản hồi.
+- Im lặng quá `cancel_request_response_hours` giờ (mặc định 24): job huỷ như "Đồng ý". Riêng lý do `COUNTERPART_NO_SHOW` hoặc `COUNTERPART_NOT_SHIPPED` thì sau khi huỷ tự mở báo cáo không đến hẹn nhắm vào bên im lặng cho Admin xem, không tự trừ sao.
+- Bên kia bấm đã giao nhận xong khi có đề nghị huỷ đang chờ thì coi như không đồng ý (`DISPUTED`). Người đề nghị không bấm hoàn tất được khi còn đề nghị. Không có đồng thời đề nghị huỷ và đề nghị dời lịch (`409 REQUEST_RESCHEDULE_PENDING` hoặc `REQUEST_CANCEL_REQUEST_PENDING`).
+- `GET /api/v1/admin/anomalies` có thêm `repeatedCancelers`, `cancelWindowDays`, `cancelThreshold`: người đề nghị huỷ từ `cancel_after_contact_alert_count` lần (mặc định 3) trong `cancel_after_contact_window_days` ngày (mặc định 30) sau khi đã thấy liên hệ và giao dịch đã huỷ vì đề nghị đó. Chỉ để Admin xem, không tự phạt.
+
+## 17. Giới hạn giờ hẹn và dời lịch (GN-11)
+
+- Giờ hẹn (Giao hàng: ngày gửi hàng dự kiến) xa nhất `meeting_max_days_ahead` ngày (mặc định 7) tính từ lúc đề xuất, kiểm ở `POST /schedule` và `POST /reschedule`. Vượt thì `400 REQUEST_SCHEDULE_TOO_FAR` với câu "Chỉ hẹn trong vòng <N> ngày tới".
+- `POST /api/v1/requests/{id}/reschedule` body `{meetingTime, meetingPlace?}`: đề xuất giờ mới sau khi đã chốt. `POST .../reschedule/accept` và `POST .../reschedule/reject`: bên kia trả lời. Đồng ý thì đổi lịch, liên hệ vẫn mở, hai bên không cam kết lại, `reschedule_count` tăng. Từ chối hoặc hết hạn thì giữ lịch cũ. Hết hạn ở thời điểm sớm hơn giữa giờ hẹn cũ và lúc đề xuất cộng `cancel_request_response_hours` (Giao hàng chỉ tính theo hạn phản hồi).
+- Tối đa `reschedule_max_count` lần (mặc định 2), chỉ tính lần được đồng ý, vượt thì `409 REQUEST_RESCHEDULE_LIMIT_REACHED`. Không dời được khi đã qua giờ hẹn, đã có bên bấm hoàn tất hoặc có chiều Đã gửi (`409 REQUEST_RESCHEDULE_NOT_ALLOWED`).
+- Cột: `reschedule_proposed_by`, `reschedule_proposed_at`, `reschedule_meeting_time`, `reschedule_meeting_place`, `reschedule_count`.
+- **Giao dịch kẹt (GN-12)**: Gặp trực tiếp qua giờ hẹn 24 giờ mà chưa ai bấm gì thì nhắc cả hai một lần (`HANDOVER_STALE_REMINDER`), qua `confirmed_stale_cancel_days` ngày (mặc định 3) thì tự huỷ, không phạt, nhả bài, báo hai bên. Giao hàng tính từ hạn gửi, xem mục 18.
+
+## 18. Giao hàng hai chiều (GN-12)
+
+Chiều 1: món chính, chủ bài gửi cho người nhận. Chiều 2: món đổi, người nhận gửi cho chủ bài, chỉ có ở Trao đổi. Cho tặng qua Giao hàng chỉ có chiều 1. Mỗi chiều có ba bước Chờ gửi, Đã gửi, Đã nhận. Ý nghĩa cột cũ khi Giao hàng: `receiver_handover_at` là người nhận đã nhận món chính (chiều 1), `donor_handover_at` là chủ bài đã nhận món đổi (chiều 2).
+
+- Cột mới: `receiver_address`, `donor_address` (tối đa 255 ký tự), `donor_shipped_at`, `donor_tracking_code`, `receiver_shipped_at`, `receiver_tracking_code`. Migration chép `meeting_place` sang `receiver_address` cho giao dịch Giao hàng cũ, không tự suy ngày gửi.
+- `POST /requests/{id}/schedule`: `meetingPlace` chỉ bắt buộc khi `IN_PERSON`, thêm `shippingAddress` (địa chỉ nhận hàng của chính người gọi). `POST /confirm-logistics` thêm `shippingAddress`. Cho tặng chỉ cần địa chỉ người nhận, Trao đổi cần cả hai, thiếu thì `400 REQUEST_SHIPPING_ADDRESS_REQUIRED`. Đổi địa chỉ của mình trước khi chốt thì xác nhận của bên kia bị xoá. Với Giao hàng, `meetingTime` là "Ngày gửi hàng dự kiến" và `meetingPlace` không dùng.
+- **Địa chỉ chỉ hiện cho bên kia sau khi chốt lịch** (giống thông tin liên hệ), địa chỉ của chính mình luôn hiện. `receiverAddressProvided` và `donorAddressProvided` luôn cho biết đã nhập hay chưa, kể cả khi nội dung bị ẩn. Admin thấy đủ.
+- `POST /api/v1/requests/{id}/shipment` body `{trackingCode, mediaIds?}`: bên gửi báo đã gửi, mã vận đơn 3 đến 50 ký tự (`400 REQUEST_TRACKING_CODE_INVALID`), ảnh biên nhận không bắt buộc (ảnh riêng tư, gắn bằng `MediaService.attachPrivate`, xem qua `GET /requests/{id}/media/{mediaId}`). Lần gửi đầu chuyển `LOGISTICS_CONFIRMED` sang `AWAITING_HANDOVER`. Đã gửi rồi thì `409 REQUEST_LEG_ALREADY_SHIPPED`, không có chiều để gửi thì `409 REQUEST_LEG_NOT_APPLICABLE`. Nếu bên nhận đang có đề nghị huỷ "chưa gửi hàng" cho đúng chiều này thì đề nghị tự rút. Không tích hợp đơn vị vận chuyển, không tra mã vận đơn.
+- `POST /requests/{id}/confirm-handover` khi Giao hàng nghĩa là "Tôi đã nhận được hàng" cho chiều mình nhận, chỉ sau khi chiều đó Đã gửi (`409 REQUEST_LEG_NOT_SHIPPED`). Hoàn tất khi mọi chiều cần có đều Đã nhận.
+- `handover-failed` khi Giao hàng, tính theo chiều người báo nhận: chiều Đã gửi, hoặc chiều kia đã Đã nhận, thì `DISPUTED` ngay (nội dung ghi chiều nào và mã vận đơn, bên kia có `response_window_hours` giờ giải trình). Chiều chưa gửi và chưa quá hạn gửi thì `409 REQUEST_SEND_DEADLINE_NOT_PASSED` ("Bên kia chưa gửi hàng, hạn gửi đến <ngày>"). Chiều chưa gửi và quá hạn gửi thì tạo đề nghị huỷ `COUNTERPART_NOT_SHIPPED`. Câu huỷ ghi rõ "Món <tên> đã được gửi, hai bên liên hệ để hoàn trả" khi chiều kia đã gửi.
+- `refuse-handover` dùng được cho bên nhận của mỗi chiều sau khi chiều đó Đã gửi.
+- Hạn gửi mỗi chiều = ngày gửi dự kiến cộng `shipping_send_deadline_days` (mặc định 3), trả ở `sendDeadlineAt`.
+- Việc nền: tự ghi nhận Đã nhận cho chiều đã gửi mà bên nhận im lặng `auto_confirm_days_shipping` ngày kể từ lúc gửi (chiều chưa gửi không bao giờ tự hoàn tất, đủ chiều thì hoàn tất với `autoConfirmed`). Chưa chiều nào gửi mà quá hạn gửi cộng `confirmed_stale_cancel_days` ngày thì tự huỷ. Một chiều đã nhận, chiều còn lại chưa gửi quá mốc đó thì chuyển `DISPUTED` và mở báo cáo `NO_SHOW` nhắm vào bên chưa gửi (không tự huỷ, không tự trừ sao).
+
+## 19. Các trường mới của RequestResponse (JSON phẳng)
+
+Bốn nhóm gộp bằng `@JsonUnwrapped`, tên trường nằm cùng cấp với trường cũ (trường cũ không đổi):
+
+- Đề nghị huỷ đang chờ: `cancelRequestedBy`, `cancelRequestedAt`, `cancelRequestCode`, `cancelRequestLabel`, `cancelRequestReason`.
+- Dời lịch: `rescheduleProposedBy`, `rescheduleProposedAt`, `rescheduleMeetingTime`, `rescheduleMeetingPlace`, `rescheduleCount`.
+- Giao hàng: `receiverAddress`, `donorAddress`, `receiverAddressProvided`, `donorAddressProvided`, `donorShippedAt`, `donorTrackingCode`, `receiverShippedAt`, `receiverTrackingCode`.
+- Mốc hạn do backend tính (GN-13): `autoCancelAt`, `autoConfirmAt`, `cancelRequestExpiresAt`, `rescheduleExpiresAt`, `sendDeadlineAt` (chỉ Giao hàng), `leg1AutoReceiveAt`, `leg2AutoReceiveAt`. Giữ `complaintDeadline`. FE không tự cộng ngày.
+
+`GET /api/v1/admin/requests/{id}` thêm `cancelRequest` (`state`: `PENDING`, `ACCEPTED`, `REJECTED`), `reschedule`, `shippingLegs` (mỗi chiều có địa chỉ, ngày gửi, mã vận đơn, ngày nhận, bước), `deadlines` (cùng bảy mốc ở trên) và `autoConfirmed`. Dòng thời gian thêm các mốc đề nghị huỷ, dời lịch, gửi và nhận. `GET /api/v1/admin/requests` thêm `labels` ("Đang chờ phản hồi đề nghị huỷ", "Chờ gửi hàng", "Một bên đã nhận", "Quá hạn gửi hàng") và hai bộ lọc `pendingCancel`, `sendOverdue`.
+
+## 20. Mã lỗi mới
+
+`REQUEST_BEFORE_MEETING_TIME`, `REQUEST_CANCEL_REQUEST_PENDING`, `REQUEST_CANCEL_REQUEST_NOT_FOUND`, `REQUEST_CANCEL_REASON_INVALID`, `REQUEST_SCHEDULE_TOO_FAR`, `REQUEST_RESCHEDULE_LIMIT_REACHED`, `REQUEST_RESCHEDULE_NOT_ALLOWED`, `REQUEST_RESCHEDULE_PENDING`, `REQUEST_RESCHEDULE_NOT_FOUND`, `REQUEST_SHIPPING_ADDRESS_REQUIRED`, `REQUEST_LEG_NOT_SHIPPED`, `REQUEST_LEG_ALREADY_SHIPPED`, `REQUEST_LEG_NOT_APPLICABLE`, `REQUEST_TRACKING_CODE_INVALID`, `REQUEST_SEND_DEADLINE_NOT_PASSED`, `REQUEST_NOT_SHIPPING`, `REQUEST_ITEM_OUTCOMES_REQUIRED` (xem `docs/api/report.md`). Module report thêm `REPORT_PENALIZED_USER_INVALID`.
+
+## 21. Khoá dòng
+
+Các thao tác mới và các hàm đổi trạng thái sau khi chốt lịch (đề nghị huỷ, dời lịch, gửi hàng, `confirm-handover`, `handover-failed`, các việc nền) đọc giao dịch bằng `RequestRepository.findByIdForUpdate` (khoá `PESSIMISTIC_WRITE`) để hai bên bấm cùng lúc không đè nhau: đúng một thao tác thắng, thao tác còn lại nhận 409.

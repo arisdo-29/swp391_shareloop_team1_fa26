@@ -178,7 +178,6 @@ class ReputationServiceTest {
             assertThat(summary.userId()).isNull();
             assertThat(summary.trustStars()).isEqualTo(5);
             assertThat(summary.rank()).isEqualTo(Rank.BRONZE);
-            assertThat(summary.asDescribedRate()).isNull();
         }
 
         @Test
@@ -189,46 +188,18 @@ class ReputationServiceTest {
             assertThat(summary.userId()).isEqualTo(123L);
             assertThat(summary.trustStars()).isEqualTo(5);
             assertThat(summary.rank()).isEqualTo(Rank.BRONZE);
-            assertThat(summary.asDescribedRate()).isNull();
         }
 
         @Test
         void getReputationSummary_whenUserFoundInRepo_returnsReputationDataWithCalculatedRank() {
             UserReputation userRep = new UserReputation(123L, (short) 4, 350, Rank.BRONZE);
             when(userReputationRepository.findById(123L)).thenReturn(Optional.of(userRep));
-            when(userReputationRepository.countRatedCompletedAsDonor(123L)).thenReturn(4L);
-            when(userReputationRepository.calculateAsDescribedRate(123L)).thenReturn(96.5);
 
             ReputationSummary summary = service.getReputationSummary(123L);
 
             assertThat(summary.userId()).isEqualTo(123L);
             assertThat(summary.trustStars()).isEqualTo(4);
             assertThat(summary.rank()).isEqualTo(Rank.GOLD);
-            // Cùng thang 0–1 với /me/reputation và docs/api/request.md
-            assertThat(summary.asDescribedRate()).isEqualTo(0.965);
-        }
-
-        @ParameterizedTest
-        @ValueSource(longs = {0L, 1L, 2L})
-        @DisplayName("Dưới 3 giao dịch đã đánh giá thì chưa hiện tỉ lệ đúng mô tả (SRS 6.12)")
-        void getReputationSummary_whenFewerThanThreeRated_returnsNullRate(long rated) {
-            when(userReputationRepository.findById(123L))
-                    .thenReturn(Optional.of(new UserReputation(123L, (short) 5, 0, Rank.BRONZE)));
-            when(userReputationRepository.countRatedCompletedAsDonor(123L)).thenReturn(rated);
-            when(userReputationRepository.calculateAsDescribedRate(123L)).thenReturn(50.0);
-
-            assertThat(service.getReputationSummary(123L).asDescribedRate()).isNull();
-        }
-
-        @Test
-        @DisplayName("Đủ đúng 3 giao dịch đã đánh giá thì hiện tỉ lệ")
-        void getReputationSummary_whenExactlyThreeRated_returnsRate() {
-            when(userReputationRepository.findById(123L))
-                    .thenReturn(Optional.of(new UserReputation(123L, (short) 5, 0, Rank.BRONZE)));
-            when(userReputationRepository.countRatedCompletedAsDonor(123L)).thenReturn(3L);
-            when(userReputationRepository.calculateAsDescribedRate(123L)).thenReturn(100.0);
-
-            assertThat(service.getReputationSummary(123L).asDescribedRate()).isEqualTo(1.0);
         }
 
         @Test
@@ -250,7 +221,6 @@ class ReputationServiceTest {
             assertThat(summary.userId()).isEqualTo(999L);
             assertThat(summary.trustStars()).isEqualTo(5);
             assertThat(summary.rank()).isEqualTo(Rank.BRONZE);
-            assertThat(summary.asDescribedRate()).isNull();
         }
     }
 
@@ -377,7 +347,7 @@ class ReputationServiceTest {
                     .notify(
                             eq(donorId),
                             eq("POINTS_AWARDED"),
-                            eq("Bạn được cộng 10 điểm uy tín"),
+                            eq("Bạn được cộng 10 điểm tích luỹ"),
                             org.mockito.ArgumentMatchers.contains("lên hạng Bạc"),
                             eq("/profile?tab=reputation"));
             verify(notificationService)
@@ -391,7 +361,7 @@ class ReputationServiceTest {
                     .notify(
                             eq(receiverId),
                             eq("POINTS_AWARDED"),
-                            eq("Bạn được cộng 2 điểm uy tín"),
+                            eq("Bạn được cộng 2 điểm tích luỹ"),
                             org.mockito.ArgumentMatchers.contains("Tổng điểm hiện tại: 2"),
                             eq("/profile?tab=reputation"));
         }
@@ -581,8 +551,6 @@ class ReputationServiceTest {
             Long userId = 1L;
             UserReputation user = new UserReputation(userId, (short) 4, 320, Rank.GOLD);
             when(userReputationRepository.findById(userId)).thenReturn(Optional.of(user));
-            when(userReputationRepository.countRatedCompletedAsDonor(userId)).thenReturn(25L);
-            when(userReputationRepository.calculateAsDescribedRate(userId)).thenReturn(92.0);
 
             ActivityLogDto logDto = new ActivityLogDto(
                     101L,
@@ -606,7 +574,6 @@ class ReputationServiceTest {
             assertThat(res.totalPoints()).isEqualTo(320);
             assertThat(res.rank()).isEqualTo(Rank.GOLD);
             assertThat(res.trustStars()).isEqualTo(4);
-            assertThat(res.accuracyRate()).isEqualTo(0.92);
             assertThat(res.history().getContent()).hasSize(1);
             assertThat(res.history().getContent().get(0).delta()).isEqualTo(10);
             assertThat(res.history().getContent().get(0).reason())
@@ -614,15 +581,16 @@ class ReputationServiceTest {
             // GOLD 320 điểm, ngưỡng DIAMOND 600 → còn thiếu 280 điểm
             assertThat(res.nextRank()).isEqualTo(Rank.DIAMOND);
             assertThat(res.pointsToNextRank()).isEqualTo(280);
+            assertThat(res.currentRankMinPoints()).isEqualTo(300);
+            assertThat(res.nextRankMinPoints()).isEqualTo(600);
         }
 
         @Test
-        @DisplayName("Người dùng chưa có giao dịch nào trả về accuracyRate = null và lịch sử rỗng")
-        void getMyReputation_noTransactions_returnsNullAccuracyRate() {
+        @DisplayName("Người dùng chưa có giao dịch nào trả về lịch sử rỗng")
+        void getMyReputation_noTransactions_returnsEmptyHistory() {
             Long userId = 2L;
             UserReputation user = new UserReputation(userId, (short) 5, 0, Rank.BRONZE);
             when(userReputationRepository.findById(userId)).thenReturn(Optional.of(user));
-            when(userReputationRepository.calculateAsDescribedRate(userId)).thenReturn(null);
             when(activityLogQueryService.search(eq(userId), eq("POINTS"), any(), any(), eq(0), eq(20)))
                     .thenReturn(Page.empty());
 
@@ -631,8 +599,25 @@ class ReputationServiceTest {
             assertThat(res.totalPoints()).isEqualTo(0);
             assertThat(res.rank()).isEqualTo(Rank.BRONZE);
             assertThat(res.trustStars()).isEqualTo(5);
-            assertNull(res.accuracyRate());
+            assertThat(res.currentRankMinPoints()).isZero();
             assertThat(res.history().getContent()).isEmpty();
+        }
+
+        @Test
+        void getMyReputation_highestRankHasNoNextThreshold() {
+            Long userId = 3L;
+            UserReputation user = new UserReputation(userId, (short) 5, 650, Rank.DIAMOND);
+            when(userReputationRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(activityLogQueryService.search(eq(userId), eq("POINTS"), any(), any(), eq(0), eq(20)))
+                    .thenReturn(Page.empty());
+
+            MyReputationResponse res = service.getMyReputation(userId, 0, 20);
+
+            assertThat(res.rank()).isEqualTo(Rank.DIAMOND);
+            assertThat(res.currentRankMinPoints()).isEqualTo(600);
+            assertNull(res.nextRank());
+            assertNull(res.nextRankMinPoints());
+            assertNull(res.pointsToNextRank());
         }
 
         @Test
@@ -686,9 +671,9 @@ class ReputationServiceTest {
 
             assertThat(donor.getTotalPoints()).isEqualTo(20);
             assertThat(receiver.getTotalPoints()).isEqualTo(10);
-            // Không cộng điểm nhưng vẫn là giao dịch sạch
-            assertThat(donor.getCleanStreak()).isEqualTo(1);
-            assertThat(receiver.getCleanStreak()).isEqualTo(1);
+            // Không cộng điểm và cũng không tính vào chuỗi sạch (F4)
+            assertThat(donor.getCleanStreak()).isZero();
+            assertThat(receiver.getCleanStreak()).isZero();
 
             @SuppressWarnings("unchecked")
             ArgumentCaptor<Map<String, Object>> data = ArgumentCaptor.forClass(Map.class);

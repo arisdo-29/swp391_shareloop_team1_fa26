@@ -7,15 +7,19 @@ import {
 } from '../../services/requestApi';
 import type { ApiError } from '../../services/http';
 import { canSchedule, formatDateTime } from '../../utils/request';
+import { usePublicConfig } from '../../utils/usePublicConfig';
+import { ReschedulePanel } from './ReschedulePanel';
+import { ownShippingAddress, partnerAddressProvided, partnerNeedsAddress, viewerNeedsOwnAddress } from '../../utils/shipping';
 import {
   canConfirmMeetingSchedule,
+  hasConfirmedMeetingSchedule,
+  maximumMeetingTimeValue,
   minimumMeetingTimeValue,
   parseLocalMeetingTime,
   scheduleApiErrorMessage,
   toLocalMeetingTimeValue,
   validateLocalMeetingTime,
   validateMeetingPlace,
-  validateStoredMeetingTime,
 } from '../../utils/meetingSchedule';
 
 interface ScheduleCardProps {
@@ -31,21 +35,30 @@ interface ScheduleCardProps {
  * hiện thời gian, địa điểm và nút xem số điện thoại.
  */
 export function ScheduleCard(props: ScheduleCardProps) {
-  const { request } = props;
+  const { request, currentUserId, viewerIsDonor } = props;
   const editable = canSchedule(request.status) && !request.contactRevealedAt;
   if (!editable && !request.meetingTime && !request.meetingPlace) return null;
+
+  const currentPartyWaiverAt = viewerIsDonor ? request.donorWaiverAt : request.receiverWaiverAt;
+  const scheduleKey = JSON.stringify([
+    request.id, currentUserId, request.meetingTime, request.meetingPlace,
+    request.deliveryMethod, currentPartyWaiverAt,
+  ]);
 
   return (
     <section className="card space-y-4 p-5 sm:p-6" aria-labelledby="meeting-title">
       <h2 id="meeting-title" className="section-title">
         Lịch giao nhận
       </h2>
-      {editable ? <ScheduleForm {...props} /> : <ScheduleSummary {...props} />}
+      {editable ? (
+        <ScheduleForm key={scheduleKey} {...props} currentPartyWaiverAt={currentPartyWaiverAt} />
+      ) : <ScheduleSummary {...props} />}
     </section>
   );
 }
 
-function ScheduleSummary({ request, currentUserId }: ScheduleCardProps) {
+function ScheduleSummary(props: ScheduleCardProps) {
+  const { request, currentUserId } = props;
   const [contact, setContact] = useState<RequestContactResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -66,15 +79,31 @@ function ScheduleSummary({ request, currentUserId }: ScheduleCardProps) {
     <>
       <dl className="grid gap-3 text-sm sm:grid-cols-2">
         <div>
-          <dt className="label">Thời gian</dt>
+          <dt className="label">{request.deliveryMethod === 'SHIPPING' ? 'Ngày gửi hàng dự kiến' : 'Thời gian'}</dt>
           <dd>{request.meetingTime ? formatDateTime(request.meetingTime) : 'Chưa có'}</dd>
         </div>
-        <div>
-          <dt className="label">
-            {request.deliveryMethod === 'SHIPPING' ? 'Địa chỉ nhận hàng' : 'Địa điểm'}
-          </dt>
-          <dd className="break-words">{request.meetingPlace || 'Chưa có'}</dd>
-        </div>
+        {request.deliveryMethod === 'SHIPPING' ? null : (
+          <div>
+            <dt className="label">Địa điểm</dt>
+            <dd className="break-words">{request.meetingPlace || 'Chưa có'}</dd>
+          </div>
+        )}
+        {request.deliveryMethod === 'SHIPPING' ? (
+          <>
+            {request.receiverAddress ? (
+              <div>
+                <dt className="label">Địa chỉ nhận hàng của người nhận</dt>
+                <dd className="break-words">{request.receiverAddress}</dd>
+              </div>
+            ) : null}
+            {request.donorAddress ? (
+              <div>
+                <dt className="label">Địa chỉ nhận hàng của chủ bài</dt>
+                <dd className="break-words">{request.donorAddress}</dd>
+              </div>
+            ) : null}
+          </>
+        ) : null}
       </dl>
       {request.contactRevealedAt ? (
         contact ? (
@@ -90,6 +119,7 @@ function ScheduleSummary({ request, currentUserId }: ScheduleCardProps) {
         )
       ) : null}
       {error ? <Alert tone="error">{error}</Alert> : null}
+      <ReschedulePanel {...props} />
     </>
   );
 }
@@ -100,22 +130,21 @@ function ScheduleForm({
   viewerIsDonor,
   partnerName,
   onUpdated,
-}: ScheduleCardProps) {
-  const [deliveryMethod, setDeliveryMethod] = useState<'IN_PERSON' | 'SHIPPING'>('IN_PERSON');
-  const [meetingPlace, setMeetingPlace] = useState('');
-  const [meetingTime, setMeetingTime] = useState('');
-  const [agreeToWaiver, setAgreeToWaiver] = useState(false);
+  currentPartyWaiverAt,
+}: ScheduleCardProps & { currentPartyWaiverAt?: string }) {
+  const [deliveryMethod, setDeliveryMethod] = useState<'IN_PERSON' | 'SHIPPING'>(
+    request.deliveryMethod === 'SHIPPING' ? 'SHIPPING' : 'IN_PERSON',
+  );
+  const [meetingPlace, setMeetingPlace] = useState(request.meetingPlace ?? '');
+  const [shippingAddress, setShippingAddress] = useState(ownShippingAddress(request, viewerIsDonor));
+  const [meetingTime, setMeetingTime] = useState(
+    () => request.meetingTime ? toLocalMeetingTimeValue(request.meetingTime) : '',
+  );
+  const [agreeToWaiver, setAgreeToWaiver] = useState(Boolean(currentPartyWaiverAt));
   const [now, setNow] = useState(() => new Date());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-
-  // Lịch đã lưu đổi (do mình lưu hoặc bên kia lưu) thì đưa form về đúng lịch đó.
-  useEffect(() => {
-    setMeetingTime(request.meetingTime ? toLocalMeetingTimeValue(request.meetingTime) : '');
-    setMeetingPlace(request.meetingPlace ?? '');
-    setDeliveryMethod(request.deliveryMethod === 'SHIPPING' ? 'SHIPPING' : 'IN_PERSON');
-    setAgreeToWaiver(false);
-  }, [request.meetingTime, request.meetingPlace, request.deliveryMethod]);
+  const maxDays = usePublicConfig().meeting_max_days_ahead;
 
   // Cập nhật mốc "bây giờ" mỗi 30 giây để kiểm giờ hẹn không lùi về quá khứ.
   useEffect(() => {
@@ -123,40 +152,52 @@ function ScheduleForm({
     return () => window.clearInterval(intervalId);
   }, []);
 
-  const currentPartyConfirmedAt = viewerIsDonor
-    ? request.donorScheduleOkAt
-    : request.receiverScheduleOkAt;
-  const otherPartyConfirmedAt = viewerIsDonor
-    ? request.receiverScheduleOkAt
-    : request.donorScheduleOkAt;
-  const placeError = validateMeetingPlace(meetingPlace);
-  const timeError = validateLocalMeetingTime(meetingTime, now);
+  const currentPartyConfirmed = hasConfirmedMeetingSchedule(
+    viewerIsDonor ? request.donorScheduleOkAt : request.receiverScheduleOkAt,
+    currentPartyWaiverAt,
+  );
+  const otherPartyConfirmed = hasConfirmedMeetingSchedule(
+    viewerIsDonor ? request.receiverScheduleOkAt : request.donorScheduleOkAt,
+    viewerIsDonor ? request.receiverWaiverAt : request.donorWaiverAt,
+  );
+  const isShipping = deliveryMethod === 'SHIPPING';
+  const needsOwnAddress = isShipping && viewerNeedsOwnAddress(request, viewerIsDonor);
+  // Giao hàng không dùng địa điểm: thay bằng địa chỉ nhận hàng của chính mình khi có chiều nhận (GN-12)
+  const placeError = isShipping ? null : validateMeetingPlace(meetingPlace);
+  const addressError = needsOwnAddress
+    ? shippingAddress.trim().length === 0
+      ? 'Vui lòng nhập địa chỉ nhận hàng của bạn.'
+      : shippingAddress.length > 255
+        ? 'Địa chỉ tối đa 255 ký tự.'
+        : null
+    : null;
+  const timeError = validateLocalMeetingTime(meetingTime, now, maxDays);
   const hasUnsavedSchedule =
-    meetingPlace.trim() !== (request.meetingPlace ?? '').trim() ||
+    (isShipping
+      ? shippingAddress.trim() !== ownShippingAddress(request, viewerIsDonor).trim()
+      : meetingPlace.trim() !== (request.meetingPlace ?? '').trim()) ||
     meetingTime !== (request.meetingTime ? toLocalMeetingTimeValue(request.meetingTime) : '') ||
     deliveryMethod !== request.deliveryMethod;
-  const savedScheduleValid =
-    !validateMeetingPlace(request.meetingPlace ?? '') &&
-    !validateStoredMeetingTime(request.meetingTime, now);
   const canConfirm =
     request.status === 'AWAITING_LOGISTICS' &&
     canConfirmMeetingSchedule({
-      meetingPlace,
+      meetingPlace: isShipping ? (needsOwnAddress ? shippingAddress : 'Giao hàng') : meetingPlace,
       localMeetingTime: meetingTime,
       storedMeetingTime: request.meetingTime,
       agreed: agreeToWaiver,
       hasUnsavedChanges: hasUnsavedSchedule,
       now,
     }) &&
-    savedScheduleValid &&
-    !currentPartyConfirmedAt &&
+    !currentPartyConfirmed &&
     !submitting;
 
   const saveSchedule = async () => {
+    if (!agreeToWaiver || submitting) return;
+
     const checkNow = new Date();
     const parsedMeetingTime = parseLocalMeetingTime(meetingTime);
     const validationError =
-      validateMeetingPlace(meetingPlace) || validateLocalMeetingTime(meetingTime, checkNow);
+      placeError || addressError || validateLocalMeetingTime(meetingTime, checkNow, maxDays);
     if (validationError || !parsedMeetingTime) {
       setNow(checkNow);
       setError(validationError || 'Thời gian giao nhận không hợp lệ.');
@@ -168,9 +209,10 @@ function ScheduleForm({
       onUpdated(
         await requestApi.updateSchedule(request.id, currentUserId, {
           deliveryMethod,
-          meetingPlace: meetingPlace.trim(),
+          meetingPlace: isShipping ? undefined : meetingPlace.trim(),
           meetingTime: parsedMeetingTime.toISOString(),
-          agreeToWaiver,
+          agreeToWaiver: true,
+          shippingAddress: needsOwnAddress ? shippingAddress.trim() : undefined,
         }),
       );
     } catch (caught) {
@@ -185,7 +227,12 @@ function ScheduleForm({
     setSubmitting(true);
     setError('');
     try {
-      onUpdated(await requestApi.confirmLogistics(request.id, currentUserId, { agreeToWaiver }));
+      onUpdated(
+        await requestApi.confirmLogistics(request.id, currentUserId, {
+          agreeToWaiver,
+          shippingAddress: needsOwnAddress ? shippingAddress.trim() : undefined,
+        }),
+      );
     } catch (caught) {
       setError(scheduleApiErrorMessage(caught, 'Không xác nhận được lịch giao nhận.'));
     } finally {
@@ -196,9 +243,9 @@ function ScheduleForm({
   return (
     <div className="space-y-3">
       <p className="text-xs leading-5 text-text-secondary">
-        Một bên lưu lịch, cả hai cùng xác nhận. Khi đó hai bên mới thấy số điện thoại của nhau.
+        Cả hai bên phải đồng ý lịch và cam kết trách nhiệm giao nhận để xem số điện thoại của nhau.
       </p>
-      {otherPartyConfirmedAt ? (
+      {otherPartyConfirmed ? (
         <Alert tone="info">{partnerName} đã xác nhận lịch đang lưu.</Alert>
       ) : null}
       <fieldset className="grid grid-cols-2 gap-2">
@@ -214,7 +261,11 @@ function ScheduleForm({
             type="button"
             aria-pressed={deliveryMethod === value}
             disabled={submitting}
-            onClick={() => setDeliveryMethod(value)}
+            onClick={() => {
+              if (value === deliveryMethod) return;
+              setDeliveryMethod(value);
+              setAgreeToWaiver(false);
+            }}
             className={`flex min-h-11 flex-col gap-0.5 rounded-md border p-2.5 text-left transition disabled:opacity-40 ${deliveryMethod === value ? 'border-primary bg-primary-faint' : 'border-border hover:bg-primary-faint'}`}
           >
             <strong className="text-sm">{label}</strong>
@@ -230,34 +281,64 @@ function ScheduleForm({
         ))}
       </fieldset>
       <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <Field
-            label={deliveryMethod === 'SHIPPING' ? 'Địa chỉ nhận hàng' : 'Địa điểm gặp'}
-            value={meetingPlace}
-            maxLength={255}
-            error={meetingPlace.length >= 255 ? 'Địa điểm tối đa 255 ký tự.' : meetingPlace ? (placeError ?? undefined) : undefined}
-            disabled={submitting}
-            onChange={(event) => {
-              setMeetingPlace(event.target.value);
-              setError('');
-            }}
-          />
-          <p className="mt-1 text-xs text-text-muted">{meetingPlace.length}/255</p>
-        </div>
+        {isShipping ? (
+          needsOwnAddress ? (
+            <div>
+              <Field
+                label="Địa chỉ nhận hàng của bạn"
+                value={shippingAddress}
+                maxLength={255}
+                error={shippingAddress ? (addressError ?? undefined) : undefined}
+                disabled={submitting}
+                onChange={(event) => {
+                  setShippingAddress(event.target.value);
+                  setAgreeToWaiver(false);
+                  setError('');
+                }}
+              />
+              <p className="mt-1 text-xs text-text-muted">{shippingAddress.length}/255</p>
+            </div>
+          ) : null
+        ) : (
+          <div>
+            <Field
+              label="Địa điểm gặp"
+              value={meetingPlace}
+              maxLength={255}
+              error={meetingPlace.length >= 255 ? 'Địa điểm tối đa 255 ký tự.' : meetingPlace ? (placeError ?? undefined) : undefined}
+              disabled={submitting}
+              onChange={(event) => {
+                setMeetingPlace(event.target.value);
+                setAgreeToWaiver(false);
+                setError('');
+              }}
+            />
+            <p className="mt-1 text-xs text-text-muted">{meetingPlace.length}/255</p>
+          </div>
+        )}
         <Field
-          label="Thời gian"
+          label={isShipping ? 'Ngày gửi hàng dự kiến' : 'Thời gian'}
           type="datetime-local"
           value={meetingTime}
           min={minimumMeetingTimeValue(now)}
+          max={maximumMeetingTimeValue(now, maxDays)}
+          hint={`Chỉ hẹn trong vòng ${maxDays} ngày tới.`}
           error={meetingTime ? (timeError ?? undefined) : undefined}
           disabled={submitting}
           onChange={(event) => {
             setMeetingTime(event.target.value);
+            setAgreeToWaiver(false);
             setNow(new Date());
             setError('');
           }}
         />
       </div>
+      {isShipping && partnerNeedsAddress(request, viewerIsDonor) ? (
+        <p className="text-xs leading-5 text-text-secondary">
+          Địa chỉ của {partnerName}: {partnerAddressProvided(request, viewerIsDonor) ? 'Đã nhập' : 'Chưa nhập'}. Địa chỉ
+          chỉ hiện cho bên kia sau khi hai bên chốt lịch.
+        </p>
+      ) : null}
       <label className="flex min-h-11 items-start gap-2 text-xs leading-5 text-text-secondary">
         <input
           type="checkbox"
@@ -276,13 +357,13 @@ function ScheduleForm({
       <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"
-          disabled={submitting || Boolean(placeError) || Boolean(timeError)}
+          disabled={submitting || !agreeToWaiver || Boolean(placeError) || Boolean(addressError) || Boolean(timeError)}
           onClick={() => void saveSchedule()}
         >
           Lưu lịch hẹn
         </Button>
         <Button disabled={!canConfirm} onClick={() => void confirmSchedule()}>
-          {currentPartyConfirmedAt ? 'Đã xác nhận lịch' : 'Xác nhận lịch'}
+          {currentPartyConfirmed && !hasUnsavedSchedule ? 'Đã xác nhận lịch' : 'Xác nhận lịch'}
         </Button>
       </div>
     </div>

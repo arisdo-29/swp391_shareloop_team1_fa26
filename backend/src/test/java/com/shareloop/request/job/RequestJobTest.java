@@ -3,6 +3,7 @@ package com.shareloop.request.job;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.shareloop.request.service.RequestDeadlineJobService;
 import com.shareloop.request.service.RequestJobService;
 import java.time.Clock;
 import java.time.Instant;
@@ -20,6 +21,9 @@ class RequestJobTest {
     @Mock
     private RequestJobService requestJobService;
 
+    @Mock
+    private RequestDeadlineJobService requestDeadlineJobService;
+
     private Clock fixedClock;
     private RequestJob requestJob;
 
@@ -27,7 +31,7 @@ class RequestJobTest {
     void setUp() {
         Instant fixedInstant = Instant.parse("2026-10-16T12:00:00Z");
         fixedClock = Clock.fixed(fixedInstant, ZoneOffset.UTC);
-        requestJob = new RequestJob(requestJobService, fixedClock);
+        requestJob = new RequestJob(requestJobService, requestDeadlineJobService, fixedClock);
     }
 
     @Test

@@ -116,6 +116,8 @@ public class ItemController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) ItemCondition condition,
             @RequestParam(required = false) OfferType offerType,
+            @RequestParam(required = false) @Min(1) Long minPrice,
+            @RequestParam(required = false) @Min(1) Long maxPrice,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "24") @Min(1) @Max(100) int size,
             @RequestParam(defaultValue = "false") boolean boosted,
@@ -137,7 +139,9 @@ public class ItemController {
                 sort,
                 rotationSeed,
                 parseUserId(jwt),
-                viewerKey);
+                viewerKey,
+                minPrice,
+                maxPrice);
     }
 
     // Đường dẫn chuỗi cố định "featured" được Spring ưu tiên hơn mẫu /items/{id}, nên không bị hiểu nhầm là id bài.

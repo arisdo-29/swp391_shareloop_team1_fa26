@@ -8,13 +8,18 @@ import { StepsCard } from '../../components/transaction/StepsCard';
 import { ScheduleCard } from '../../components/transaction/ScheduleCard';
 import { ChangeOfferedItem } from '../../components/transaction/ChangeOfferedItem';
 import { HandoverCard } from '../../components/transaction/HandoverCard';
+import { ShipmentCard } from '../../components/transaction/ShipmentCard';
 import { HandoverMediaCard } from '../../components/transaction/HandoverMediaCard';
 import { ItemSideCard, PartnerCard } from '../../components/transaction/SideCards';
 import { PendingCard } from '../../components/transaction/PendingCard';
+import { DeadlinesCard } from '../../components/transaction/DeadlinesCard';
 import {
+  CancelRequestDialog,
   CancelTransactionDialog,
   DisputeDialog,
-  HandoverIssueDialog,
+  HandoverFailedDialog,
+  RefuseHandoverDialog,
+  RejectCancelRequestDialog,
 } from '../../components/transaction/TransactionDialogs';
 import {
   conversationImage,
@@ -27,13 +32,27 @@ import {
   type ApiConversation,
 } from '../../components/messages/conversation';
 import type { DisputeResponse } from '../../services/reportApi';
-import { toBackendUserId, type RequestResponse } from '../../services/requestApi';
-import { canCancelTransaction, requestStatusLabel } from '../../utils/request';
+import {
+  toBackendUserId,
+  type RequestDispute,
+  type RequestResponse,
+} from '../../services/requestApi';
+import { canCancelTransaction, formatDeadline, requestStatusLabel } from '../../utils/request';
+import { transactionDisputeReasonLabel } from '../../utils/disputeView';
+import { DisputeResponseDialog } from '../../components/DisputeResponseDialog';
 import { requestConversationPath } from '../../utils/chatMessages';
 import { useTransactionDetail } from './useTransactionDetail';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
-type OpenDialog = 'cancel' | 'issue' | 'dispute' | 'report' | null;
+type OpenDialog =
+  | 'cancel'
+  | 'failed'
+  | 'refuse'
+  | 'cancelRequest'
+  | 'rejectCancel'
+  | 'dispute'
+  | 'report'
+  | null;
 
 /** Trang Tiến trình giao dịch (route /messages/:conversationId/progress, conversationId là id Request). */
 export function TransactionProgress() {
@@ -74,6 +93,7 @@ function TransactionProgressView({
   const [openDialog, setOpenDialog] = useState<OpenDialog>(null);
   const [notice, setNotice] = useState('');
   const [disputeReceipt, setDisputeReceipt] = useState<DisputeResponse | null>(null);
+  const [respondingDispute, setRespondingDispute] = useState<RequestDispute | null>(null);
 
   if (loading && !request) {
     return (
@@ -132,14 +152,24 @@ function TransactionProgressView({
           <Alert tone="success">{notice}</Alert>
         </div>
       ) : null}
+      {request.flags?.includes('ITEM_UNDER_REVIEW') ? (
+        <div className="mb-4">
+          <Alert tone="warning">
+            Bài đang bị xem xét vi phạm. Giao dịch vẫn tiếp tục, bạn nên cẩn thận khi bàn giao.
+          </Alert>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-5">
           <StepsCard
             request={request}
+            partnerName={partnerName}
             disputeReceipt={disputeReceipt}
             onOpenDispute={() => setOpenDialog('dispute')}
+            onRespondDispute={setRespondingDispute}
           />
+          <DeadlinesCard request={request} viewerIsDonor={viewerIsDonor} partnerName={partnerName} />
           <PendingCard
             request={request}
             conversation={conversation}
@@ -168,20 +198,36 @@ function TransactionProgressView({
             partnerName={partnerName}
             onUpdated={applyUpdate}
           />
-          <HandoverCard
-            request={request}
-            currentUserId={currentUserId}
-            viewerIsDonor={viewerIsDonor}
-            partnerName={partnerName}
-            onUpdated={applyUpdate}
-            onOpenIssue={() => setOpenDialog('issue')}
-            onNotice={setNotice}
-          />
+          {request.deliveryMethod === 'SHIPPING' ? (
+            <ShipmentCard
+              request={request}
+              currentUserId={currentUserId}
+              viewerIsDonor={viewerIsDonor}
+              partnerName={partnerName}
+              onUpdated={applyUpdate}
+              onOpenFailed={() => setOpenDialog('failed')}
+              onOpenRefuse={() => setOpenDialog('refuse')}
+              onOpenCancelRequest={() => setOpenDialog('cancelRequest')}
+              onOpenRejectCancel={() => setOpenDialog('rejectCancel')}
+            />
+          ) : (
+            <HandoverCard
+              request={request}
+              currentUserId={currentUserId}
+              viewerIsDonor={viewerIsDonor}
+              partnerName={partnerName}
+              onUpdated={applyUpdate}
+              onOpenFailed={() => setOpenDialog('failed')}
+              onOpenRefuse={() => setOpenDialog('refuse')}
+              onOpenCancelRequest={() => setOpenDialog('cancelRequest')}
+              onOpenRejectCancel={() => setOpenDialog('rejectCancel')}
+            />
+          )}
           <HandoverMediaCard request={request} />
           {canCancelTransaction(request.status) ? (
             <section className="space-y-2">
               <Button variant="danger" onClick={() => setOpenDialog('cancel')}>
-                Huỷ giao dịch
+                Hủy giao dịch
               </Button>
               <p className="text-xs leading-5 text-text-secondary">
                 Cần nêu lý do. Bài đăng mở lại cho người khác, không mất phí đăng lần nữa.
@@ -216,12 +262,12 @@ function TransactionProgressView({
           onClose={() => setOpenDialog(null)}
           onStale={reload}
           onCancelled={(updated) =>
-            finishAction(updated, 'Đã huỷ giao dịch. Bài đăng được mở lại cho người khác.')
+            finishAction(updated, 'Đã hủy giao dịch. Bài đăng được mở lại cho người khác.')
           }
         />
       ) : null}
-      {openDialog === 'issue' ? (
-        <HandoverIssueDialog
+      {openDialog === 'failed' ? (
+        <HandoverFailedDialog
           request={request}
           currentUserId={currentUserId}
           itemTitle={title}
@@ -229,10 +275,74 @@ function TransactionProgressView({
           viewerIsDonor={viewerIsDonor}
           onClose={() => setOpenDialog(null)}
           onStale={reload}
-          onReported={(updated) => finishAction(updated, 'Đã gửi báo cáo sự cố giao nhận.')}
-          onCancelled={(updated) =>
-            finishAction(updated, 'Đã huỷ giao dịch. Bài đăng được mở lại cho người khác.')
+          onDone={(updated) =>
+            finishAction(
+              updated,
+              updated.status === 'DISPUTED'
+                ? 'Đã báo sự cố giao nhận. Admin sẽ xác minh.'
+                : `Đã gửi đề nghị huỷ. Đang chờ ${partnerName} phản hồi.`,
+            )
           }
+        />
+      ) : null}
+      {openDialog === 'cancelRequest' ? (
+        <CancelRequestDialog
+          request={request}
+          currentUserId={currentUserId}
+          itemTitle={title}
+          partnerName={partnerName}
+          viewerIsDonor={viewerIsDonor}
+          onClose={() => setOpenDialog(null)}
+          onStale={reload}
+          onDone={(updated) =>
+            finishAction(updated, `Đã gửi đề nghị huỷ. Đang chờ ${partnerName} phản hồi.`)
+          }
+        />
+      ) : null}
+      {openDialog === 'rejectCancel' ? (
+        <RejectCancelRequestDialog
+          request={request}
+          currentUserId={currentUserId}
+          itemTitle={title}
+          partnerName={partnerName}
+          viewerIsDonor={viewerIsDonor}
+          onClose={() => setOpenDialog(null)}
+          onStale={reload}
+          onDone={(updated) =>
+            finishAction(updated, 'Đã gửi giải trình. Giao dịch chuyển sang sự cố giao nhận, chờ Admin xác minh.')
+          }
+        />
+      ) : null}
+      {openDialog === 'refuse' ? (
+        <RefuseHandoverDialog
+          request={request}
+          currentUserId={currentUserId}
+          itemTitle={title}
+          partnerName={partnerName}
+          viewerIsDonor={viewerIsDonor}
+          onClose={() => setOpenDialog(null)}
+          onStale={reload}
+          onDone={(updated) =>
+            finishAction(updated, 'Bạn đã từ chối nhận và gửi báo cáo. Admin đang xem xét.')
+          }
+        />
+      ) : null}
+      {respondingDispute ? (
+        <DisputeResponseDialog
+          disputeId={respondingDispute.id}
+          reasonLabel={transactionDisputeReasonLabel(respondingDispute.reason)}
+          isReport={respondingDispute.id === request.refusalReport?.id}
+          deadlineText={
+            respondingDispute.responseDueAt
+              ? `Hạn giải trình: ${formatDeadline(respondingDispute.responseDueAt)}. Mỗi khiếu nại chỉ giải trình được một lần.`
+              : undefined
+          }
+          onClose={() => setRespondingDispute(null)}
+          onSubmitted={() => {
+            setRespondingDispute(null);
+            setNotice('Đã gửi giải trình. Admin sẽ xem xét.');
+            reload();
+          }}
         />
       ) : null}
       {openDialog === 'dispute' ? (

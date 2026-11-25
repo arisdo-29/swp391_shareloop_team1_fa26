@@ -64,6 +64,10 @@ public class ItemFee extends SliceAudit {
     @Column(name = "boost_started_at")
     private Instant boostStartedAt;
 
+    // Lúc gửi bản sửa của bài đã từng duyệt (B1). Chỉ entity lát cắt này ghi cột; Item không map cột này.
+    @Column(name = "edit_submitted_at")
+    private Instant editSubmittedAt;
+
     protected ItemFee() {}
 
     public Long getId() {
@@ -108,6 +112,34 @@ public class ItemFee extends SliceAudit {
 
     public Instant getBoostStartedAt() {
         return boostStartedAt;
+    }
+
+    public Instant getEditSubmittedAt() {
+        return editSubmittedAt;
+    }
+
+    /** Ghi mốc gửi bản sửa; đang chờ duyệt mà sửa tiếp thì giữ mốc cũ để không mất thời gian đã chờ. */
+    public void markEditSubmitted(Instant submittedAt) {
+        if (editSubmittedAt == null) {
+            this.editSubmittedAt = submittedAt;
+        }
+    }
+
+    public void clearEditSubmitted() {
+        this.editSubmittedAt = null;
+    }
+
+    /**
+     * Cộng thêm một khoảng thời gian vào hạn hiển thị, và vào hạn đẩy nếu đợt đẩy còn chạy tại {@code boostRunningAt}.
+     * Người gọi đã khoá dòng items.
+     */
+    public void addDisplayTime(java.time.Duration extra, Instant boostRunningAt) {
+        if (expireAt != null) {
+            this.expireAt = expireAt.plus(extra);
+        }
+        if (boostedUntil != null && boostedUntil.isAfter(boostRunningAt)) {
+            this.boostedUntil = boostedUntil.plus(extra);
+        }
     }
 
     /** Ghi nhận đang giữ phí; từ CHARGED hoặc RELEASED vẫn giữ lại được (lượt sửa sau). */

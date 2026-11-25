@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAppSelector } from '../../app/hooks';
@@ -127,12 +127,34 @@ describe('trang Giới thiệu', () => {
     expect(screen.getAllByText(/trong 24 giờ sau khi/).length).toBeGreaterThan(0);
   });
 
+  it('mở FAQ hỗ trợ và hiển thị đúng liên kết email', () => {
+    renderAbout();
+
+    const question = screen.getByText(
+      'Tôi cần hỗ trợ hoặc gặp sự cố khi sử dụng ShareLoop thì liên hệ ở đâu?',
+    );
+    const details = question.closest('details');
+    const summary = question.closest('summary');
+    expect(details?.open).toBe(false);
+
+    fireEvent.click(summary!);
+
+    expect(details?.open).toBe(true);
+    expect(screen.getByRole('link', { name: 'support@shareloop.vn' }).getAttribute('href')).toBe(
+      'mailto:support@shareloop.vn',
+    );
+  });
+
   it('không còn các nội dung luật đã bỏ', () => {
     renderAbout();
 
     const pageText = document.body.textContent ?? '';
-    for (const removed of ['7 ngày', 'Được đẩy', 'chính hãng', 'thực phẩm', 'QR']) {
+    for (const removed of ['Được đẩy', 'chính hãng', 'thực phẩm', 'QR']) {
       expect(pageText).not.toContain(removed);
     }
+    // Hạn khiếu nại 7 ngày đã bỏ (nay là 24 giờ). "7 ngày" vẫn hợp lệ cho hạn tự hoàn tất khi giao hàng.
+    expect(pageText).not.toMatch(/khiếu nại trong 7 ngày|7 ngày (để|được) khiếu nại/);
+    // Luật mới (GN-12): Giao hàng tự ghi nhận theo từng chiều, 7 ngày tính từ lúc gửi
+    expect(pageText).toContain('7 ngày kể từ lúc gửi');
   });
 });

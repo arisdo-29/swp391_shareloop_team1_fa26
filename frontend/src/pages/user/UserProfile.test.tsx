@@ -53,7 +53,6 @@ const profile = (overrides: Partial<PublicProfileResponse> = {}): PublicProfileR
   district: 'Bình Thạnh',
   rank: 'GOLD',
   trustStars: 4,
-  asDescribedRate: 0.96,
   completedTransactions: 12,
   joinedAt: '2026-03-01T08:00:00Z',
   ...overrides,
@@ -174,18 +173,18 @@ describe('Trang Hồ sơ công khai', () => {
     expect(screen.getByText('NA')).toBeTruthy();
     expect(screen.getByText('Hạng Vàng')).toBeTruthy();
     expect(screen.getByText('Khu vực: Bình Thạnh')).toBeTruthy();
-    expect(screen.getByText('4 / 5 sao')).toBeTruthy();
+    expect(screen.getAllByRole('img', { name: '4 trên 5 sao' })).toHaveLength(2);
     expect(screen.getByText('12')).toBeTruthy();
-    expect(screen.getByText('96%')).toBeTruthy();
+    expect(screen.queryByText('Đúng mô tả')).toBeNull();
     expect(screen.queryByText(/Credit/)).toBeNull();
     expect(screen.queryByText(/Điểm thưởng/)).toBeNull();
     expect(screen.queryByText('460')).toBeNull();
   });
 
-  it('ẩn ô Đúng mô tả khi asDescribedRate là null và ẩn khu vực khi rỗng', async () => {
+  it('ẩn khu vực khi rỗng', async () => {
     // given
     vi.mocked(userApi.getPublicProfile).mockResolvedValue(
-      profile({ asDescribedRate: null, district: null }),
+      profile({ district: null }),
     );
     mockItems({ ACTIVE: page([]), DONE: page([]) });
 
@@ -194,7 +193,6 @@ describe('Trang Hồ sơ công khai', () => {
     await screen.findByRole('heading', { level: 1, name: 'Nguyễn Văn An' });
 
     // then
-    expect(screen.queryByText('Đúng mô tả')).toBeNull();
     expect(screen.queryByText(/Khu vực:/)).toBeNull();
   });
 

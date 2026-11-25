@@ -25,6 +25,7 @@ import com.shareloop.wallet.mapper.WalletMapper;
 import com.shareloop.wallet.repository.CashTotalsView;
 import com.shareloop.wallet.repository.CreditLedgerRepository;
 import com.shareloop.wallet.repository.CreditTypeTotalView;
+import com.shareloop.wallet.repository.ItemFeeTotalView;
 import com.shareloop.wallet.repository.PaidOrderView;
 import com.shareloop.wallet.repository.PaymentOrderRepository;
 import com.shareloop.wallet.repository.UserTopUpTotalView;
@@ -327,6 +328,32 @@ public class CreditService {
         return applyTopUp(wallet, order);
     }
 
+    /**
+     * Admin đối soát đơn VNPay đã đóng mà tiền đã về: cộng Credit như nạp thường (ledger TOP_UP gắn payment_order_id),
+     * đơn sang SUCCESS và ghi người xử lý. Khoá users rồi payment_orders như IPN, kiểm lại SAU khi khoá nên gọi hai
+     * lần chỉ cộng một lần.
+     *
+     * @throws com.shareloop.common.exception.BusinessException WALLET_PAYMENT_ORDER_NOT_FOUND;
+     *     WALLET_TOPUP_NOT_RECONCILABLE khi đơn không cần đối soát hoặc đã xử lý
+     */
+    public WalletResponse grantReconciledTopUp(long paymentOrderId, long adminId, String note) {
+        long userId = paymentOrderRepository
+                .findUserIdById(paymentOrderId)
+                .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_FOUND));
+        WalletAccount wallet = lockWallet(userId);
+        PaymentOrder order = lockPaymentOrder(paymentOrderId);
+        if (!order.needsReconcile()) {
+            throw new BusinessException(WalletErrorCode.WALLET_TOPUP_NOT_RECONCILABLE);
+        }
+
+        order.markReconciledGranted(adminId, clock.instant(), note);
+        wallet.topUp(order.getCredits());
+        creditLedgerRepository.save(
+                CreditLedgerEntry.topUp(userId, order.getCredits(), wallet.getCreditBalance(), order.getId()));
+        publishWalletUpdate(userId);
+        return walletMapper.toResponse(wallet);
+    }
+
     private WalletResponse applyTopUp(WalletAccount wallet, PaymentOrder order) {
         long userId = order.getUserId();
         if (order.getStatus() == PaymentOrderStatus.SUCCESS) {
@@ -342,6 +369,30 @@ public class CreditService {
                 CreditLedgerEntry.topUp(userId, order.getCredits(), wallet.getCreditBalance(), order.getId()));
         publishWalletUpdate(userId);
         return walletMapper.toResponse(wallet);
+    }
+
+    /**
+     * Tổng phí đăng bài đã trừ của từng bài, tính theo số Credit dương. Bài chưa trừ phí đăng thì không có trong map.
+     * Dùng cho danh sách bài của Admin; chỉ đọc sổ cái.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Long> getPostFeePaidByItem(Collection<Long> itemIds) {
+        Map<Long, Long> paid = new java.util.HashMap<>();
+        if (itemIds == null || itemIds.isEmpty()) {
+            return paid;
+        }
+        for (ItemFeeTotalView view : creditLedgerRepository.sumByItemAndType(itemIds, CreditTxType.POST_FEE)) {
+            paid.put(view.getItemId(), Math.abs(view.getTotal()));
+        }
+        return paid;
+    }
+
+    /** Mọi dòng sổ cái gắn với một bài, cũ nhất trước, cho trang chi tiết bài của Admin. */
+    @Transactional(readOnly = true)
+    public List<WalletTransactionResponse> getLedgerOfItem(long itemId) {
+        return creditLedgerRepository.findByItemIdOrderByIdAsc(itemId).stream()
+                .map(walletMapper::toTransactionResponse)
+                .toList();
     }
 
     /**

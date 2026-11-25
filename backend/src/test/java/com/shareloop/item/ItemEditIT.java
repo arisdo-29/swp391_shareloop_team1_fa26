@@ -63,6 +63,11 @@ class ItemEditIT extends IntegrationTest {
                         .single())
                 .isEqualTo("PENDING_REVIEW");
 
+        assertThat(jdbc.sql("""
+                        SELECT actor_id FROM activity_logs
+                        WHERE target_type = 'ITEM' AND target_id = :id AND type = 'ITEM_EDIT_SUBMITTED'
+                        """).param("id", itemId).query(Long.class).single()).isEqualTo(ownerId);
+
         assertThat(jdbc.sql("SELECT media_id FROM item_media_mappings WHERE item_id = :itemId ORDER BY sort_order")
                         .param("itemId", itemId)
                         .query(Long.class)
@@ -318,6 +323,79 @@ class ItemEditIT extends IntegrationTest {
                         .query(Integer.class)
                         .single())
                 .isZero();
+    }
+
+    @Test
+    void updateItem_whenApprovedItemHasPendingRequests_notifiesRequestersAndCancelsRequestsOfferingIt()
+            throws Exception {
+        // given: bài đang hiển thị có người xin, và chính bài này đang được chủ bài đem đi đổi ở bài khác
+        long ownerId = user("item-edit-owner9@shareloop.local", "0900000771");
+        long receiverId = user("item-edit-receiver9@shareloop.local", "0900000772");
+        long otherDonorId = user("item-edit-other9@shareloop.local", "0900000773");
+        long itemId = approvedItem(ownerId);
+        long otherItemId = approvedItem(otherDonorId);
+        long pendingToItem = pendingRequest(itemId, receiverId, "GIVE");
+        long offeringItem = jdbc.sql("INSERT INTO requests (item_id, receiver_id, offered_item_id, type, status) "
+                        + "VALUES (:itemId, :receiverId, :offeredItemId, 'GIVE', 'PENDING') RETURNING id")
+                .param("itemId", otherItemId)
+                .param("receiverId", ownerId)
+                .param("offeredItemId", itemId)
+                .query(Long.class)
+                .single();
+
+        // when
+        mvc.perform(put("/api/v1/items/{id}", itemId)
+                        .header("Authorization", "Bearer " + jwtService.issue(ownerId, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Tên mới", "Mô tả mới")))
+                .andExpect(status().isOk());
+        entityManager.flush();
+
+        // then: người xin được báo và yêu cầu vẫn chờ; yêu cầu đem bài này đi đổi tự huỷ
+        assertThat(requestStatus(pendingToItem)).isEqualTo("PENDING");
+        assertThat(noticeCount(receiverId, "REQUEST_ITEM_EDITED")).isEqualTo(1);
+        assertThat(requestStatus(offeringItem)).isEqualTo("CANCELLED");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"REJECTED", "PENDING_REVIEW"})
+    void updateItem_whenItemNotApproved_doesNotNotifyRequesters(String itemStatus) throws Exception {
+        // given: bài đang bị từ chối hoặc đang chờ duyệt (dữ liệu dựng tay để chắc chắn không gửi thông báo)
+        String phonePrefix = "REJECTED".equals(itemStatus) ? "090000078" : "090000079";
+        long ownerId = user("item-edit-owner10-" + phonePrefix + "@shareloop.local", phonePrefix + "1");
+        long receiverId = user("item-edit-receiver10-" + phonePrefix + "@shareloop.local", phonePrefix + "2");
+        long itemId = approvedItem(ownerId);
+        jdbc.sql("UPDATE items SET status = :status WHERE id = :id")
+                .param("status", itemStatus)
+                .param("id", itemId)
+                .update();
+        pendingRequest(itemId, receiverId, "GIVE");
+
+        // when
+        mvc.perform(put("/api/v1/items/{id}", itemId)
+                        .header("Authorization", "Bearer " + jwtService.issue(ownerId, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Tên mới", "Mô tả mới")))
+                .andExpect(status().isOk());
+        entityManager.flush();
+
+        // then
+        assertThat(noticeCount(receiverId, "REQUEST_ITEM_EDITED")).isZero();
+    }
+
+    private String requestStatus(long requestId) {
+        return jdbc.sql("SELECT status FROM requests WHERE id = :id")
+                .param("id", requestId)
+                .query(String.class)
+                .single();
+    }
+
+    private long noticeCount(long userId, String type) {
+        return jdbc.sql("SELECT COUNT(*) FROM notifications WHERE user_id = :userId AND type = :type")
+                .param("userId", userId)
+                .param("type", type)
+                .query(Long.class)
+                .single();
     }
 
     private long user(String email, String phone) {

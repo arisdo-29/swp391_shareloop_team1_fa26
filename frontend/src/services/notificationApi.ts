@@ -19,13 +19,14 @@ export interface NotificationListParams {
   size?: number;
 }
 
-export type NotificationCategory = 'moderation' | 'transaction' | 'complaint' | 'credit' | 'other';
+export type NotificationCategory = 'moderation' | 'transaction' | 'complaint' | 'credit' | 'systemReport' | 'other';
 
 export const notificationCategoryLabels: Record<Exclude<NotificationCategory, 'other'>, string> = {
   moderation: 'Duyệt bài',
-  transaction: 'Giao dịch & Tin nhắn',
-  complaint: 'Khiếu nại & Giải trình',
-  credit: 'Credit & Uy tín',
+  transaction: 'Giao dịch và Tin nhắn',
+  complaint: 'Khiếu nại và Giải trình',
+  credit: 'Credit và Uy tín',
+  systemReport: 'Báo cáo hệ thống',
 };
 
 // Backend trả tối đa 100 dòng mỗi trang (docs/api/notification.md).
@@ -39,9 +40,10 @@ const HIDDEN_KEY_PREFIX = 'shareloop:hiddenNotifications:';
  * Loại mới chưa biết rơi vào 'other' và chỉ hiện ở bộ lọc "Tất cả".
  */
 export function notificationCategory(type: string): NotificationCategory {
+  if (type.startsWith('SYSTEM_REPORT_')) return 'systemReport';
   if (type.startsWith('POST_') || type.startsWith('ITEM_')) return 'moderation';
   if (type.startsWith('DISPUTE_') || type.startsWith('REPORT_')) return 'complaint';
-  if (type.startsWith('TRUST_') || type.startsWith('BOOST_') || type.startsWith('POINTS_') || type.includes('CREDIT'))
+  if (type.startsWith('TRUST_') || type.startsWith('BOOST_') || type.startsWith('POINTS_') || type.startsWith('TOPUP_') || type.includes('CREDIT'))
     return 'credit';
   if (
     type.startsWith('REQUEST_') ||
@@ -55,7 +57,28 @@ export function notificationCategory(type: string): NotificationCategory {
       'LOGISTICS_CONFIRMED',
       'SCHEDULE_UPDATED',
       'OFFERED_ITEM_CHANGED',
+      // Món từng yêu cầu mở lại do giao dịch đã chọn bị huỷ (docs/api/request.md).
+      'REQUESTED_ITEM_REOPENED',
       'HANDOVER_CONFIRMED',
+      // Luật huỷ có xác nhận, dời lịch, giao hàng hai chiều và nhắc hạn (docs/api/notification.md)
+      'CANCEL_REQUESTED',
+      'CANCEL_REQUEST_WITHDRAWN',
+      'CANCEL_REQUEST_REJECTED',
+      'TRANSACTION_RESUMED',
+      'CANCEL_REQUEST_REMINDER',
+      'RESCHEDULE_PROPOSED',
+      'RESCHEDULE_ACCEPTED',
+      'RESCHEDULE_REJECTED',
+      'RESCHEDULE_EXPIRED',
+      'RESCHEDULE_REMINDER',
+      'SHIPMENT_SENT',
+      'SHIP_DATE_REMINDER',
+      'SHIP_OVERDUE_REMINDER',
+      'SHIP_OVERDUE_NOTICE',
+      'HANDOVER_STALE_REMINDER',
+      'HANDOVER_AUTO_CONFIRM_REMINDER',
+      'SCHEDULE_AUTO_CANCEL_REMINDER',
+      'MEETING_REMINDER',
     ].includes(type)
   ) {
     return 'transaction';

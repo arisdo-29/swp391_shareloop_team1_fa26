@@ -1,16 +1,15 @@
 package com.shareloop.report;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.shareloop.auth.service.JwtService;
-import com.shareloop.request.dto.HandoverConfirmRequest;
+import com.shareloop.request.dto.RefuseHandoverRequest;
 import com.shareloop.request.dto.ScheduleRequest;
-import com.shareloop.request.service.RequestJobService;
 import com.shareloop.support.IntegrationTest;
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -25,12 +24,13 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Chạy thật luồng xác nhận giao nhận trên PostgreSQL: bên nhận chọn "Không đúng mô tả" thì module report tự mở report
- * sau khi giao dịch commit (GN-07), và job tự hoàn tất bỏ qua giao dịch đó (GN-09).
- * Không dùng @Transactional ở lớp test vì listener AFTER_COMMIT chỉ chạy khi giao dịch thật sự commit.
+ * Chạy thật luồng "Từ chối nhận" trên PostgreSQL (GN-07, BC-09): giao dịch huỷ ngay, món bị từ chối tạm ẩn, món của
+ * người từ chối mở lại và module report mở báo cáo vi phạm nhắm vào chủ món bị từ chối. Admin chỉ kết luận ai có lỗi,
+ * giao dịch luôn ở CANCELLED.
  */
 @AutoConfigureMockMvc
 class NotAsDescribedReportIT extends IntegrationTest {
@@ -49,9 +49,6 @@ class NotAsDescribedReportIT extends IntegrationTest {
     @Autowired
     ObjectMapper objectMapper;
 
-    @Autowired
-    RequestJobService requestJobService;
-
     private final List<Long> requestIds = new ArrayList<>();
     private final List<Long> itemIds = new ArrayList<>();
     private final List<Long> userIds = new ArrayList<>();
@@ -60,6 +57,8 @@ class NotAsDescribedReportIT extends IntegrationTest {
     void cleanUp() {
         for (Long requestId : requestIds) {
             jdbc.update("DELETE FROM reports WHERE request_id = ?", requestId);
+            // Tin nhắn hệ thống trong cuộc trò chuyện (nếu có) phải xoá trước vì khoá ngoại.
+            jdbc.update("DELETE FROM messages WHERE request_id = ?", requestId);
             jdbc.update("DELETE FROM requests WHERE id = ?", requestId);
         }
         for (Long itemId : itemIds) {
@@ -76,99 +75,278 @@ class NotAsDescribedReportIT extends IntegrationTest {
     }
 
     @Test
-    void confirmHandover_whenReceiverFirstSaysNotAsDescribed_opensExactlyOneReport() throws Exception {
+    void refuseHandover_whenGiveReceiverRefuses_cancelsHidesMainItemAndReportsDonor() throws Exception {
         // given
         long donorId = insertUser("Donor");
         long receiverId = insertUser("Receiver");
-        long requestId = createLogisticsConfirmedRequest(donorId, receiverId);
+        long itemId = insertItem(donorId, "GIVE");
+        long requestId = createLogisticsConfirmedRequest(itemId, null, donorId, receiverId);
 
         // when
-        confirmAsReceiver(requestId, receiverId, false, REASON)
-                .andExpect(jsonPath("$.status").value("DISPUTED"));
+        refuse(requestId, receiverId).andExpect(jsonPath("$.status").value("CANCELLED"));
 
         // then
+        assertThat(statusOf(requestId)).isEqualTo("CANCELLED");
+        assertThat(itemActiveOf(itemId)).isFalse();
         List<Map<String, Object>> reports = reportsOf(requestId);
         assertThat(reports).hasSize(1);
         Map<String, Object> report = reports.get(0);
+        assertThat(report.get("target_type")).isEqualTo("ITEM");
+        assertThat(report.get("item_id")).isEqualTo(itemId);
         assertThat(report.get("reason")).isEqualTo("NOT_AS_DESCRIBED");
-        assertThat(report.get("target_type")).isEqualTo("REQUEST");
-        assertThat(report.get("description")).isEqualTo(REASON);
         assertThat(report.get("reporter_id")).isEqualTo(receiverId);
         assertThat(report.get("target_user_id")).isEqualTo(donorId);
-        assertThat(report.get("status")).isEqualTo("AWAITING_RESPONSE");
+        assertThat(report.get("description")).isEqualTo(REASON);
+        assertThat(report.get("status")).isEqualTo("OPEN");
+        assertThat(report.get("response_due_at")).isNull();
     }
 
     @Test
-    void confirmHandover_whenDonorConfirmedFirstThenReceiverSaysNotAsDescribed_transitionsToDisputedAndOpensReport()
-            throws Exception {
-        // given
+    void refuseHandover_whenDonorConfirmedFirst_stillCancels() throws Exception {
+        // given: chủ bài đã bấm hoàn tất, người nhận vẫn từ chối được vì chính họ chưa bấm
         long donorId = insertUser("Donor");
         long receiverId = insertUser("Receiver");
-        long requestId = createLogisticsConfirmedRequest(donorId, receiverId);
+        long requestId = createLogisticsConfirmedRequest(insertItem(donorId, "GIVE"), null, donorId, receiverId);
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
                         .header("Authorization", token(donorId)))
                 .andExpect(status().isOk());
 
         // when
-        confirmAsReceiver(requestId, receiverId, false, REASON)
-                .andExpect(jsonPath("$.status").value("DISPUTED"));
+        refuse(requestId, receiverId).andExpect(jsonPath("$.status").value("CANCELLED"));
 
         // then
         assertThat(reportsOf(requestId)).hasSize(1);
     }
 
     @Test
-    void confirmHandover_whenReceiverSaysAsDescribed_opensNoReport() throws Exception {
+    void refuseHandover_whenSwapDonorRefuses_reopensMainItemAndHidesOfferedItem() throws Exception {
         // given
         long donorId = insertUser("Donor");
         long receiverId = insertUser("Receiver");
-        long requestId = createLogisticsConfirmedRequest(donorId, receiverId);
+        long mainItemId = insertItem(donorId, "SWAP");
+        long offeredItemId = insertItem(receiverId, "GIVE");
+        long requestId = createLogisticsConfirmedRequest(mainItemId, offeredItemId, donorId, receiverId);
 
         // when
-        confirmAsReceiver(requestId, receiverId, true, null)
-                .andExpect(jsonPath("$.status").value("AWAITING_HANDOVER"));
+        refuse(requestId, donorId).andExpect(jsonPath("$.status").value("CANCELLED"));
 
-        // then
-        assertThat(reportsOf(requestId)).isEmpty();
+        // then: báo cáo nhắm vào người xin là chủ món đổi
+        assertThat(itemStatusOf(mainItemId)).isEqualTo("APPROVED");
+        assertThat(itemActiveOf(mainItemId)).isTrue();
+        assertThat(itemActiveOf(offeredItemId)).isFalse();
+        Map<String, Object> report = reportsOf(requestId).get(0);
+        assertThat(report.get("item_id")).isEqualTo(offeredItemId);
+        assertThat(report.get("target_user_id")).isEqualTo(receiverId);
     }
 
     @Test
-    void autoConfirmHandoverRequests_whenReceiverReportedNotAsDescribed_doesNotComplete() throws Exception {
-        // given: bên nhận báo không đúng mô tả cách đây 5 ngày, bên cho vẫn im lặng
+    void refuseHandover_whenSwapReceiverRefuses_hidesMainItemAndReopensOfferedItem() throws Exception {
+        // given
         long donorId = insertUser("Donor");
         long receiverId = insertUser("Receiver");
-        long requestId = createLogisticsConfirmedRequest(donorId, receiverId);
-        confirmAsReceiver(requestId, receiverId, false, REASON);
-        jdbc.update(
-                "UPDATE requests SET receiver_handover_at = ? WHERE id = ?",
-                Timestamp.from(Instant.now().minus(5, ChronoUnit.DAYS)),
-                requestId);
+        long mainItemId = insertItem(donorId, "SWAP");
+        long offeredItemId = insertItem(receiverId, "GIVE");
+        long requestId = createLogisticsConfirmedRequest(mainItemId, offeredItemId, donorId, receiverId);
 
         // when
-        requestJobService.autoConfirmHandoverRequests(Instant.now());
+        refuse(requestId, receiverId).andExpect(jsonPath("$.status").value("CANCELLED"));
 
         // then
-        assertThat(statusOf(requestId)).isEqualTo("DISPUTED");
+        assertThat(itemActiveOf(mainItemId)).isFalse();
+        assertThat(itemStatusOf(offeredItemId)).isEqualTo("APPROVED");
+        assertThat(itemActiveOf(offeredItemId)).isTrue();
+        assertThat(reportsOf(requestId).get(0).get("target_user_id")).isEqualTo(donorId);
+    }
+
+    @Test
+    void refuseHandover_whenGiveDonorRefuses_returns403AndOpensNoReport() throws Exception {
+        // given
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long requestId = createLogisticsConfirmedRequest(insertItem(donorId, "GIVE"), null, donorId, receiverId);
+
+        // when
+        mockMvc.perform(post("/api/v1/requests/{id}/refuse-handover", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new RefuseHandoverRequest(REASON, null))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("REQUEST_REFUSE_NOT_ALLOWED"));
+
+        // then
+        assertThat(reportsOf(requestId)).isEmpty();
+        assertThat(statusOf(requestId)).isEqualTo("LOGISTICS_CONFIRMED");
+    }
+
+    @Test
+    void getDetail_afterRefusal_returnsRefusalReportByRoleAndNoDispute() throws Exception {
+        // given
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long requestId = createLogisticsConfirmedRequest(insertItem(donorId, "GIVE"), null, donorId, receiverId);
+        refuse(requestId, receiverId)
+                .andExpect(jsonPath("$.disputes.length()").value(0))
+                .andExpect(jsonPath("$.refusalReport.openedByMe").value(true))
+                .andExpect(jsonPath("$.refusalReport.canRespond").value(false));
+
+        // when, then: bên bị báo cáo được gửi giải trình, không có hạn
+        mockMvc.perform(get("/api/v1/requests/{id}", requestId).header("Authorization", token(donorId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.disputes.length()").value(0))
+                .andExpect(jsonPath("$.refusalReport.reason").value("NOT_AS_DESCRIBED"))
+                .andExpect(jsonPath("$.refusalReport.openedByMe").value(false))
+                .andExpect(jsonPath("$.refusalReport.canRespond").value(true))
+                .andExpect(jsonPath("$.refusalReport.responseDueAt").isEmpty());
+    }
+
+    @Test
+    void respondDispute_onRefusalReport_savesOptionalResponse() throws Exception {
+        // given
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long requestId = createLogisticsConfirmedRequest(insertItem(donorId, "GIVE"), null, donorId, receiverId);
+        refuse(requestId, receiverId);
+        long reportId = reportIdOf(requestId);
+
+        // when
+        mockMvc.perform(post("/api/v1/disputes/{id}/response", reportId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"note\":\"Máy bật được, tôi có video lúc giao\"}"))
+                .andExpect(status().is2xxSuccessful());
+
+        // then
+        assertThat(jdbc.queryForObject("SELECT response FROM reports WHERE id = ?", String.class, reportId))
+                .isEqualTo("Máy bật được, tôi có video lúc giao");
+    }
+
+    @Test
+    void conclude_whenAdminUpholds_deductsStarFromOwnerKeepsItemHiddenAndStaysCancelled() throws Exception {
+        // given: Admin kết luận ngay, không phải chờ giải trình
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long adminId = insertUser("Admin");
+        long itemId = insertItem(donorId, "GIVE");
+        long requestId = createLogisticsConfirmedRequest(itemId, null, donorId, receiverId);
+        refuse(requestId, receiverId);
+
+        // when
+        conclude(reportIdOf(requestId), adminId, "UPHOLD");
+
+        // then
+        assertThat(trustStarsOf(donorId)).isEqualTo(4);
+        assertThat(trustStarsOf(receiverId)).isEqualTo(5);
+        assertThat(itemActiveOf(itemId)).isFalse();
+        assertThat(itemStatusOf(itemId)).isEqualTo("APPROVED");
+        assertThat(statusOf(requestId)).isEqualTo("CANCELLED");
+        assertThat(totalPointsOf(donorId)).isZero();
+        assertThat(totalPointsOf(receiverId)).isZero();
+    }
+
+    @Test
+    void conclude_whenAdminDismisses_reopensItemPenalizesReporterAndStaysCancelled() throws Exception {
+        // given
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long adminId = insertUser("Admin");
+        long itemId = insertItem(donorId, "GIVE");
+        long requestId = createLogisticsConfirmedRequest(itemId, null, donorId, receiverId);
+        refuse(requestId, receiverId);
+
+        // when
+        conclude(reportIdOf(requestId), adminId, "DISMISS");
+
+        // then
+        assertThat(itemActiveOf(itemId)).isTrue();
+        assertThat(trustStarsOf(receiverId)).isEqualTo(4);
+        assertThat(trustStarsOf(donorId)).isEqualTo(5);
+        assertThat(statusOf(requestId)).isEqualTo("CANCELLED");
+        assertThat(totalPointsOf(donorId)).isZero();
+    }
+
+    @Test
+    void conclude_whenSwapDonorRefusalUpheld_deductsStarFromReceiverAndKeepsOfferedItemHidden() throws Exception {
+        // given: giao dịch Trao đổi, chủ bài từ chối món đem đổi nên báo cáo nhắm vào người xin
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long adminId = insertUser("Admin");
+        long mainItemId = insertItem(donorId, "SWAP");
+        long offeredItemId = insertItem(receiverId, "GIVE");
+        long requestId = createLogisticsConfirmedRequest(mainItemId, offeredItemId, donorId, receiverId);
+        refuse(requestId, donorId);
+
+        // when
+        conclude(reportIdOf(requestId), adminId, "UPHOLD");
+
+        // then: giao dịch vẫn huỷ, bài chính đang hiện, món đổi của người xin (bên vi phạm) vẫn ẩn
+        assertThat(statusOf(requestId)).isEqualTo("CANCELLED");
+        assertThat(itemActiveOf(mainItemId)).isTrue();
+        assertThat(itemActiveOf(offeredItemId)).isFalse();
+        assertThat(trustStarsOf(receiverId)).isEqualTo(4);
+        assertThat(trustStarsOf(donorId)).isEqualTo(5);
+    }
+
+    @Test
+    void refuseHandover_whenReasonIs1000Chars_cancelReasonFitsColumnAndReportKeepsFullText() throws Exception {
+        // given: lý do dài 1000 ký tự gồm nhiều từ, cho cả người nhận (GIVE) và chủ bài (SWAP)
+        String longReason = "lỗi ".repeat(250).trim();
+        assertThat(longReason).hasSize(999);
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long giveRequestId = createLogisticsConfirmedRequest(insertItem(donorId, "GIVE"), null, donorId, receiverId);
+        long mainItemId = insertItem(donorId, "SWAP");
+        long offeredItemId = insertItem(receiverId, "GIVE");
+        long swapRequestId = createLogisticsConfirmedRequest(mainItemId, offeredItemId, donorId, receiverId);
+
+        // when
+        refuseWith(giveRequestId, receiverId, longReason);
+        refuseWith(swapRequestId, donorId, longReason);
+
+        // then: cancel_reason không vượt 600 ký tự, kết thúc bằng "…"; báo cáo nhận đủ lý do
+        for (long requestId : List.of(giveRequestId, swapRequestId)) {
+            String cancelReason =
+                    jdbc.queryForObject("SELECT cancel_reason FROM requests WHERE id = ?", String.class, requestId);
+            assertThat(cancelReason.length()).isLessThanOrEqualTo(600);
+            assertThat(cancelReason).endsWith("…");
+            assertThat(reportsOf(requestId).get(0).get("description")).isEqualTo(longReason);
+        }
     }
 
     // ---------- Helper ----------
 
-    private org.springframework.test.web.servlet.ResultActions confirmAsReceiver(
-            long requestId, long receiverId, boolean asDescribed, String reason) throws Exception {
-        return mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
-                        .header("Authorization", token(receiverId))
+    private void refuseWith(long requestId, long userId, String reason) throws Exception {
+        mockMvc.perform(post("/api/v1/requests/{id}/refuse-handover", requestId)
+                        .header("Authorization", token(userId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new HandoverConfirmRequest(asDescribed, reason))))
+                        .content(objectMapper.writeValueAsString(new RefuseHandoverRequest(reason, null))))
                 .andExpect(status().isOk());
     }
 
-    /** Đi qua API: gửi yêu cầu, chọn người nhận, chốt lịch, xác nhận hậu cần để tới LOGISTICS_CONFIRMED. */
-    private long createLogisticsConfirmedRequest(long donorId, long receiverId) throws Exception {
-        long itemId = insertItem(donorId);
-        MvcResult created = mockMvc.perform(
-                        post("/api/v1/items/{itemId}/requests", itemId).header("Authorization", token(receiverId)))
-                .andExpect(status().isCreated())
-                .andReturn();
+    private ResultActions refuse(long requestId, long userId) throws Exception {
+        return mockMvc.perform(post("/api/v1/requests/{id}/refuse-handover", requestId)
+                        .header("Authorization", token(userId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new RefuseHandoverRequest(REASON, null))))
+                .andExpect(status().isOk());
+    }
+
+    private void conclude(long reportId, long adminId, String decision) throws Exception {
+        mockMvc.perform(post("/api/v1/admin/reports/{reportId}/conclude", reportId)
+                        .header("Authorization", "Bearer " + jwtService.issue(adminId, true))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"" + decision + "\"}"))
+                .andExpect(status().isOk());
+    }
+
+    /** Đi qua API: gửi yêu cầu (kèm món đổi nếu có), chọn người nhận, chốt lịch, xác nhận hậu cần. */
+    private long createLogisticsConfirmedRequest(long itemId, Long offeredItemId, long donorId, long receiverId)
+            throws Exception {
+        var createCall = post("/api/v1/items/{itemId}/requests", itemId).header("Authorization", token(receiverId));
+        if (offeredItemId != null) {
+            createCall.contentType(MediaType.APPLICATION_JSON).content("{\"offeredItemId\":" + offeredItemId + "}");
+        }
+        MvcResult created =
+                mockMvc.perform(createCall).andExpect(status().isCreated()).andReturn();
         long requestId = objectMapper
                 .readTree(created.getResponse().getContentAsString())
                 .get("id")
@@ -182,23 +360,47 @@ class NotAsDescribedReportIT extends IntegrationTest {
                         .header("Authorization", token(donorId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new ScheduleRequest("IN_PERSON", "FPT Park", meetingTime, false))))
+                                new ScheduleRequest("IN_PERSON", "FPT Park", meetingTime, true))))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
-                        .header("Authorization", token(receiverId)))
+                        .header("Authorization", token(receiverId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"agreeToWaiver\":true}"))
                 .andExpect(status().isOk());
+        // Luật mới (GN-07): chỉ từ chối nhận được từ giờ hẹn trở đi, nên lùi giờ hẹn về quá khứ sau khi đã chốt lịch
+        jdbc.update("UPDATE requests SET meeting_time = now() - interval '1 hour' WHERE id = ?", requestId);
         return requestId;
     }
 
     private List<Map<String, Object>> reportsOf(long requestId) {
         return jdbc.queryForList(
-                "SELECT reporter_id, target_type, target_user_id, reason, description, status "
-                        + "FROM reports WHERE request_id = ?",
+                "SELECT reporter_id, target_type, item_id, target_user_id, reason, description, status,"
+                        + " response_due_at FROM reports WHERE request_id = ?",
                 requestId);
+    }
+
+    private long reportIdOf(long requestId) {
+        return jdbc.queryForObject("SELECT id FROM reports WHERE request_id = ?", Long.class, requestId);
     }
 
     private String statusOf(long requestId) {
         return jdbc.queryForObject("SELECT status FROM requests WHERE id = ?", String.class, requestId);
+    }
+
+    private String itemStatusOf(long itemId) {
+        return jdbc.queryForObject("SELECT status FROM items WHERE id = ?", String.class, itemId);
+    }
+
+    private boolean itemActiveOf(long itemId) {
+        return jdbc.queryForObject("SELECT is_active FROM items WHERE id = ?", Boolean.class, itemId);
+    }
+
+    private int trustStarsOf(long userId) {
+        return jdbc.queryForObject("SELECT trust_stars FROM users WHERE id = ?", Integer.class, userId);
+    }
+
+    private int totalPointsOf(long userId) {
+        return jdbc.queryForObject("SELECT total_points FROM users WHERE id = ?", Integer.class, userId);
     }
 
     private String token(long userId) {
@@ -218,18 +420,22 @@ class NotAsDescribedReportIT extends IntegrationTest {
         return userId;
     }
 
-    private long insertItem(long donorId) {
+    private long insertItem(long donorId, String offerType) {
         long categoryId = jdbc.queryForObject("SELECT id FROM item_categories ORDER BY id LIMIT 1", Long.class);
         long areaId = jdbc.queryForObject("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1", Long.class);
+        // Bài Trao đổi bắt buộc có món mong muốn
+        String desiredItem = "SWAP".equals(offerType) ? "Muốn đổi lấy đồ dùng học tập" : null;
         Long itemId = jdbc.queryForObject(
-                "INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, condition, status,"
-                        + " fee_state, pending_fee, pending_fee_type)"
-                        + " VALUES (?, ?, ?, 'GIVE', 'Máy cũ', 'Mô tả', 'GOOD', 'APPROVED', 'CHARGED', 0, NULL)"
+                "INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, desired_item,"
+                        + " condition, status, fee_state, pending_fee, pending_fee_type)"
+                        + " VALUES (?, ?, ?, ?, 'Máy cũ', 'Mô tả', ?, 'GOOD', 'APPROVED', 'CHARGED', 0, NULL)"
                         + " RETURNING id",
                 Long.class,
                 donorId,
                 categoryId,
-                areaId);
+                areaId,
+                offerType,
+                desiredItem);
         itemIds.add(itemId);
         return itemId;
     }

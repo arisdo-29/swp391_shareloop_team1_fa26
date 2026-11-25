@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
@@ -25,7 +26,7 @@ import org.springframework.test.util.ReflectionTestUtils;
  * Kiểm tra:
  * 1. Từng mũi tên hợp lệ (14 test độc lập với các domain methods tương ứng).
  * 2. Mọi chuyển trạng thái không hợp lệ trong ma trận đều ném BusinessException(REQUEST_INVALID_STATE_TRANSITION).
- * 3. Các quy tắc nghiệp vụ ràng buộc trạng thái: GN-03 (khoá lịch sau khi đã chốt), YC-01, waiver khi shipping, v.v.
+ * 3. Các quy tắc nghiệp vụ ràng buộc trạng thái: GN-02 (cam kết), GN-03 (khoá lịch sau khi đã chốt), YC-01.
  * 4. Các kịch bản vòng đời hoàn chỉnh (End-to-End Lifecycle Flows).
  */
 class RequestStateMachineTest {
@@ -40,11 +41,16 @@ class RequestStateMachineTest {
             "AWAITING_LOGISTICS->CANCELLED",
             "LOGISTICS_CONFIRMED->AWAITING_HANDOVER",
             "LOGISTICS_CONFIRMED->CANCELLED",
+            // Cạnh thứ 15: chỉ dành cho "không đồng ý đề nghị huỷ" (GN-06)
+            "LOGISTICS_CONFIRMED->DISPUTED",
             "AWAITING_HANDOVER->COMPLETED",
             "AWAITING_HANDOVER->DISPUTED",
             "AWAITING_HANDOVER->CANCELLED",
             "DISPUTED->COMPLETED",
-            "DISPUTED->CANCELLED");
+            "DISPUTED->CANCELLED",
+            // Hai cạnh 16 và 17: chỉ dành cho Admin bác khiếu nại đề nghị huỷ không tố ai (GN-06)
+            "DISPUTED->LOGISTICS_CONFIRMED",
+            "DISPUTED->AWAITING_HANDOVER");
 
     private static String key(RequestStatus from, RequestStatus to) {
         return from.name() + "->" + to.name();
@@ -137,7 +143,7 @@ class RequestStateMachineTest {
             Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
             Instant now = Instant.now();
 
-            request.proposeSchedule("IN_PERSON", "Cổng trường ĐH FPT", meetingTime, true, false, now);
+            request.proposeSchedule("IN_PERSON", "Cổng trường ĐH FPT", meetingTime, true, true, now);
 
             assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_LOGISTICS);
             assertThat(request.getDeliveryMethod()).isEqualTo("IN_PERSON");
@@ -184,10 +190,10 @@ class RequestStateMachineTest {
             Instant t2 = t1.plus(5, ChronoUnit.MINUTES);
 
             // Bên cho đề xuất lịch
-            request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, true, false, t1);
+            request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, true, true, t1);
 
             // Bên nhận xác nhận đồng ý lịch
-            request.confirmLogistics(false, false, t2);
+            request.confirmLogistics(false, true, t2);
 
             assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
             assertThat(request.getContactRevealedAt()).isEqualTo(t2);
@@ -228,7 +234,7 @@ class RequestStateMachineTest {
             Instant now = Instant.now();
 
             // Chủ bài bấm xác nhận đã giao
-            request.confirmHandover(true, null, now);
+            request.confirmHandover(true, now);
 
             assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
             assertThat(request.getDonorHandoverAt()).isEqualTo(now);
@@ -236,18 +242,16 @@ class RequestStateMachineTest {
         }
 
         @Test
-        @DisplayName(
-                "Mũi tên 8b: LOGISTICS_CONFIRMED -> AWAITING_HANDOVER (Người nhận bấm trước kèm đánh giá đúng mô tả)")
+        @DisplayName("Mũi tên 8b: LOGISTICS_CONFIRMED -> AWAITING_HANDOVER (Người nhận bấm hoàn tất trước)")
         void logisticsConfirmedToAwaitingHandover_receiverFirst() {
             Request request = createRequest(RequestStatus.LOGISTICS_CONFIRMED);
             Instant now = Instant.now();
 
-            // Người nhận bấm xác nhận đã nhận
-            request.confirmHandover(false, true, now);
+            // Người nhận bấm hoàn tất giao nhận
+            request.confirmHandover(false, now);
 
             assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
             assertThat(request.getReceiverHandoverAt()).isEqualTo(now);
-            assertThat(request.getAsDescribed()).isTrue();
             assertThat(request.getDonorHandoverAt()).isNull();
         }
 
@@ -260,18 +264,36 @@ class RequestStateMachineTest {
         }
 
         @Test
-        @DisplayName("Người nhận bấm trước nhưng chọn không đúng mô tả -> DISPUTED")
-        void logisticsConfirmedToDisputed_receiverSaysNotAsDescribed() {
+        @DisplayName("Người nhận từ chối nhận khi chưa bên nào bấm hoàn tất -> CANCELLED kèm lý do từ chối nhận")
+        void refuseHandover_whenLogisticsConfirmed_cancelsWithRefusalReason() {
+            // given
             Request request = createRequest(RequestStatus.LOGISTICS_CONFIRMED);
-            Instant now = Instant.now();
 
-            request.confirmHandover(false, false, now);
+            // when
+            request.refuseHandover(false, "Máy không bật được");
 
-            assertThat(request.getStatus()).isEqualTo(RequestStatus.DISPUTED);
-            assertThat(request.getReceiverHandoverAt()).isEqualTo(now);
-            assertThat(request.getAsDescribed()).isFalse();
-            assertThat(request.getDonorHandoverAt()).isNull();
+            // then
+            assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+            assertThat(request.getCancelReason())
+                    .isEqualTo(Request.CANCEL_BY_RECEIVER + Request.REFUSAL_REASON + "Máy không bật được");
+            assertThat(request.getReceiverHandoverAt()).isNull();
             assertThat(request.getCompletedAt()).isNull();
+        }
+
+        @Test
+        @DisplayName("Đã bấm hoàn tất rồi thì không được từ chối giao nhận")
+        void refuseHandover_whenAlreadyConfirmed_throwsInvalidStateTransition() {
+            // given
+            Request request = createRequest(RequestStatus.LOGISTICS_CONFIRMED);
+            request.confirmHandover(false, Instant.now());
+
+            // when / then
+            assertThatThrownBy(() -> request.refuseHandover(false, "Máy không bật được"))
+                    .isInstanceOfSatisfying(
+                            BusinessException.class,
+                            ex -> assertThat(ex.getErrorCode())
+                                    .isEqualTo(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION));
+            assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
         }
 
         @Test
@@ -304,11 +326,10 @@ class RequestStateMachineTest {
             ReflectionTestUtils.setField(request, "donorHandoverAt", t1);
 
             // Người nhận xác nhận hoàn tất
-            request.confirmHandover(false, true, t2);
+            request.confirmHandover(false, t2);
 
             assertThat(request.getStatus()).isEqualTo(RequestStatus.COMPLETED);
             assertThat(request.getCompletedAt()).isEqualTo(t2);
-            assertThat(request.getAsDescribed()).isTrue();
         }
 
         @Test
@@ -323,7 +344,6 @@ class RequestStateMachineTest {
             assertThat(request.getStatus()).isEqualTo(RequestStatus.COMPLETED);
             assertThat(request.isAutoConfirmed()).isTrue();
             assertThat(request.getCompletedAt()).isEqualTo(now);
-            assertThat(request.getAsDescribed()).isTrue();
         }
 
         @Test
@@ -345,18 +365,18 @@ class RequestStateMachineTest {
         }
 
         @Test
-        @DisplayName("Mũi tên 11b: AWAITING_HANDOVER -> DISPUTED (Người nhận xác nhận sau nhưng chọn không đúng mô tả)")
-        void awaitingHandoverToDisputed_receiverSaysNotAsDescribed() {
+        @DisplayName("AWAITING_HANDOVER -> CANCELLED (Chủ bài đã bấm hoàn tất, người nhận từ chối nhận)")
+        void awaitingHandoverToCancelled_receiverRefusesAfterDonorConfirmed() {
+            // given
             Request request = createRequest(RequestStatus.LOGISTICS_CONFIRMED);
-            Instant t1 = Instant.now();
-            request.confirmHandover(true, null, t1); // donor confirmed first -> status is AWAITING_HANDOVER
+            request.confirmHandover(true, Instant.now());
             assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
 
-            Instant t2 = t1.plusSeconds(10);
-            request.confirmHandover(false, false, t2); // receiver says not as described
+            // when
+            request.refuseHandover(false, "Máy không bật được");
 
-            assertThat(request.getStatus()).isEqualTo(RequestStatus.DISPUTED);
-            assertThat(request.getAsDescribed()).isFalse();
+            // then
+            assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
             assertThat(request.getCompletedAt()).isNull();
         }
 
@@ -482,7 +502,7 @@ class RequestStateMachineTest {
                 Request request = createRequest(status);
                 Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
                 assertThatThrownBy(() -> request.proposeSchedule(
-                                "IN_PERSON", "Địa điểm", meetingTime, true, false, Instant.now()))
+                                "IN_PERSON", "Địa điểm", meetingTime, true, true, Instant.now()))
                         .isInstanceOfSatisfying(BusinessException.class, ex -> {
                             assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_SCHEDULE_LOCKED);
                         });
@@ -516,18 +536,32 @@ class RequestStateMachineTest {
                     });
         }
 
-        @Test
-        @DisplayName("confirmLogistics() khi SHIPPING bắt buộc phải agreeToWaiver nếu chưa waiver (GN-02)")
-        void confirmLogistics_shippingWithoutWaiver_throwsException() {
+        @ParameterizedTest
+        @ValueSource(strings = {"IN_PERSON", "SHIPPING"})
+        @DisplayName("Lịch mới xoá xác nhận và cam kết cũ của bên còn lại (GN-02)")
+        void confirmLogistics_afterReschedule_requiresFreshWaiver(String deliveryMethod) {
             Request request = createRequest(RequestStatus.AWAITING_LOGISTICS);
-            Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
-            request.proposeSchedule("SHIPPING", null, meetingTime, false, false, Instant.now());
+            Instant now = Instant.now();
+            Instant meetingTime = now.plus(2, ChronoUnit.DAYS);
+            // Giao hàng: người nhận phải nhập địa chỉ nhận hàng của mình (GN-12)
+            request.proposeSchedule(deliveryMethod, "Địa điểm cũ", meetingTime, true, true, now, null);
+            request.proposeSchedule(
+                    deliveryMethod, "Địa điểm mới", meetingTime, false, true, now.plusSeconds(1), "12 Lê Lợi");
 
-            // Bên cho xác nhận nhưng không chịu cam kết trách nhiệm waiver
-            assertThatThrownBy(() -> request.confirmLogistics(true, false, Instant.now()))
+            assertThat(request.getDonorScheduleOkAt()).isNull();
+            assertThat(request.getDonorWaiverAt()).isNull();
+            assertThat(request.getReceiverScheduleOkAt()).isEqualTo(now.plusSeconds(1));
+            assertThat(request.getReceiverWaiverAt()).isEqualTo(now.plusSeconds(1));
+
+            assertThatThrownBy(() -> request.confirmLogistics(true, false, now.plusSeconds(2)))
                     .isInstanceOfSatisfying(BusinessException.class, ex -> {
                         assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_WAIVER_REQUIRED);
                     });
+            assertThat(request.getContactRevealedAt()).isNull();
+
+            request.confirmLogistics(true, true, now.plusSeconds(3));
+            assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
+            assertThat(request.getContactRevealedAt()).isEqualTo(now.plusSeconds(3));
         }
 
         @Test
@@ -544,22 +578,11 @@ class RequestStateMachineTest {
 
             for (RequestStatus status : invalidStatuses) {
                 Request request = createRequest(status);
-                assertThatThrownBy(() -> request.confirmHandover(true, null, Instant.now()))
+                assertThatThrownBy(() -> request.confirmHandover(true, Instant.now()))
                         .isInstanceOfSatisfying(BusinessException.class, ex -> {
                             assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
                         });
             }
-        }
-
-        @Test
-        @DisplayName("confirmHandover() ném REQUEST_AS_DESCRIBED_REQUIRED khi người nhận không đánh giá asDescribed")
-        void confirmHandover_whenReceiverMissingAsDescribed_throwsException() {
-            Request request = createRequest(RequestStatus.LOGISTICS_CONFIRMED);
-
-            assertThatThrownBy(() -> request.confirmHandover(false, null, Instant.now()))
-                    .isInstanceOfSatisfying(BusinessException.class, ex -> {
-                        assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_AS_DESCRIBED_REQUIRED);
-                    });
         }
 
         @Test
@@ -569,10 +592,10 @@ class RequestStateMachineTest {
             Instant now = Instant.now();
 
             // Lần 1: Bên cho xác nhận thành công
-            request.confirmHandover(true, null, now);
+            request.confirmHandover(true, now);
 
             // Lần 2: Bên cho bấm tiếp -> ném lỗi
-            assertThatThrownBy(() -> request.confirmHandover(true, null, now.plusSeconds(10)))
+            assertThatThrownBy(() -> request.confirmHandover(true, now.plusSeconds(10)))
                     .isInstanceOfSatisfying(BusinessException.class, ex -> {
                         assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_HANDOVER_ALREADY_CONFIRMED);
                     });
@@ -620,26 +643,25 @@ class RequestStateMachineTest {
             // 2. Người nhận đề xuất lịch gặp
             Instant meetingTime = t1.plus(3, ChronoUnit.DAYS);
             Instant t2 = t1.plus(1, ChronoUnit.HOURS);
-            request.proposeSchedule("IN_PERSON", "Cổng FPT", meetingTime, false, false, t2);
+            request.proposeSchedule("IN_PERSON", "Cổng FPT", meetingTime, false, true, t2);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_LOGISTICS);
 
             // 3. Chủ bài đồng ý chốt lịch -> chuyển sang LOGISTICS_CONFIRMED (GN-03)
             Instant t3 = t2.plus(30, ChronoUnit.MINUTES);
-            request.confirmLogistics(true, false, t3);
+            request.confirmLogistics(true, true, t3);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
             assertThat(request.getContactRevealedAt()).isEqualTo(t3);
 
             // 4. Chủ bài giao đồ xong bấm xác nhận -> chuyển sang AWAITING_HANDOVER
             Instant t4 = meetingTime.plus(10, ChronoUnit.MINUTES);
-            request.confirmHandover(true, null, t4);
+            request.confirmHandover(true, t4);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
 
-            // 5. Người nhận kiểm tra đồ bấm xác nhận đúng mô tả -> chuyển sang COMPLETED
+            // 5. Người nhận kiểm tra đồ bấm hoàn tất -> chuyển sang COMPLETED
             Instant t5 = t4.plus(5, ChronoUnit.MINUTES);
-            request.confirmHandover(false, true, t5);
+            request.confirmHandover(false, t5);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.COMPLETED);
             assertThat(request.getCompletedAt()).isEqualTo(t5);
-            assertThat(request.getAsDescribed()).isTrue();
         }
 
         @Test
@@ -650,26 +672,26 @@ class RequestStateMachineTest {
             // Chủ bài chọn người nhận
             request.select(Instant.now());
 
-            // Chủ bài đề xuất ship và đồng ý cam kết miễn trừ trách nhiệm
+            // Chủ bài đề xuất ngày gửi hàng dự kiến (Cho tặng nên chủ bài không cần địa chỉ) và đồng ý cam kết
             Instant meetingTime = Instant.now().plus(4, ChronoUnit.DAYS);
             Instant t1 = Instant.now();
             request.proposeSchedule("SHIPPING", null, meetingTime, true, true, t1);
             assertThat(request.getDonorWaiverAt()).isEqualTo(t1);
 
-            // Người nhận xác nhận lịch và cũng đồng ý cam kết trách nhiệm
+            // Người nhận nhập địa chỉ nhận hàng, xác nhận lịch và cũng đồng ý cam kết trách nhiệm
             Instant t2 = t1.plus(2, ChronoUnit.HOURS);
-            request.confirmLogistics(false, true, t2);
+            request.confirmLogistics(false, true, t2, "12 Lê Lợi");
             assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
             assertThat(request.getReceiverWaiverAt()).isEqualTo(t2);
 
-            // Người nhận nhận được kiện hàng trước bấm xác nhận
+            // Luật mới (GN-12): chiều 1 do chủ bài gửi, người nhận chỉ báo nhận được sau khi chiều đó Đã gửi
             Instant t3 = meetingTime.plus(1, ChronoUnit.DAYS);
-            request.confirmHandover(false, true, t3);
+            request.markShipped(true, "GHN12345", t3);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
 
-            // Chủ bài xác nhận đã gửi thành công
+            // Cho tặng chỉ có một chiều nên người nhận nhận xong là hoàn tất
             Instant t4 = t3.plus(1, ChronoUnit.HOURS);
-            request.confirmHandover(true, null, t4);
+            request.markReceived(false, t4);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.COMPLETED);
         }
 
@@ -679,12 +701,12 @@ class RequestStateMachineTest {
             Request request = new Request(3L, 30L, null, "GIVE");
             request.select(Instant.now());
             request.proposeSchedule(
-                    "IN_PERSON", "Địa điểm", Instant.now().plus(2, ChronoUnit.DAYS), true, false, Instant.now());
-            request.confirmLogistics(false, false, Instant.now());
+                    "IN_PERSON", "Địa điểm", Instant.now().plus(2, ChronoUnit.DAYS), true, true, Instant.now());
+            request.confirmLogistics(false, true, Instant.now());
 
             // Chủ bài xác nhận đã giao đồ
             Instant handoverTime = Instant.now();
-            request.confirmHandover(true, null, handoverTime);
+            request.confirmHandover(true, handoverTime);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
 
             // Người nhận im lặng, 3 ngày sau job tự động hoàn tất
@@ -694,7 +716,6 @@ class RequestStateMachineTest {
             assertThat(request.getStatus()).isEqualTo(RequestStatus.COMPLETED);
             assertThat(request.isAutoConfirmed()).isTrue();
             assertThat(request.getCompletedAt()).isEqualTo(autoConfirmTime);
-            assertThat(request.getAsDescribed()).isTrue();
         }
 
         @Test
@@ -703,9 +724,9 @@ class RequestStateMachineTest {
             Request request = new Request(4L, 40L, null, "GIVE");
             request.select(Instant.now());
             request.proposeSchedule(
-                    "IN_PERSON", "Địa điểm", Instant.now().plus(2, ChronoUnit.DAYS), true, false, Instant.now());
-            request.confirmLogistics(false, false, Instant.now());
-            request.confirmHandover(true, null, Instant.now());
+                    "IN_PERSON", "Địa điểm", Instant.now().plus(2, ChronoUnit.DAYS), true, true, Instant.now());
+            request.confirmLogistics(false, true, Instant.now());
+            request.confirmHandover(true, Instant.now());
 
             // Đồ có vấn đề -> chuyển sang DISPUTED
             request.transitionTo(RequestStatus.DISPUTED);
@@ -722,9 +743,9 @@ class RequestStateMachineTest {
             Request request = new Request(5L, 50L, null, "GIVE");
             request.select(Instant.now());
             request.proposeSchedule(
-                    "IN_PERSON", "Địa điểm", Instant.now().plus(2, ChronoUnit.DAYS), true, false, Instant.now());
-            request.confirmLogistics(false, false, Instant.now());
-            request.confirmHandover(true, null, Instant.now());
+                    "IN_PERSON", "Địa điểm", Instant.now().plus(2, ChronoUnit.DAYS), true, true, Instant.now());
+            request.confirmLogistics(false, true, Instant.now());
+            request.confirmHandover(true, Instant.now());
 
             // Chuyển sang DISPUTED
             request.transitionTo(RequestStatus.DISPUTED);

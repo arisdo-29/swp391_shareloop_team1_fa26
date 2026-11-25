@@ -314,7 +314,7 @@ class OfferChangeIT extends IntegrationTest {
     }
 
     @Test
-    @DisplayName("Hoàn tất giao dịch sau khi chuyển: điểm uy tín tính theo SWAP cho cả hai bên (CD-07)")
+    @DisplayName("Hoàn tất giao dịch sau khi chuyển: điểm tích luỹ tính theo SWAP cho cả hai bên (CD-07)")
     void completeAfterConversion_awardsSwapPoints() throws Exception {
         // given
         givenReservedGiveTransaction(DONOR_BALANCE);
@@ -329,7 +329,7 @@ class OfferChangeIT extends IntegrationTest {
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
                         .header("Authorization", token(receiverId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new HandoverConfirmRequest(true, null))))
+                        .content(objectMapper.writeValueAsString(new HandoverConfirmRequest(null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"));
 
@@ -381,12 +381,12 @@ class OfferChangeIT extends IntegrationTest {
                         .header("Authorization", token(donorId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new ScheduleRequest("IN_PERSON", "Cổng trường", meetingTime, false))))
+                                new ScheduleRequest("IN_PERSON", "Cổng trường", meetingTime, true))))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
                         .header("Authorization", token(receiverId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new ConfirmLogisticsRequest(false))))
+                        .content(objectMapper.writeValueAsString(new ConfirmLogisticsRequest(true))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("LOGISTICS_CONFIRMED"));
     }

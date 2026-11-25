@@ -87,7 +87,14 @@ public class AdminActivityLogController {
                                                 "AUTH_REJECT",
                                                 "AUTH_REVOKE",
                                                 "GRACE_STAR",
-                                                "STAR_RESTORED"
+                                                "STAR_RESTORED",
+                                                "ADMIN_TOPUP_RECONCILED",
+                                                "ADMIN_ITEM_HIDDEN",
+                                                "ADMIN_ITEM_UNHIDDEN",
+                                                "ITEM_EDIT_SUBMITTED",
+                                                "ADMIN_VIEWED_CHAT",
+                                                "ITEM_DISPLAY_COMPENSATED",
+                                                "POINTS_REVOKED"
                                             }))
                     @RequestParam(required = false)
                     String type,

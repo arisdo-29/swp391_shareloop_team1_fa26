@@ -1,6 +1,7 @@
 package com.shareloop.integration.payment;
 
 import com.shareloop.wallet.entity.PaymentProvider;
+import java.time.Instant;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -21,7 +22,7 @@ public class MockPaymentClient implements PaymentGatewayClient {
     }
 
     @Override
-    public String buildRedirectUrl(String orderCode, long amountVnd) {
+    public String buildRedirectUrl(String orderCode, long amountVnd, Instant createdAt, Instant expiresAt) {
         return MOCK_CHECKOUT_PATH + orderCode;
     }
 }

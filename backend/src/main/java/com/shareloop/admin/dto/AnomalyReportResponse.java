@@ -14,6 +14,9 @@ import java.util.List;
  * @param ipWindowDays số ngày của cửa sổ tính nhiều tài khoản cùng IP
  * @param ipMinAccounts số tài khoản tối thiểu cùng IP trong cửa sổ để cảnh báo
  * @param sharedIpGroups các nhóm IP có từ ipMinAccounts tài khoản đăng ký trong ipWindowDays
+ * @param cancelWindowDays số ngày của cửa sổ đếm huỷ sau khi thấy liên hệ
+ * @param cancelThreshold người đề nghị huỷ từ số lần này trở lên thì bị cảnh báo
+ * @param repeatedCancelers các người đề nghị huỷ nhiều lần, nhiều nhất lên trước
  */
 public record AnomalyReportResponse(
         Instant generatedAt,
@@ -22,7 +25,32 @@ public record AnomalyReportResponse(
         List<RepeatedPairAnomaly> repeatedPairs,
         int ipWindowDays,
         int ipMinAccounts,
-        List<SharedIpGroup> sharedIpGroups) {
+        List<SharedIpGroup> sharedIpGroups,
+        int cancelWindowDays,
+        int cancelThreshold,
+        List<RepeatedCancelerAnomaly> repeatedCancelers) {
+
+    // Dạng 7 tham số (chưa có mục huỷ nhiều lần) để code và test đang gọi vẫn compile.
+    public AnomalyReportResponse(
+            Instant generatedAt,
+            int pairWindowDays,
+            int pairThreshold,
+            List<RepeatedPairAnomaly> repeatedPairs,
+            int ipWindowDays,
+            int ipMinAccounts,
+            List<SharedIpGroup> sharedIpGroups) {
+        this(
+                generatedAt,
+                pairWindowDays,
+                pairThreshold,
+                repeatedPairs,
+                ipWindowDays,
+                ipMinAccounts,
+                sharedIpGroups,
+                30,
+                3,
+                List.of());
+    }
 
     public AnomalyReportResponse(
             Instant generatedAt, int pairWindowDays, int pairThreshold, List<RepeatedPairAnomaly> repeatedPairs) {

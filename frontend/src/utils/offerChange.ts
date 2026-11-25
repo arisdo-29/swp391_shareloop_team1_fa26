@@ -46,6 +46,7 @@ const offerChangeErrorMessages: Record<string, string> = {
   REQUEST_ITEM_NOT_AVAILABLE: 'Món đề nghị không còn sẵn sàng để trao đổi.',
   REQUEST_ITEM_NOT_FOUND: 'Món đề nghị không còn tồn tại.',
   REQUEST_SELF_OFFER_NOT_ALLOWED: 'Không thể đề nghị chính món của giao dịch này.',
+  ITEM_HIDDEN: 'Món đề nghị đang tạm ẩn nên chưa giữ chỗ được.',
 };
 
 // Lỗi của các API đổi món; mã lạ thì dùng thông điệp backend gửi về.

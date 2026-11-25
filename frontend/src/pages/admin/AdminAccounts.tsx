@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Dialog } from '../../components/Dialog';
 import { Pagination } from '../../components/Pagination';
 import {
   Alert,
+  Avatar,
   Button,
   PageHeader,
   SearchField,
@@ -11,7 +12,8 @@ import {
   TextArea,
   SkeletonRows,
 } from '../../components/ui';
-import { adminFinanceApi } from '../../services/adminFinanceApi';
+import { adminFinanceApi, type AdminFinanceUserSummary } from '../../services/adminFinanceApi';
+import { adminItemApi } from '../../services/adminItemApi';
 import {
   adminUserApi,
   type AdminAccountRole,
@@ -19,11 +21,33 @@ import {
   type AdminUserSummary,
 } from '../../services/adminUserApi';
 import type { PageResponse } from '../../services/itemApi';
+import { userApi, type PublicProfileResponse } from '../../services/userApi';
 import { useDebouncedValue } from '../../utils/useDebouncedValue';
 import { adminErrorMessage } from './adminErrors';
+import './admin-accounts.css';
 
 const PAGE_SIZE = 20;
 const REASON_MAX_LENGTH = 500;
+
+interface AccountStats {
+  total: number;
+  active: number;
+  locked: number;
+}
+
+interface AccountEnrichment {
+  profile?: PublicProfileResponse;
+  wallet?: AdminFinanceUserSummary;
+}
+
+function avatarInitials(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(-2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+}
 
 const stateLabels: Record<AdminAccountState, string> = {
   ACTIVE: 'Đang hoạt động',
@@ -63,7 +87,13 @@ export function AdminAccounts() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
-  const [target, setTarget] = useState<{ account: AdminUserSummary; action: 'lock' | 'unlock' } | null>(null);
+  const [target, setTarget] = useState<{
+    account: AdminUserSummary;
+    action: 'lock' | 'unlock';
+  } | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<AdminUserSummary | null>(null);
+  const [stats, setStats] = useState<AccountStats | null>(null);
+  const [enrichment, setEnrichment] = useState<Record<number, AccountEnrichment>>({});
 
   useEffect(() => {
     let active = true;
@@ -93,6 +123,56 @@ export function AdminAccounts() {
     };
   }, [debouncedKeyword, state, role, page, reloadKey]);
 
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      adminUserApi.list({ page: 0, size: 1 }),
+      adminUserApi.list({ status: 'ACTIVE', page: 0, size: 1 }),
+      adminUserApi.list({ status: 'LOCKED', page: 0, size: 1 }),
+    ])
+      .then(([allAccounts, activeAccounts, lockedAccounts]) => {
+        if (!active) return;
+        setStats({
+          total: allAccounts.totalElements,
+          active: activeAccounts.totalElements,
+          locked: lockedAccounts.totalElements,
+        });
+      })
+      .catch(() => {
+        if (active) setStats(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [reloadKey]);
+
+  useEffect(() => {
+    if (!result) return;
+    let active = true;
+    setEnrichment({});
+    Promise.all(
+      result.items.map(async (account) => {
+        const [profileResult, walletResult] = await Promise.allSettled([
+          userApi.getPublicProfile(account.id),
+          account.role === 'USER'
+            ? adminFinanceApi.userWallet(account.id)
+            : Promise.resolve(undefined),
+        ]);
+        return {
+          id: account.id,
+          profile: profileResult.status === 'fulfilled' ? profileResult.value : undefined,
+          wallet: walletResult.status === 'fulfilled' ? walletResult.value : undefined,
+        };
+      }),
+    ).then((rows) => {
+      if (!active) return;
+      setEnrichment(Object.fromEntries(rows.map(({ id, ...data }) => [id, data])));
+    });
+    return () => {
+      active = false;
+    };
+  }, [result]);
+
   const closeDialog = useCallback(() => setTarget(null), []);
 
   const onDone = (message: string) => {
@@ -102,13 +182,23 @@ export function AdminAccounts() {
   };
 
   return (
-    <>
-      <PageHeader
-        title="Quản lý tài khoản"
-        description="Theo dõi tài khoản trong hệ thống, khóa hoặc mở khóa kèm lý do lưu vào nhật ký."
-      />
-      <div className="mb-5 flex flex-col gap-3 rounded-lg bg-white p-3 ring-1 ring-border/80 lg:flex-row lg:items-end">
-        <div className="min-w-0 flex-1">
+    <section className="admin-accounts-page">
+      <div className="admin-accounts-header">
+        <PageHeader
+          title="Quản lý tài khoản"
+          description="Theo dõi tài khoản trong hệ thống, khóa hoặc mở khóa kèm lý do lưu vào nhật ký."
+        />
+      </div>
+
+      <div className="admin-accounts-stats">
+        <AccountStat label="Tổng tài khoản" value={stats?.total} modifier="total" />
+        <AccountStat label="Đang hoạt động" value={stats?.active} modifier="active" />
+        <AccountStat label="Đã khóa" value={stats?.locked} modifier="locked" />
+      </div>
+
+      <div className="admin-accounts-filters">
+        <div className="admin-accounts-filter-search">
+          <span className="label">Tìm kiếm tài khoản</span>
           <SearchField
             aria-label="Tìm tài khoản"
             placeholder="Tìm theo tên, email hoặc số điện thoại..."
@@ -120,6 +210,7 @@ export function AdminAccounts() {
           />
         </div>
         <Select
+          className="admin-accounts-filter-state"
           label="Trạng thái"
           value={state}
           onChange={(event) => {
@@ -135,6 +226,7 @@ export function AdminAccounts() {
           ))}
         </Select>
         <Select
+          className="admin-accounts-filter-role"
           label="Vai trò"
           value={role}
           onChange={(event) => {
@@ -152,12 +244,12 @@ export function AdminAccounts() {
       </div>
 
       {notice ? (
-        <div className="mb-4" role="status">
+        <div role="status">
           <Alert tone="success">{notice}</Alert>
         </div>
       ) : null}
       {error ? (
-        <div className="mb-4 space-y-3">
+        <div className="space-y-3">
           <Alert tone="error">{error}</Alert>
           <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
             Thử lại
@@ -168,47 +260,77 @@ export function AdminAccounts() {
       {loading && !result ? (
         <SkeletonRows label="Đang tải danh sách tài khoản" />
       ) : result ? (
-        <>
-          <div className="table-wrap">
-            <table className="data-table">
+        <div className="admin-accounts-table-section">
+          <div className="table-wrap admin-accounts-table-wrap">
+            <table className="data-table admin-accounts-table">
               <thead>
                 <tr>
-                  <th>Họ tên</th>
-                  <th>Email</th>
+                  <th>Người dùng</th>
                   <th>Số điện thoại</th>
                   <th>Vai trò</th>
+                  <th className="text-right">Số dư Credit</th>
+                  <th className="text-center">Uy tín</th>
                   <th>Trạng thái</th>
-                  <th>Ngày tạo</th>
-                  <th>Thao tác</th>
+                  <th>Ngày đăng ký</th>
+                  <th className="text-center">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 {result.items.map((account) => {
                   const action = availableAction(account);
+                  const data = enrichment[account.id];
                   return (
-                    <tr key={account.id}>
-                      <td className="w-36 font-semibold text-text-primary">{account.fullName}</td>
+                    <tr key={account.id} className="admin-accounts-row">
                       <td>
-                        <span className="cell-truncate" title={account.email}>
-                          {account.email}
-                        </span>
+                        <div className="admin-accounts-user">
+                          <Avatar
+                            user={{
+                              name: account.fullName,
+                              avatarInitials:
+                                data?.profile?.avatarInitials || avatarInitials(account.fullName),
+                              avatarUrl: data?.profile?.avatarUrl ?? undefined,
+                            }}
+                            size="md"
+                          />
+                          <div className="min-w-0">
+                            <p className="admin-accounts-user-name">{account.fullName}</p>
+                            <p className="admin-accounts-user-email">{account.email}</p>
+                          </div>
+                        </div>
                       </td>
                       <td>{account.phone || '—'}</td>
                       <td>{roleLabels[account.role]}</td>
+                      <td className="admin-accounts-credit">
+                        {data?.wallet
+                          ? `${data.wallet.totalCredit.toLocaleString('vi-VN')} Credit`
+                          : '—'}
+                      </td>
+                      <td className="admin-accounts-reputation">
+                        {data?.profile
+                          ? `${data.profile.trustStars.toLocaleString('vi-VN')} sao`
+                          : '—'}
+                      </td>
                       <td>
-                        <span
-                          className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-2xs font-semibold ${stateBadgeClass(account.status)}`}
-                        >
+                        <span className={`admin-accounts-state ${stateBadgeClass(account.status)}`}>
                           {stateLabels[account.status]}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap text-xs">
+                      <td className="admin-accounts-date">
                         {new Date(account.createdAt).toLocaleDateString('vi-VN')}
                       </td>
                       <td>
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="admin-accounts-actions">
+                          <button
+                            type="button"
+                            className="admin-accounts-action"
+                            onClick={() => setSelectedAccount(account)}
+                          >
+                            Xem chi tiết
+                          </button>
                           {action ? (
                             <Button
+                              size="sm"
+                              className="admin-accounts-action-size !min-h-8 !px-2 !py-1"
                               variant={action === 'lock' ? 'danger' : 'outline'}
                               onClick={() => {
                                 setNotice('');
@@ -220,7 +342,7 @@ export function AdminAccounts() {
                           ) : null}
                           {account.role === 'USER' ? (
                             <Link
-                              className="text-xs font-semibold text-link hover:underline"
+                              className="admin-accounts-action"
                               to={`/admin/finance/users/${account.id}`}
                             >
                               Xem Credit
@@ -235,7 +357,7 @@ export function AdminAccounts() {
                 })}
                 {result.items.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center text-text-muted">
+                    <td colSpan={8} className="text-center text-text-muted">
                       Không có tài khoản phù hợp bộ lọc hiện tại.
                     </td>
                   </tr>
@@ -250,7 +372,11 @@ export function AdminAccounts() {
             disabled={loading}
             onPageChange={setPage}
           />
-        </>
+        </div>
+      ) : null}
+
+      {selectedAccount ? (
+        <AccountDetailDialog account={selectedAccount} onClose={() => setSelectedAccount(null)} />
       ) : null}
 
       {target ? (
@@ -261,7 +387,132 @@ export function AdminAccounts() {
           onDone={onDone}
         />
       ) : null}
-    </>
+    </section>
+  );
+}
+
+function AccountStat({
+  label,
+  value,
+  modifier,
+}: {
+  label: string;
+  value: number | undefined;
+  modifier: 'total' | 'active' | 'locked';
+}) {
+  return (
+    <div className={`admin-accounts-stat admin-accounts-stat--${modifier}`}>
+      <p>{label}</p>
+      <strong>{value === undefined ? '—' : value.toLocaleString('vi-VN')}</strong>
+      <span>Toàn hệ thống</span>
+    </div>
+  );
+}
+
+function AccountDetailDialog({
+  account,
+  onClose,
+}: {
+  account: AdminUserSummary;
+  onClose: () => void;
+}) {
+  const [profile, setProfile] = useState<PublicProfileResponse | null>(null);
+  const [wallet, setWallet] = useState<AdminFinanceUserSummary | null>(null);
+  const [totalItems, setTotalItems] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    Promise.allSettled([
+      userApi.getPublicProfile(account.id),
+      account.role === 'USER' ? adminFinanceApi.userWallet(account.id) : Promise.resolve(null),
+      adminItemApi.list({ ownerId: account.id, page: 0, size: 1 }),
+    ]).then(([profileResult, walletResult, itemResult]) => {
+      if (!active) return;
+      setProfile(profileResult.status === 'fulfilled' ? profileResult.value : null);
+      setWallet(walletResult.status === 'fulfilled' ? walletResult.value : null);
+      setTotalItems(itemResult.status === 'fulfilled' ? itemResult.value.totalElements : null);
+      setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [account.id, account.role]);
+
+  return (
+    <Dialog title="Chi tiết tài khoản" wide onClose={onClose}>
+      <div className="admin-account-detail-profile">
+        <Avatar
+          user={{
+            name: account.fullName,
+            avatarInitials: profile?.avatarInitials || avatarInitials(account.fullName),
+            avatarUrl: profile?.avatarUrl ?? undefined,
+          }}
+          size="lg"
+        />
+        <div>
+          <p className="font-semibold text-text-primary">{account.fullName}</p>
+          <p className="break-all text-xs text-text-muted">{account.email}</p>
+        </div>
+      </div>
+
+      <dl className="admin-account-detail-grid">
+        <AccountDetailItem label="Mã tài khoản">#{account.id}</AccountDetailItem>
+        <AccountDetailItem label="Họ tên">{account.fullName}</AccountDetailItem>
+        <AccountDetailItem label="Email">{account.email}</AccountDetailItem>
+        <AccountDetailItem label="Số điện thoại">{account.phone || '—'}</AccountDetailItem>
+        <AccountDetailItem label="Vai trò">{roleLabels[account.role]}</AccountDetailItem>
+        <AccountDetailItem label="Trạng thái">
+          <span className={`admin-accounts-state ${stateBadgeClass(account.status)}`}>
+            {stateLabels[account.status]}
+          </span>
+        </AccountDetailItem>
+        <AccountDetailItem label="Ngày đăng ký">
+          {new Date(account.createdAt).toLocaleString('vi-VN')}
+        </AccountDetailItem>
+        {wallet ? (
+          <AccountDetailItem label="Số dư Credit">
+            {wallet.totalCredit.toLocaleString('vi-VN')} Credit
+          </AccountDetailItem>
+        ) : null}
+        {profile ? (
+          <AccountDetailItem label="Uy tín">
+            {profile.trustStars.toLocaleString('vi-VN')} sao
+          </AccountDetailItem>
+        ) : null}
+        {totalItems !== null ? (
+          <AccountDetailItem label="Tổng bài đăng">
+            {totalItems.toLocaleString('vi-VN')}
+          </AccountDetailItem>
+        ) : null}
+        {profile ? (
+          <AccountDetailItem label="Giao dịch hoàn tất">
+            {profile.completedTransactions.toLocaleString('vi-VN')}
+          </AccountDetailItem>
+        ) : null}
+      </dl>
+
+      {loading ? (
+        <p className="mt-3 text-xs text-text-muted">Đang tải thông tin bổ sung...</p>
+      ) : null}
+
+      <div className="admin-account-detail-links">
+        <Link to={`/users/${account.id}`}>Xem hồ sơ người dùng</Link>
+        {account.role === 'USER' ? (
+          <Link to={`/admin/finance/users/${account.id}`}>Xem lịch sử Credit</Link>
+        ) : null}
+      </div>
+    </Dialog>
+  );
+}
+
+function AccountDetailItem({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="admin-account-detail-item">
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
   );
 }
 
@@ -302,8 +553,8 @@ function LockDialog({
   return (
     <Dialog title={locking ? 'Khóa tài khoản' : 'Mở khóa tài khoản'} busy={busy} onClose={onClose}>
       <p className="text-sm leading-6 text-text-secondary">
-        {locking ? 'Khóa' : 'Mở khóa'} tài khoản <strong>{account.fullName}</strong> ({account.email}).
-        Lý do sẽ được lưu vào nhật ký hành động.
+        {locking ? 'Khóa' : 'Mở khóa'} tài khoản <strong>{account.fullName}</strong> (
+        {account.email}). Lý do sẽ được lưu vào nhật ký hành động.
       </p>
       <div className="mt-4">
         <TextArea

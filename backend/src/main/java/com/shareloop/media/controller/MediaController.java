@@ -44,9 +44,22 @@ public class MediaController {
     }
 
     @Operation(
+            summary = "Xem lại ảnh vừa tải lên khi chưa gắn",
+            description =
+                    "Yêu cầu đăng nhập. Chỉ người tải lên xem được ảnh còn chưa gắn vào bài đăng hay tin nhắn (bước xem trước khi đăng bài). Người khác nhận 404.")
+    @GetMapping("/{id}/preview")
+    public ResponseEntity<byte[]> preview(@PathVariable long id, @CurrentUserId Long userId) {
+        MediaService.MediaContent content = service.readOwnUnattached(id, userId);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .contentType(MediaType.parseMediaType(content.mimeType()))
+                .body(content.bytes());
+    }
+
+    @Operation(
             summary = "Xem ảnh công khai",
             description =
-                    "Không cần đăng nhập. Trả về nội dung ảnh với đúng kiểu MIME; chỉ đọc được ảnh công khai đang hoạt động.")
+                    "Không cần đăng nhập. Trả về nội dung ảnh với đúng kiểu MIME; chỉ đọc được ảnh công khai đã gắn vào bài đăng hoặc ảnh đại diện.")
     @GetMapping("/{id}")
     public ResponseEntity<byte[]> read(@PathVariable long id) {
         MediaService.MediaContent content = service.readPublic(id);

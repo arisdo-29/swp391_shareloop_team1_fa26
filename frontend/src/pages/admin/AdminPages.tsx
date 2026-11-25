@@ -289,7 +289,7 @@ const activityLogTypeLabels: Record<string, string> = {
   ADMIN_ACTION: 'Thao tác quản trị',
   REVIEW: 'Kiểm duyệt bài',
   AI_CALL: 'Gọi trợ lý AI',
-  POINTS: 'Thay đổi điểm uy tín',
+  POINTS: 'Thay đổi điểm tích luỹ',
   STARS: 'Thay đổi sao uy tín',
   SECURITY: 'Sự kiện bảo mật',
 };
@@ -588,6 +588,7 @@ function ApiLexiconModal({ entry, saving, onClose, onSave }: { entry: AdminLexic
 function ApiAdminAreas() {
   const [areas, setAreas] = useState<AdminAreaResponse[]>([]);
   const [editing, setEditing] = useState<AdminAreaResponse | null | 'new'>(null);
+  const [pendingDeactivate, setPendingDeactivate] = useState<{ area: AdminAreaResponse; count: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState('');
@@ -626,7 +627,26 @@ function ApiAdminAreas() {
     }
   };
 
+  // Tắt khu vực thì hỏi lại kèm số bài sẽ bị ẩn khỏi Tìm đồ (B3). Bật lại thì làm ngay.
+  const requestToggle = async (area: AdminAreaResponse) => {
+    if (!area.active) {
+      void toggleActive(area);
+      return;
+    }
+    setSavingId(area.id);
+    setError('');
+    try {
+      const count = await adminAreaApi.visibleItemCount(area.id);
+      setPendingDeactivate({ area, count });
+    } catch (apiError) {
+      setError((apiError as ApiError).message || 'Không đếm được số bài bị ảnh hưởng.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   const toggleActive = async (area: AdminAreaResponse) => {
+    setPendingDeactivate(null);
     setSavingId(area.id);
     setError('');
     setNotice('');
@@ -644,7 +664,8 @@ function ApiAdminAreas() {
   return <Panel title="Khu vực" description="Quản lý tỉnh, thành phố và khu vực con dùng cho tìm kiếm và đăng bài." action={<Button onClick={() => setEditing('new')}>Thêm khu vực</Button>}>
     {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
     {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
-    {loading ? <EmptyState title="Đang tải khu vực" text="Vui lòng chờ trong giây lát." /> : areas.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Tên</th><th>Khu vực cha</th><th>Cấp</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>{areas.map((area) => <tr key={area.id}><td className="font-semibold">{area.name}</td><td>{areas.find((entry) => entry.id === area.parentId)?.name ?? '—'}</td><td>{area.level === 1 ? 'Thành phố' : area.level === 2 ? 'Quận' : area.level}</td><td>{area.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td className="space-x-2"><Button size="sm" variant="outline" disabled={savingId === area.id} onClick={() => setEditing(area)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId === area.id} onClick={() => void toggleActive(area)}>{area.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có khu vực" text="Hiện chưa có khu vực nào." />}
+    {loading ? <EmptyState title="Đang tải khu vực" text="Vui lòng chờ trong giây lát." /> : areas.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Tên</th><th>Khu vực cha</th><th>Cấp</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>{areas.map((area) => <tr key={area.id}><td className="font-semibold">{area.name}</td><td>{areas.find((entry) => entry.id === area.parentId)?.name ?? '—'}</td><td>{area.level === 1 ? 'Thành phố' : area.level === 2 ? 'Quận' : area.level}</td><td>{area.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td className="space-x-2"><Button size="sm" variant="outline" disabled={savingId === area.id} onClick={() => setEditing(area)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId === area.id} onClick={() => void requestToggle(area)}>{area.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có khu vực" text="Hiện chưa có khu vực nào." />}
+    {pendingDeactivate ? <DeactivateConfirm name={pendingDeactivate.area.name} count={pendingDeactivate.count} onCancel={() => setPendingDeactivate(null)} onConfirm={() => void toggleActive(pendingDeactivate.area)} /> : null}
     {editing ? <ApiAreaModal area={editing === 'new' ? null : editing} areas={areas} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
   </Panel>;
 }
@@ -848,6 +869,18 @@ function ChecklistEditModal({ entry, saving, error, onClose, onSave }: { entry: 
 
 const SHOW_CATEGORY_ATTRIBUTES = false;
 
+// Hộp xác nhận trước khi tắt danh mục hoặc khu vực: nói rõ số bài đang hiển thị sẽ bị ẩn khỏi Tìm đồ (B3).
+function DeactivateConfirm({ name, count, onCancel, onConfirm }: { name: string; count: number; onCancel: () => void; onConfirm: () => void }) {
+  return <DialogFrame labelledBy="deactivate-confirm-title" onClose={onCancel}>
+    <h2 id="deactivate-confirm-title" className="text-xl font-bold">Tạm ẩn “{name}”</h2>
+    <p className="mt-2 text-sm">{count} bài đang hiển thị sẽ bị ẩn khỏi Tìm đồ. Bật lại thì các bài này hiện lại.</p>
+    <div className="mt-5 flex justify-end gap-2">
+      <Button variant="outline" onClick={onCancel}>Xem lại</Button>
+      <Button onClick={onConfirm}>Tạm ẩn</Button>
+    </div>
+  </DialogFrame>;
+}
+
 function sortCategories(categories: AdminCategoryResponse[]) {
   return [...categories].sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
 }
@@ -855,6 +888,7 @@ function sortCategories(categories: AdminCategoryResponse[]) {
 export function ApiAdminCategories() {
   const [categories, setCategories] = useState<AdminCategoryResponse[]>([]);
   const [editing, setEditing] = useState<AdminCategoryResponse | null | 'new'>(null);
+  const [pendingDeactivate, setPendingDeactivate] = useState<{ category: AdminCategoryResponse; count: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState('');
@@ -898,7 +932,26 @@ export function ApiAdminCategories() {
     }
   };
 
+  // Tắt danh mục thì hỏi lại kèm số bài sẽ bị ẩn khỏi Tìm đồ (B3). Bật lại thì làm ngay.
+  const requestToggle = async (category: AdminCategoryResponse) => {
+    if (!category.active || mutationLock.current) {
+      void toggleActive(category);
+      return;
+    }
+    setSavingId(category.id);
+    setError('');
+    try {
+      const count = await adminCategoryApi.visibleItemCount(category.id);
+      setPendingDeactivate({ category, count });
+    } catch (apiError) {
+      setError((apiError as ApiError).message || 'Không đếm được số bài bị ảnh hưởng.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   const toggleActive = async (category: AdminCategoryResponse) => {
+    setPendingDeactivate(null);
     if (mutationLock.current) return;
     mutationLock.current = true;
     setSavingId(category.id);
@@ -944,7 +997,8 @@ export function ApiAdminCategories() {
   return <Panel title="Danh mục" description="Thứ tự trong bảng cũng là thứ tự danh mục hiển thị cho người dùng." action={<Button disabled={loading || busy} onClick={() => setEditing('new')}>Thêm danh mục</Button>}>
     {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
     {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
-    {loading ? <EmptyState title="Đang tải danh mục" text="Vui lòng chờ trong giây lát." /> : categories.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Tên</th>{hasParentCategory ? <th>Danh mục cha</th> : null}<th>Phân loại</th><th>Trạng thái</th><th className="whitespace-nowrap">Thao tác</th></tr></thead><tbody>{categories.map((category, index) => <tr key={category.id}><td>{index + 1}</td><td className="font-semibold">{category.name}</td>{hasParentCategory ? <td>{categories.find((entry) => entry.id === category.parentId)?.name ?? '—'}</td> : null}<td>{category.restricted ? 'Hạn chế' : 'Thông thường'}</td><td>{category.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" variant="outline" title="Đưa danh mục này lên trên một vị trí" disabled={busy || index === 0} onClick={() => void move(index, -1)}>Lên</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title="Đưa danh mục này xuống dưới một vị trí" disabled={busy || index === categories.length - 1} onClick={() => void move(index, 1)}>Xuống</Button><Button className="!px-2 whitespace-nowrap" variant="outline" disabled={busy} onClick={() => setEditing(category)}>Sửa</Button><Button className="!px-2 whitespace-nowrap" variant="outline" disabled={busy} onClick={() => void toggleActive(category)}>{category.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có danh mục" text="Hiện chưa có danh mục nào." />}
+    {loading ? <EmptyState title="Đang tải danh mục" text="Vui lòng chờ trong giây lát." /> : categories.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Tên</th>{hasParentCategory ? <th>Danh mục cha</th> : null}<th>Phân loại</th><th>Trạng thái</th><th className="whitespace-nowrap">Thao tác</th></tr></thead><tbody>{categories.map((category, index) => <tr key={category.id}><td>{index + 1}</td><td className="font-semibold">{category.name}</td>{hasParentCategory ? <td>{categories.find((entry) => entry.id === category.parentId)?.name ?? '—'}</td> : null}<td>{category.restricted ? 'Hạn chế' : 'Thông thường'}</td><td>{category.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" variant="outline" title="Đưa danh mục này lên trên một vị trí" disabled={busy || index === 0} onClick={() => void move(index, -1)}>Lên</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title="Đưa danh mục này xuống dưới một vị trí" disabled={busy || index === categories.length - 1} onClick={() => void move(index, 1)}>Xuống</Button><Button className="!px-2 whitespace-nowrap" variant="outline" disabled={busy} onClick={() => setEditing(category)}>Sửa</Button><Button className="!px-2 whitespace-nowrap" variant="outline" disabled={busy} onClick={() => void requestToggle(category)}>{category.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có danh mục" text="Hiện chưa có danh mục nào." />}
+    {pendingDeactivate ? <DeactivateConfirm name={pendingDeactivate.category.name} count={pendingDeactivate.count} onCancel={() => setPendingDeactivate(null)} onConfirm={() => void toggleActive(pendingDeactivate.category)} /> : null}
     {SHOW_CATEGORY_ATTRIBUTES && !loading && categories.length ? <ApiCategoryAttributes categories={categories} /> : null}
     {editing ? <ApiCategoryModal category={editing === 'new' ? null : editing} categories={categories} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
   </Panel>;

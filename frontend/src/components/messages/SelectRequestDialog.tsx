@@ -15,6 +15,7 @@ export function SelectRequestDialog({
   submitting,
   error,
   needsTopUp = false,
+  blocked = false,
   onCancel,
   onConfirm,
   onViewItem,
@@ -25,6 +26,8 @@ export function SelectRequestDialog({
   error: string;
   // Backend trả 402 khi chủ bài thiếu Credit để chuyển bài sang Trao đổi.
   needsTopUp?: boolean;
+  // Backend báo món đổi hoặc bài không còn dùng được (SELECT_REQUEST_BLOCKED_MESSAGES): bấm lại cũng không được.
+  blocked?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
   onViewItem?: (itemId: number) => void;
@@ -46,6 +49,13 @@ export function SelectRequestDialog({
   const conversion = offerConversion(feRequest);
   // Yêu cầu có kèm món thì hiện 2 thẻ. Giao dịch SWAP luôn có món; nếu dữ liệu thiếu id vẫn hiện thẻ chờ.
   const showsTwoItems = requestOfferLabel(feRequest) === 'Trao đổi' || request.type === 'SWAP';
+  // Món đổi đã tải được mà không còn ở trạng thái đã duyệt (bị giữ chỗ ở giao dịch khác, chờ duyệt lại...).
+  const offeredItemUnavailable = Boolean(
+    request.offeredItemId &&
+      conversation.offeredItem &&
+      (conversation.offeredItem.status !== 'APPROVED' || conversation.offeredItem.hidden === true),
+  );
+  const confirmLocked = blocked || offeredItemUnavailable;
 
   return (
     <DialogFrame labelledBy="select-request-title">
@@ -68,9 +78,6 @@ export function SelectRequestDialog({
                 conversation.request.receiverTrustStars ?? conversation.request.trustStars
               }
               rank={conversation.request.receiverRank ?? conversation.request.rank}
-              asDescribedRate={
-                conversation.request.receiverAsDescribedRate ?? conversation.request.asDescribedRate
-              }
             />
           </div>
           <p className="mt-1 text-xs text-text-muted">
@@ -109,6 +116,11 @@ export function SelectRequestDialog({
         Khi bạn xác nhận chọn người này để giao dịch, yêu cầu sẽ được chấp nhận và các yêu cầu đang
         chờ khác của cùng bài đăng sẽ tự động bị từ chối.
       </p>
+      {offeredItemUnavailable && !error ? (
+        <p role="alert" className="mt-3 rounded-md bg-error-soft p-3 text-sm text-error">
+          Món người này đề nghị đổi không còn khả dụng.
+        </p>
+      ) : null}
       <OfferConversionWarning conversion={conversion} />
       {needsTopUp ? (
         <ConversionTopUpNotice fee={conversion?.to === 'SWAP' ? conversion.fee : null} />
@@ -122,7 +134,7 @@ export function SelectRequestDialog({
         <Button variant="outline" autoFocus disabled={submitting} onClick={onCancel}>
           Hủy
         </Button>
-        <Button disabled={submitting} onClick={onConfirm}>
+        <Button disabled={submitting || confirmLocked} onClick={onConfirm}>
           {submitting ? 'Đang chọn...' : 'Xác nhận chọn'}
         </Button>
       </div>

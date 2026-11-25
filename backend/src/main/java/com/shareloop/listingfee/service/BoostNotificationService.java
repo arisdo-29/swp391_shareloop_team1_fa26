@@ -138,11 +138,11 @@ public class BoostNotificationService {
             int maxDays = configService.getInt(ConfigKey.BOOST_MAX_DAYS);
             int cooldownDays = configService.getInt(ConfigKey.BOOST_COOLDOWN_DAYS);
             Instant boostAgainAt = row.getBoostedUntil().plus(cooldownDays, ChronoUnit.DAYS);
-            return "Đợt đẩy đã đủ tối đa " + maxDays + " ngày nên không mua thêm gói được; bài được đẩy lại từ "
+            return "Đợt đẩy đã đủ tối đa " + maxDays + " ngày nên không mua thêm gói được. Bài được đẩy lại từ "
                     + format(boostAgainAt) + ".";
         }
         if (row.getExpireAt() != null && extendedUntil.isAfter(row.getExpireAt())) {
-            return "Bài sắp hết hạn hiển thị nên chưa mua thêm gói đẩy được; hãy gia hạn bài trước rồi đẩy tiếp.";
+            return "Bài sắp hết hạn hiển thị nên chưa mua thêm gói đẩy được. Hãy gia hạn bài trước rồi đẩy tiếp.";
         }
         return "Bạn còn mua thêm được gói đẩy: mua trước lúc hết đẩy thì bài được đẩy tiếp tới " + format(extendedUntil)
                 + ".";
@@ -176,7 +176,7 @@ public class BoostNotificationService {
         // Bài đẩy rất cũ không có last_boosted_at: coi mọi thông báo dừng đẩy trước đó của bài là đã gửi.
         Instant since = row.getLastBoostedAt() != null ? row.getLastBoostedAt() : Instant.EPOCH;
         if (!alreadyNotified(row, BOOST_STOPPED, since)) {
-            String body = itemLabel(row) + " bị ẩn nên đã dừng đẩy; thời gian đẩy còn lại không được hoàn phí.";
+            String body = itemLabel(row) + " bị ẩn nên đã dừng đẩy. Thời gian đẩy còn lại không được hoàn phí.";
             notifyOwner(row, BOOST_STOPPED, "Bài đã dừng đẩy", body);
         }
         return true;

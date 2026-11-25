@@ -56,8 +56,20 @@ public class ReviewItem extends SliceAudit {
         return id;
     }
 
+    public String getRejectReason() {
+        return rejectReason;
+    }
+
     public Instant getApprovedAt() {
         return approvedAt;
+    }
+
+    public Long getRejectedBy() {
+        return rejectedBy;
+    }
+
+    public Instant getRejectedAt() {
+        return rejectedAt;
     }
 
     // L16: đã gỡ cấp, từ chối, thu hồi nhãn chính hãng (chưa có luồng xác nhận và BR). Cột auth_status giữ lại theo mô

@@ -18,6 +18,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // Derived query: email đã lưu chữ thường nên so khớp thẳng. Tài khoản xoá mềm bị @SQLRestriction loại.
     Optional<User> findByEmail(String email);
 
+    // Tìm theo email chuẩn hoá (A3): an+1@gmail.com và a.n@gmail.com cùng tìm ra tài khoản an@gmail.com.
+    // findFirst phòng dữ liệu cũ còn trùng (khi đó chỉ có index thường): lấy tài khoản tạo sớm nhất.
+    Optional<User> findFirstByEmailCanonicalOrderByIdAsc(String emailCanonical);
+
     // Số điện thoại chỉ tính trùng với tài khoản ACTIVE (khớp unique index ux_users_phone_active).
     boolean existsByPhoneAndStatus(String phone, UserStatus status);
 
@@ -60,6 +64,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("locked") Boolean locked,
             @Param("admin") Boolean admin,
             Pageable pageable);
+
+    /** Id các tài khoản có họ tên hoặc email khớp mẫu LIKE (đã là chữ thường, bọc dấu %), dùng để tìm cho Admin. */
+    @Query(
+            "select u.id from User u where lower(u.fullName) like :keywordPattern or lower(u.email) like :keywordPattern")
+    java.util.List<Long> findIdsByNameOrEmail(@Param("keywordPattern") String keywordPattern);
 
     /**
      * Danh sách ID của các quản trị viên đang hoạt động (dùng cho gửi thông báo cảnh báo hệ thống).

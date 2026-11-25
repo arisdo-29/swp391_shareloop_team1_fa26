@@ -90,7 +90,7 @@ public interface UserReputationRepository extends JpaRepository<UserReputation, 
     List<Object[]> findRepeatedPairs(@Param("since") Instant since, @Param("threshold") long threshold);
 
     /**
-     * Kiểm tra xem giao dịch đã được ghi nhận cộng điểm uy tín hay chưa qua bảng activity_logs (Idempotency).
+     * Kiểm tra xem giao dịch đã được ghi nhận cộng điểm tích luỹ hay chưa qua bảng activity_logs (Idempotency).
      */
     @Query(value = """
             SELECT COUNT(1) > 0
@@ -99,32 +99,11 @@ public interface UserReputationRepository extends JpaRepository<UserReputation, 
             """, nativeQuery = true)
     boolean isReputationAppliedForRequest(@Param("requestId") Long requestId);
 
-    /**
-     * Tính tỉ lệ đúng mô tả (%) của người dùng khi làm chủ bài (donor) trong các giao dịch COMPLETED.
-     *
-     * @param userId id người dùng cần tính tỉ lệ
-     * @return tỉ lệ đúng mô tả từ 0.0 đến 100.0, hoặc null nếu chưa có giao dịch nào được đánh giá
-     */
+    /** Điểm của giao dịch đã được thu hồi cho người này chưa (F3), để gọi lại hai lần không trừ hai lần. */
     @Query(value = """
-            SELECT CAST(
-                COUNT(CASE WHEN r.as_described = TRUE THEN 1 END) * 100.0 /
-                NULLIF(COUNT(CASE WHEN r.as_described IS NOT NULL THEN 1 END), 0)
-                AS DOUBLE PRECISION)
-            FROM requests r
-            JOIN items i ON r.item_id = i.id
-            WHERE i.donor_id = :userId AND r.status = 'COMPLETED'
+            SELECT COUNT(1) > 0
+            FROM activity_logs
+            WHERE target_type = 'REQUEST' AND target_id = :requestId AND actor_id = :userId AND type = 'POINTS_REVOKED'
             """, nativeQuery = true)
-    Double calculateAsDescribedRate(@Param("userId") Long userId);
-
-    /**
-     * Đếm số giao dịch COMPLETED mà người dùng làm chủ bài và bên nhận đã trả lời "đúng mô tả?". Dùng để chỉ hiện tỉ lệ
-     * đúng mô tả khi đủ số giao dịch tối thiểu (SRS 6.12).
-     */
-    @Query(value = """
-            SELECT COUNT(*)
-            FROM requests r
-            JOIN items i ON r.item_id = i.id
-            WHERE i.donor_id = :userId AND r.status = 'COMPLETED' AND r.as_described IS NOT NULL
-            """, nativeQuery = true)
-    long countRatedCompletedAsDonor(@Param("userId") Long userId);
+    boolean isPointsRevokedForRequest(@Param("requestId") Long requestId, @Param("userId") Long userId);
 }

@@ -194,7 +194,7 @@ class RequestJobServiceTest {
             assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
             assertThat(request.getCancelReason()).contains("10 ngày");
             verify(requestRepository).save(request);
-            verify(itemService).release(1L);
+            verify(itemService).releaseAfterCancel(eq(1L), any());
             // Thông báo cho cả donor (20L) và receiver (10L)
             verify(notificationService).notify(eq(20L), eq("REQUEST_CANCELLED"), anyString(), anyString(), anyString());
             verify(notificationService).notify(eq(10L), eq("REQUEST_CANCELLED"), anyString(), anyString(), anyString());
@@ -236,7 +236,7 @@ class RequestJobServiceTest {
             Request request = new Request(1L, 10L, null, "GIVE");
             ReflectionTestUtils.setField(request, "id", 202L);
             request.select(cutoff.minus(2, ChronoUnit.HOURS));
-            request.proposeSchedule("DIRECT", "FPT Gate", now.plus(1, ChronoUnit.DAYS), true, false, cutoff);
+            request.proposeSchedule("DIRECT", "FPT Gate", now.plus(1, ChronoUnit.DAYS), true, true, cutoff);
 
             when(requestRepository.findSilentReservedRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(request), List.of());
@@ -247,7 +247,7 @@ class RequestJobServiceTest {
 
             assertThat(cancelledCount).isEqualTo(1);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
-            verify(itemService).release(1L);
+            verify(itemService).releaseAfterCancel(eq(1L), any());
         }
 
         @Test
@@ -269,8 +269,8 @@ class RequestJobServiceTest {
 
             // then
             assertThat(cancelledCount).isEqualTo(1);
-            verify(itemService).release(1L);
-            verify(itemService).releaseIfReserved(50L);
+            verify(itemService).releaseAfterCancel(eq(1L), any());
+            verify(itemService).releaseIfReservedAfterCancel(eq(50L), any());
         }
     }
 
@@ -289,10 +289,9 @@ class RequestJobServiceTest {
             ReflectionTestUtils.setField(request, "id", 301L);
             request.select(now.minus(5, ChronoUnit.DAYS));
             request.proposeSchedule(
-                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, false, now.minus(4, ChronoUnit.DAYS));
-            request.confirmLogistics(false, false, now.minus(4, ChronoUnit.DAYS)); // status -> LOGISTICS_CONFIRMED
-            request.confirmHandover(
-                    true, null, cutoff.minus(2, ChronoUnit.HOURS)); // donor confirms -> AWAITING_HANDOVER
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, true, now.minus(4, ChronoUnit.DAYS));
+            request.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS)); // status -> LOGISTICS_CONFIRMED
+            request.confirmHandover(true, cutoff.minus(2, ChronoUnit.HOURS)); // donor confirms -> AWAITING_HANDOVER
 
             when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(request), List.of());
@@ -304,7 +303,6 @@ class RequestJobServiceTest {
             assertThat(completedCount).isEqualTo(1);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.COMPLETED);
             assertThat(request.isAutoConfirmed()).isTrue();
-            assertThat(request.getAsDescribed()).isTrue();
             assertThat(request.getCompletedAt()).isEqualTo(now);
 
             verify(requestRepository).save(request);
@@ -317,6 +315,43 @@ class RequestJobServiceTest {
         }
 
         @Test
+        @DisplayName("Hoàn tất tự động gửi hai câu khác nhau cho bên đã bấm và bên im lặng (GN-13)")
+        void autoConfirmHandoverRequests_whenAutoCompleted_sendsDifferentSentencesToConfirmedAndSilentParty() {
+            when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
+            when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS)).thenReturn(24);
+            Instant cutoff = now.minus(3, ChronoUnit.DAYS);
+
+            Request request = new Request(1L, 10L, null, "GIVE");
+            ReflectionTestUtils.setField(request, "id", 305L);
+            request.select(now.minus(5, ChronoUnit.DAYS));
+            request.proposeSchedule(
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, true, now.minus(4, ChronoUnit.DAYS));
+            request.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS));
+            request.confirmHandover(true, cutoff.minus(2, ChronoUnit.HOURS)); // chủ bài đã bấm, người nhận im lặng
+
+            when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(request), List.of());
+            when(requestRepository.findById(305L)).thenReturn(Optional.of(request));
+            when(itemQueryService.getSummary(1L)).thenReturn(new ItemSummary(1L, 20L, null, null));
+
+            requestJobService.autoConfirmHandoverRequests(now);
+
+            org.mockito.ArgumentCaptor<String> silent = org.mockito.ArgumentCaptor.forClass(String.class);
+            org.mockito.ArgumentCaptor<String> confirmed = org.mockito.ArgumentCaptor.forClass(String.class);
+            verify(notificationService)
+                    .notify(eq(10L), eq("TRANSACTION_COMPLETED"), anyString(), silent.capture(), anyString());
+            verify(notificationService)
+                    .notify(eq(20L), eq("TRANSACTION_COMPLETED"), anyString(), confirmed.capture(), anyString());
+            assertThat(silent.getValue())
+                    .startsWith(
+                            "Giao dịch đã tự hoàn tất vì bạn không phản hồi trong 3 ngày. Bạn có thể khiếu nại tới");
+            assertThat(confirmed.getValue())
+                    .startsWith("Giao dịch đã hoàn tất vì")
+                    .contains("không phản hồi trong 3 ngày");
+            assertThat(confirmed.getValue()).doesNotContain("vì bạn không phản hồi");
+        }
+
+        @Test
         @DisplayName("Quét theo từng lô 100 bản ghi cho đến khi hết (Mục Q)")
         void autoConfirmHandoverRequests_whenMultipleBatches_processesAllUntilEmpty() {
             when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
@@ -326,17 +361,17 @@ class RequestJobServiceTest {
             ReflectionTestUtils.setField(r1, "id", 301L);
             r1.select(now.minus(5, ChronoUnit.DAYS));
             r1.proposeSchedule(
-                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, false, now.minus(4, ChronoUnit.DAYS));
-            r1.confirmLogistics(false, false, now.minus(4, ChronoUnit.DAYS));
-            r1.confirmHandover(true, null, cutoff.minus(2, ChronoUnit.HOURS));
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, true, now.minus(4, ChronoUnit.DAYS));
+            r1.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS));
+            r1.confirmHandover(true, cutoff.minus(2, ChronoUnit.HOURS));
 
             Request r2 = new Request(2L, 20L, null, "GIVE");
             ReflectionTestUtils.setField(r2, "id", 302L);
             r2.select(now.minus(5, ChronoUnit.DAYS));
             r2.proposeSchedule(
-                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, false, now.minus(4, ChronoUnit.DAYS));
-            r2.confirmLogistics(false, false, now.minus(4, ChronoUnit.DAYS));
-            r2.confirmHandover(true, null, cutoff.minus(3, ChronoUnit.HOURS));
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, true, now.minus(4, ChronoUnit.DAYS));
+            r2.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS));
+            r2.confirmHandover(true, cutoff.minus(3, ChronoUnit.HOURS));
 
             when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(r1), List.of(r2), List.of());
@@ -361,9 +396,9 @@ class RequestJobServiceTest {
             ReflectionTestUtils.setField(request, "id", 303L);
             request.select(now.minus(5, ChronoUnit.DAYS));
             request.proposeSchedule(
-                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, false, now.minus(4, ChronoUnit.DAYS));
-            request.confirmLogistics(false, false, now.minus(4, ChronoUnit.DAYS));
-            request.confirmHandover(true, null, cutoff.minus(1, ChronoUnit.HOURS));
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, true, now.minus(4, ChronoUnit.DAYS));
+            request.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS));
+            request.confirmHandover(true, cutoff.minus(1, ChronoUnit.HOURS));
 
             when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(request), List.of());
@@ -416,10 +451,9 @@ class RequestJobServiceTest {
             ReflectionTestUtils.setField(request, "id", 302L);
             request.select(now.minus(5, ChronoUnit.DAYS));
             request.proposeSchedule(
-                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, false, now.minus(4, ChronoUnit.DAYS));
-            request.confirmLogistics(false, false, now.minus(4, ChronoUnit.DAYS));
-            request.confirmHandover(
-                    false, true, cutoff.minus(1, ChronoUnit.HOURS)); // receiver confirms -> AWAITING_HANDOVER
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, true, now.minus(4, ChronoUnit.DAYS));
+            request.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS));
+            request.confirmHandover(false, cutoff.minus(1, ChronoUnit.HOURS)); // receiver confirms -> AWAITING_HANDOVER
 
             when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(request), List.of());
@@ -447,10 +481,10 @@ class RequestJobServiceTest {
             ReflectionTestUtils.setField(request, "id", 303L);
             request.select(now.minus(4, ChronoUnit.DAYS));
             request.proposeSchedule(
-                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, false, now.minus(3, ChronoUnit.DAYS));
-            request.confirmLogistics(false, false, now.minus(3, ChronoUnit.DAYS));
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, true, now.minus(3, ChronoUnit.DAYS));
+            request.confirmLogistics(false, true, now.minus(3, ChronoUnit.DAYS));
             // Confirm mới 1 ngày trước (sau cutoff)
-            request.confirmHandover(true, null, cutoff.plus(1, ChronoUnit.DAYS));
+            request.confirmHandover(true, cutoff.plus(1, ChronoUnit.DAYS));
 
             when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(request), List.of());
@@ -458,6 +492,45 @@ class RequestJobServiceTest {
 
             int completedCount = requestJobService.autoConfirmHandoverRequests(now);
 
+            assertThat(completedCount).isEqualTo(0);
+            assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
+            verify(itemService, never()).markTraded(anyLong());
+        }
+
+        @Test
+        @DisplayName(
+                "Giao hàng: việc tự hoàn tất của Gặp trực tiếp không đụng tới giao dịch Giao hàng (luật mới tính theo từng chiều)")
+        void autoConfirmHandoverRequests_whenShippingRequestReturned_doesNotComplete() {
+            // given: luật mới thay luật cũ ở GN-12, Giao hàng tự hoàn tất theo từng chiều ở RequestDeadlineJobService
+            when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
+            Instant inPersonCutoff = now.minus(3, ChronoUnit.DAYS);
+
+            Request request = new Request(1L, 10L, null, "GIVE");
+            ReflectionTestUtils.setField(request, "id", 304L);
+            request.select(now.minus(6, ChronoUnit.DAYS));
+            request.proposeSchedule(
+                    "SHIPPING",
+                    null,
+                    now.plus(1, ChronoUnit.DAYS),
+                    false,
+                    true,
+                    now.minus(5, ChronoUnit.DAYS),
+                    "12 Lê Lợi");
+            request.confirmLogistics(true, true, now.minus(5, ChronoUnit.DAYS));
+            // Người nhận bấm đã nhận được hàng 4 ngày trước: dù có lọt vào danh sách cũ, việc cũ cũng không hoàn tất
+            request.markShipped(true, "GHN123", now.minus(5, ChronoUnit.DAYS));
+            request.markReceived(false, now.minus(4, ChronoUnit.DAYS));
+            ReflectionTestUtils.setField(request, "status", RequestStatus.AWAITING_HANDOVER);
+            ReflectionTestUtils.setField(request, "completedAt", null);
+
+            when(requestRepository.findOverdueHandoverRequests(eq(inPersonCutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(request), List.of());
+            when(requestRepository.findById(304L)).thenReturn(Optional.of(request));
+
+            // when
+            int completedCount = requestJobService.autoConfirmHandoverRequests(now);
+
+            // then
             assertThat(completedCount).isEqualTo(0);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
             verify(itemService, never()).markTraded(anyLong());

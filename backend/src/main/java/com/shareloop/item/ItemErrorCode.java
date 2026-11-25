@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
  * Mã lỗi của module item; tiền tố ITEM_ và là một phần của contract (docs/api/item.md).
  */
 public enum ItemErrorCode implements ErrorCode {
+    ITEM_INVALID_PRICE_RANGE(HttpStatus.BAD_REQUEST, "Giá từ phải nhỏ hơn hoặc bằng giá đến."),
     ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy bài đăng."),
     ITEM_SWAP_DESIRED_ITEM_REQUIRED(HttpStatus.BAD_REQUEST, "Bài đăng trao đổi bắt buộc phải có món mong muốn."),
     ITEM_DEFECT_NOTE_REQUIRED(HttpStatus.BAD_REQUEST, "Bài đăng đồ lỗi bắt buộc phải có mô tả lỗi."),
@@ -29,7 +30,15 @@ public enum ItemErrorCode implements ErrorCode {
     ITEM_REPUTATION_BLOCKED(HttpStatus.FORBIDDEN, "Tài khoản có 0 sao uy tín, không thể đăng bài mới."),
     ITEM_ADMIN_BLOCKED(HttpStatus.FORBIDDEN, "Quản trị viên không được đăng bài giao dịch."),
     ITEM_MODERATION_BLOCKED(HttpStatus.UNPROCESSABLE_CONTENT, "Nội dung bài đăng không qua kiểm duyệt tầng 1."),
-    ITEM_INVALID_STATUS_TRANSITION(HttpStatus.CONFLICT, "Không thể chuyển trạng thái bài đăng.");
+    ITEM_INVALID_STATUS_TRANSITION(HttpStatus.CONFLICT, "Không thể chuyển trạng thái bài đăng."),
+    ITEM_HIDDEN(HttpStatus.CONFLICT, "Bài đang tạm ẩn nên chưa giữ chỗ được."),
+    ITEM_HIDE_NOT_ALLOWED(
+            HttpStatus.CONFLICT, "Bài đang có giao dịch chạy, hãy huỷ giao dịch ở trang Giao dịch trước khi ẩn bài."),
+    ITEM_ALREADY_HIDDEN(HttpStatus.CONFLICT, "Bài này đã được ẩn rồi."),
+    ITEM_NOT_HIDDEN(HttpStatus.CONFLICT, "Bài này đang hiển thị, không cần hiện lại."),
+    ITEM_UNHIDE_NOT_ALLOWED(
+            HttpStatus.CONFLICT,
+            "Tài khoản chủ bài đang bị khoá nên chưa hiện lại được bài, hãy mở khoá tài khoản trước.");
 
     private final HttpStatus status;
     private final String defaultMessage;

@@ -1,8 +1,18 @@
 import { Alert, Button, Icon } from '../ui';
-import type { RequestResponse } from '../../services/requestApi';
+import type { RequestDispute, RequestResponse } from '../../services/requestApi';
 import type { DisputeResponse } from '../../services/reportApi';
 import { formatDateTime, formatDeadline } from '../../utils/request';
 import { completedStepCount, transactionSteps } from '../../utils/transactionSteps';
+import {
+  disputeConcludedText,
+  disputeHeadline,
+  disputeStatusLabel,
+  formatRemaining,
+  isDisputeConcluded,
+  isResponseOverdue,
+} from '../../utils/disputeView';
+import { RefusalNotice } from './RefusalNotice';
+import { isShippingRequest, shippingProgressSummary } from '../../utils/shipping';
 
 type StepState = 'done' | 'current' | 'todo';
 
@@ -10,6 +20,8 @@ type StepState = 'done' | 'current' | 'todo';
 function stepCaption(index: number, state: StepState, request: RequestResponse) {
   if (index === 1 && request.meetingTime) return `Hẹn ${formatDateTime(request.meetingTime)}`;
   if (index === 3 && request.completedAt) return formatDateTime(request.completedAt);
+  // Giao hàng: bước Giao nhận hiện tiến độ từng chiều thay cho chữ chung (GN-12)
+  if (index === 2 && isShippingRequest(request) && state !== 'todo') return shippingProgressSummary(request);
   if (state === 'done') return 'Đã xong';
   if (state === 'current') return 'Đang thực hiện';
   return 'Chưa tới';
@@ -40,21 +52,116 @@ function StatusResult({ request }: { request: RequestResponse }) {
   return null;
 }
 
+/** Khiếu nại do chính mình mở: chỉ thông tin, không có nút. */
+function OpenedByMeNotice({ dispute, partnerName }: { dispute: RequestDispute; partnerName: string }) {
+  return (
+    <div className="space-y-2">
+      <Alert tone="info">
+        {disputeHeadline(dispute, partnerName)}{' '}
+        {dispute.responseDueAt
+          ? `${partnerName} có đến ${formatDeadline(dispute.responseDueAt)} để giải trình, sau đó Admin kết luận.`
+          : 'Admin sẽ xem xét và kết luận.'}
+      </Alert>
+      <p className="text-xs font-semibold text-text-secondary">
+        Trạng thái: {disputeStatusLabel(dispute)}
+      </p>
+    </div>
+  );
+}
+
+/** Khiếu nại nhắm vào mình: nổi bật và cho giải trình ngay khi backend báo canRespond. */
+function AgainstMeNotice({
+  dispute,
+  partnerName,
+  onRespond,
+}: {
+  dispute: RequestDispute;
+  partnerName: string;
+  onRespond: (dispute: RequestDispute) => void;
+}) {
+  if (isDisputeConcluded(dispute)) {
+    return <Alert tone="info">{disputeConcludedText(dispute, partnerName)}</Alert>;
+  }
+  if (dispute.respondedAt) {
+    return (
+      <Alert tone="success">
+        Bạn đã giải trình lúc {formatDateTime(dispute.respondedAt)}. Admin sẽ xem xét và kết luận.
+      </Alert>
+    );
+  }
+  if (isResponseOverdue(dispute)) {
+    return (
+      <Alert tone="warning">
+        Đã quá hạn giải trình, Admin sẽ kết luận dựa trên thông tin hiện có.
+      </Alert>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <Alert tone="warning">
+        <span className="font-semibold">{disputeHeadline(dispute, partnerName)}</span>{' '}
+        {dispute.responseDueAt
+          ? `Bạn cần giải trình trước ${formatDeadline(dispute.responseDueAt)} (${formatRemaining(dispute.responseDueAt)}).`
+          : 'Bạn cần giải trình để Admin có đủ thông tin.'}
+      </Alert>
+      {dispute.canRespond ? (
+        <Button variant="warning" onClick={() => onRespond(dispute)}>
+          Giải trình ngay
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function DisputeList({
+  disputes,
+  partnerName,
+  onRespond,
+}: {
+  disputes: RequestDispute[];
+  partnerName: string;
+  onRespond: (dispute: RequestDispute) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      {disputes.map((dispute) =>
+        dispute.openedByMe ? (
+          <OpenedByMeNotice key={dispute.id} dispute={dispute} partnerName={partnerName} />
+        ) : (
+          <AgainstMeNotice key={dispute.id} dispute={dispute} partnerName={partnerName} onRespond={onRespond} />
+        ),
+      )}
+    </div>
+  );
+}
+
 /**
  * Khối "Các bước". Ánh xạ trạng thái sang bước dùng completedStepCount có sẵn; cửa sổ khiếu nại dùng cờ
- * disputeExpired backend trả về, không tự so giờ.
+ * disputeExpired backend trả về, không tự so giờ. Khiếu nại hiện theo vai người xem (D-04).
  */
 export function StepsCard({
   request,
+  partnerName,
   onOpenDispute,
+  onRespondDispute,
   disputeReceipt,
 }: {
   request: RequestResponse;
+  partnerName: string;
   onOpenDispute: () => void;
+  onRespondDispute: (dispute: RequestDispute) => void;
   disputeReceipt: DisputeResponse | null;
 }) {
   const done = completedStepCount(request.status);
-  const canDispute = request.status === 'COMPLETED' && !request.disputeExpired;
+  const disputes = request.disputes ?? [];
+  const alreadyComplained = disputes.some((dispute) => dispute.openedByMe) || Boolean(disputeReceipt);
+  const canDispute = request.status === 'COMPLETED' && !request.disputeExpired && !alreadyComplained;
+  const refusalReport = request.refusalReport ?? null;
+  const showHelp =
+    request.status === 'COMPLETED' ||
+    request.status === 'DISPUTED' ||
+    disputes.length > 0 ||
+    refusalReport !== null;
 
   return (
     <section className="card space-y-5 p-5 sm:p-6" aria-labelledby="steps-title">
@@ -102,7 +209,7 @@ export function StepsCard({
 
       <StatusResult request={request} />
 
-      {(request.status === 'COMPLETED' || request.status === 'DISPUTED') && (
+      {showHelp && (
         <section
           className="space-y-3 rounded-lg border border-border bg-surface-container/40 p-4"
           aria-labelledby="transaction-help-title"
@@ -113,21 +220,26 @@ export function StepsCard({
           </h3>
           {disputeReceipt ? (
             <div role="status" className="space-y-2">
-              <Alert tone="success">Đã gửi khiếu nại #{disputeReceipt.id}</Alert>
+              <Alert tone="success">Đã gửi khiếu nại giao dịch.</Alert>
               <p className="text-sm leading-6 text-text-secondary">
-                Hạn giải trình của bên còn lại: {formatDeadline(disputeReceipt.responseDueAt)}. Quản
-                trị viên sẽ xem xét và gửi kết quả qua Thông báo.
+                {partnerName} có đến {formatDeadline(disputeReceipt.responseDueAt)} để giải trình, sau đó
+                Admin kết luận và gửi kết quả qua Thông báo.
               </p>
             </div>
+          ) : refusalReport ? (
+            <RefusalNotice report={refusalReport} partnerName={partnerName} onRespond={onRespondDispute} />
+          ) : disputes.length ? (
+            <DisputeList disputes={disputes} partnerName={partnerName} onRespond={onRespondDispute} />
           ) : request.status === 'DISPUTED' ? (
             <div className="space-y-2 text-sm leading-6 text-text-secondary">
-              <p className="font-semibold text-warning">Giao dịch đang có khiếu nại</p>
+              <p className="font-semibold text-warning">Sự cố giao nhận, chờ Admin xác minh</p>
               {request.disputeResponseDueAt && (
                 <p>Hạn giải trình ghi nhận: {formatDeadline(request.disputeResponseDueAt)}.</p>
               )}
               <p>Xem yêu cầu giải trình và cập nhật xử lý trong Thông báo.</p>
             </div>
-          ) : (
+          ) : null}
+          {request.status === 'COMPLETED' && !disputeReceipt ? (
             <div className="space-y-2 text-sm leading-6 text-text-secondary">
               <p className="font-semibold">
                 {request.disputeExpired
@@ -139,13 +251,13 @@ export function StepsCard({
               {canDispute && (
                 <>
                   <p>Gửi khiếu nại nếu có vấn đề với món đồ hoặc việc giao nhận.</p>
-                  <Button variant="outline" onClick={onOpenDispute}>
+                  <Button variant="warning" onClick={onOpenDispute}>
                     Khiếu nại giao dịch
                   </Button>
                 </>
               )}
             </div>
-          )}
+          ) : null}
         </section>
       )}
     </section>

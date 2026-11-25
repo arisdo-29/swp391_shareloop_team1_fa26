@@ -1,4 +1,6 @@
 import type { ItemRequestStatus } from '../../types/domain';
+import type { RequestResponse } from '../../services/requestApi';
+import { isShippingRequest, shippingProgressSummary } from '../../utils/shipping';
 import { requestStatusLabel } from '../../utils/request';
 import { completedStepCount, transactionSteps } from '../../utils/transactionSteps';
 
@@ -6,7 +8,7 @@ import { completedStepCount, transactionSteps } from '../../utils/transactionSte
  * Thanh 4 đoạn thu gọn ở khung chat. Chỉ hiển thị trạng thái backend trả về; chưa vào giao dịch (chờ chọn,
  * bị từ chối, đã huỷ) thì không vẽ thanh.
  */
-export function CompactProgress({ status }: { status: ItemRequestStatus }) {
+export function CompactProgress({ status, request }: { status: ItemRequestStatus; request?: RequestResponse }) {
   const done = completedStepCount(status);
   if (done < 0) return null;
   return (
@@ -24,6 +26,9 @@ export function CompactProgress({ status }: { status: ItemRequestStatus }) {
       </ol>
       <span className="truncate text-xs font-semibold text-text-secondary">
         {requestStatusLabel[status]}
+        {request && isShippingRequest(request) && (status === 'LOGISTICS_CONFIRMED' || status === 'AWAITING_HANDOVER')
+          ? ` · ${shippingProgressSummary(request)}`
+          : ''}
       </span>
     </div>
   );

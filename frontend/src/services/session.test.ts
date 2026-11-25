@@ -46,7 +46,6 @@ beforeEach(() => {
     totalPoints: 0,
     rank: 'BRONZE',
     trustStars: 5,
-    accuracyRate: null,
     history: { content: [], totalElements: 0, totalPages: 0, number: 0, size: 1 },
   });
 });

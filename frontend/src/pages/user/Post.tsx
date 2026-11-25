@@ -25,14 +25,12 @@ import {
   reputationBlockedMessage,
 } from '../../utils/apiErrorMessages';
 
-type FormErrors = Partial<Record<'type' | 'title' | 'category' | 'condition' | 'district' | 'description' | 'tradeFor' | 'brand' | 'defectNote' | 'images' | 'defectImages' | 'operatingStatus', string>>;
+import { parseReferencePrice } from '../../utils/referencePrice';
+
+type FormErrors = Partial<Record<'type' | 'referencePrice' | 'title' | 'category' | 'condition' | 'district' | 'description' | 'tradeFor' | 'brand' | 'defectNote' | 'images' | 'defectImages' | 'operatingStatus', string>>;
 type MediaUploadState = 'idle' | 'uploading' | 'error';
 
-const SWAP_POST_SUCCESS =
-  'Đăng bài trao đổi thành công. Bài đăng đã được gửi để xét duyệt.';
-const GIVE_POST_SUCCESS =
-  'Đăng bài cho tặng thành công. Bài đăng đã được gửi để xét duyệt.';
-const PENDING_REVIEW_NOTICE = 'Bài đăng đang chờ quản trị viên duyệt.';
+const POST_REQUEST_SUCCESS = 'Đã gửi yêu cầu đăng bài thành công.';
 const WALLET_INSUFFICIENT_BALANCE = 'WALLET_INSUFFICIENT_BALANCE';
 const INSUFFICIENT_CREDIT_MESSAGE = 'Số dư Credit khả dụng không đủ để đăng bài.';
 const MODERATION_BLOCKED_TITLE = 'Bài đăng chưa đáp ứng quy định';
@@ -69,7 +67,6 @@ export function Post() {
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState('');
   const [categoryAttributes, setCategoryAttributes] = useState<CategoryAttributeResponse[]>([]);
-  const [attributesLoading, setAttributesLoading] = useState(false);
   const [attributesError, setAttributesError] = useState('');
   const [type, setType] = useState<ItemType | ''>('');
   const [title, setTitle] = useState('');
@@ -78,6 +75,7 @@ export function Post() {
   const [district, setDistrict] = useState('');
   const [description, setDescription] = useState('');
   const [tradeFor, setTradeFor] = useState('');
+  const [referencePrice, setReferencePrice] = useState('');
   const [brand, setBrand] = useState('');
   const [defectNote, setDefectNote] = useState('');
   const [operatingStatus, setOperatingStatus] = useState<OperatingStatus | ''>('');
@@ -169,11 +167,9 @@ export function Post() {
     if (!categoryId) {
       setCategoryAttributes([]);
       setAttributesError('');
-      setAttributesLoading(false);
       return;
     }
     let active = true;
-    setAttributesLoading(true);
     setAttributesError('');
     catalogApi.categoryAttributes(categoryId)
       .then((response) => { if (active) setCategoryAttributes(response); })
@@ -181,8 +177,7 @@ export function Post() {
         if (!active) return;
         setCategoryAttributes([]);
         setAttributesError('Không tải được thông tin bổ sung của danh mục.');
-      })
-      .finally(() => { if (active) setAttributesLoading(false); });
+      });
     return () => { active = false; };
   }, [category, categoryIds]);
 
@@ -198,6 +193,9 @@ export function Post() {
       nextErrors.images = `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.`;
     } else if (imageFiles.length > ITEM_IMAGES_MAX) {
       nextErrors.images = `Chỉ được chọn tối đa ${ITEM_IMAGES_MAX} ảnh.`;
+    }
+    if (parseReferencePrice(referencePrice) === undefined) {
+      nextErrors.referencePrice = 'Vui lòng nhập giá tham khảo là số nguyên dương.';
     }
     if (title.trim().length > 150) nextErrors.title = 'Tiêu đề tối đa 150 ký tự.';
     if (type === 'trade' && !tradeFor.trim()) nextErrors.tradeFor = 'Vui lòng nhập món đồ mong muốn.';
@@ -331,12 +329,13 @@ export function Post() {
         }
       }
       setMediaUploadState('idle');
-      const item = await itemApi.create(
+      await itemApi.create(
         {
           categoryId,
           areaId,
           offerType: type === 'gift' ? 'GIVE' : 'SWAP',
           title: title.trim(),
+          referencePrice: Number(referencePrice),
           description: description.trim(),
           desiredItem: type === 'trade' ? tradeFor.trim() || null : null,
           condition: CONDITION_TO_API[condition],
@@ -350,13 +349,11 @@ export function Post() {
         },
       );
       refreshWallet();
-      const baseNotice = type === 'gift' ? GIVE_POST_SUCCESS : SWAP_POST_SUCCESS;
-      const reviewNotice = item.status === 'PENDING_REVIEW' ? ` ${PENDING_REVIEW_NOTICE}` : '';
-      navigate('/activities', { state: { notice: `${baseNotice}${reviewNotice}` } });
+      navigate('/activities', { state: { notice: POST_REQUEST_SUCCESS } });
     } catch (caught) {
       const apiError = caught as ApiError;
       const fieldNames: Record<string, keyof FormErrors> = {
-        title: 'title', description: 'description', desiredItem: 'tradeFor',
+        title: 'title', referencePrice: 'referencePrice', description: 'description', desiredItem: 'tradeFor',
         categoryId: 'category', areaId: 'district', condition: 'condition',
         defectNote: 'defectNote', images: 'images', defectImages: 'defectImages',
         brand: 'brand', operatingStatus: 'operatingStatus', offerType: 'type',
@@ -558,6 +555,13 @@ export function Post() {
 
           <PostStep number={3} title="Thông tin món đồ">
             <Field
+              label="Giá tham khảo (đồng)"
+              inputMode="numeric"
+              value={referencePrice}
+              onChange={(event) => setReferencePrice(event.target.value)}
+              error={errors.referencePrice}
+            />
+            <Field
               label="Tên món đồ"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -582,24 +586,7 @@ export function Post() {
                 error={errors.brand}
               />
             </div>
-            {category && (attributesLoading || Boolean(attributesError) || categoryAttributes.length > 0) ? (
-              <div className="rounded-md bg-surface-low p-3 text-sm">
-                <p className="font-semibold">Nên nêu trong mô tả</p>
-                {attributesLoading ? <p className="mt-1 text-text-muted">Đang tải thuộc tính...</p> : null}
-                {attributesError ? <p className="mt-1 text-error">{attributesError}</p> : null}
-                {!attributesLoading && !attributesError && categoryAttributes.length ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {sortedCategoryAttributes.map((attribute) => (
-                      <span key={attribute.id} className="rounded-full bg-white px-2.5 py-1 text-xs ring-1 ring-border">
-                        {attribute.name}
-                        {attribute.required ? ' · bắt buộc' : ''}
-                        {attribute.options.length ? ` · ${attribute.options.join(', ')}` : ''}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+            {category && attributesError ? <p className="text-sm text-error">{attributesError}</p> : null}
             <fieldset>
               <legend className="label">Tình trạng</legend>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -778,7 +765,7 @@ export function Post() {
               onClick={confirmSubmit}
               disabled={submitting || mediaUploading || (type === 'trade' && postFee === null)}
             >
-              {submitting ? 'Đang đăng...' : 'Xác nhận đăng bài'}
+              {submitting ? 'Đang gửi yêu cầu đăng bài...' : 'Xác nhận đăng bài'}
             </Button>
           </div>
         </DialogFrame>

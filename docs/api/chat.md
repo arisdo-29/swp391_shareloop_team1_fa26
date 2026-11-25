@@ -365,6 +365,8 @@ chuyện của giao dịch.
 | `requestId` | number | ID yêu cầu giao dịch |
 | `senderId` | number? | ID người gửi tin; `null` với tin `SYSTEM` |
 | `kind` | string | `TEXT`, `IMAGE`, `ITEM_CARD`, `OFFER_CHANGE`, `SYSTEM` |
+
+Tin `SYSTEM` cũng được thêm khi giao dịch bị khiếu nại (nghe `DisputeOpenedEvent` của module report, xem `report.md`).
 | `content` | string? | Nội dung văn bản |
 | `mediaId` | number? | ID ảnh đính kèm (nếu `kind == IMAGE`) |
 | `refItemId` | number? | ID bài đăng đính kèm (`ITEM_CARD`) hoặc món đề nghị đổi (`OFFER_CHANGE`) |
@@ -373,3 +375,7 @@ chuyện của giao dịch.
 | `moderation` | string | `PASS` hoặc `BLOCKED` |
 | `blockedReason` | string? | Lý do nếu tin bị chặn |
 | `createdAt` | string | Thời điểm tạo ISO-8601 UTC |
+
+## Ảnh trong chat là ảnh riêng tư (D2)
+
+Ảnh gửi trong chat được gắn ở dạng riêng tư. `MessageResponse.mediaId` giữ nguyên, nhưng ảnh chỉ đọc được qua `GET /api/v1/requests/{requestId}/media/{mediaId}` bằng token của một trong hai bên (xem `docs/api/media.md`).

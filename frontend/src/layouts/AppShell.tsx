@@ -55,6 +55,7 @@ function AppShellContent() {
   const { wallet } = useWallet();
   const isAdmin = user?.role === 'admin';
   const isHome = pathname === '/' && !isAdmin;
+  const isBrowse = pathname === '/browse';
   const dispatch = useAppDispatch();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -247,7 +248,9 @@ function AppShellContent() {
   return (
     // M01: overflow-x-clip chặn mọi phần tử lỡ rộng hơn màn hình làm trang rộng ra (điện thoại sẽ thu nhỏ cả trang,
     // chân trang trông bị tràn và dư khoảng trắng phía dưới). Dùng clip thay vì hidden để header sticky vẫn chạy.
-    <div className="flex min-h-screen flex-col overflow-x-clip bg-background">
+    <div
+      className={`${isBrowse ? 'browse-app-shell' : ''} flex min-h-screen flex-col overflow-x-clip bg-background`}
+    >
       <ScrollToTop />
       <a
         href="#main-content"
@@ -259,7 +262,7 @@ function AppShellContent() {
         className={`site-header top-0 z-30 border-b backdrop-blur-md ${
           isHome
             ? `site-header-home fixed inset-x-0 ${homeHeaderSolid ? 'site-header-home-solid' : ''}`
-            : 'sticky'
+            : `sticky ${isBrowse ? 'browse-site-header' : ''}`
         }`}
       >
         <div className="wide-shell flex min-h-[68px] items-center gap-5 py-2">
@@ -386,6 +389,15 @@ function AppShellContent() {
                           Ví Credit
                         </Link>
                       ) : null}
+                      {!isAdmin && (
+                        <Link
+                          to="/me/system-reports"
+                          onClick={closeMenus}
+                          className="flex items-center rounded-md min-h-11 px-3 py-2 text-sm text-text-secondary transition hover:bg-surface-low"
+                        >
+                          Báo cáo hệ thống
+                        </Link>
+                      )}
                       <Link
                         to="/change-password"
                         onClick={closeMenus}
@@ -463,7 +475,7 @@ function AppShellContent() {
           </nav>
         ) : null}
       </header>
-      <main id="main-content" className="flex-1">
+      <main id="main-content" className={`flex-1 ${isBrowse ? 'browse-main' : ''}`}>
         <Suspense fallback={<div className="min-h-[620px]" aria-hidden="true" />}>
           <Outlet />
         </Suspense>
@@ -514,6 +526,9 @@ function AppShellContent() {
                   </Link>
                   <Link to="/safety" className="site-footer-link block py-2 transition">
                     An toàn khi giao nhận
+                  </Link>
+                  <Link to="/me/system-reports" className="site-footer-link block py-2 transition">
+                    Báo cáo lỗi hệ thống
                   </Link>
                   <a
                     href="mailto:support@shareloop.vn"

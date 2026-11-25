@@ -106,12 +106,12 @@ class RequestMediaServiceTest {
         List<RequestMediaResponse> result = requestService.attachMedia(REQUEST_ID, RECEIVER_ID, mediaIds, "HANDOVER");
 
         // Xác nhận đã gọi MediaService.attach để chuyển trạng thái media sang ATTACHED
-        verify(mediaService).attach(mediaIds, RECEIVER_ID);
+        verify(mediaService).attachPrivate(mediaIds, RECEIVER_ID);
         verify(requestMediaRepository, org.mockito.Mockito.times(2)).save(any(RequestMediaMapping.class));
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).mediaId()).isEqualTo(501L);
-        assertThat(result.get(0).url()).isEqualTo("/api/v1/media/501");
+        assertThat(result.get(0).url()).isEqualTo("/api/v1/requests/" + REQUEST_ID + "/media/501");
         assertThat(result.get(0).stage()).isEqualTo("HANDOVER");
         assertThat(result.get(0).uploadedBy()).isEqualTo(RECEIVER_ID);
     }
@@ -129,7 +129,7 @@ class RequestMediaServiceTest {
 
         List<RequestMediaResponse> result = requestService.attachMedia(REQUEST_ID, DONOR_ID, mediaIds, null);
 
-        verify(mediaService).attach(mediaIds, DONOR_ID);
+        verify(mediaService).attachPrivate(mediaIds, DONOR_ID);
         assertThat(result).hasSize(1);
         assertThat(result.get(0).mediaId()).isEqualTo(601L);
         assertThat(result.get(0).stage()).isEqualTo("HANDOVER"); // Mặc định là HANDOVER
@@ -138,15 +138,15 @@ class RequestMediaServiceTest {
     @Test
     @DisplayName("Thành công: Đính kèm minh chứng trực tiếp trong confirmHandover")
     void confirmHandover_withMediaIds_attachesMedia() {
-        when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(REQUEST_ID)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
 
         List<Long> mediaIds = List.of(701L);
-        HandoverConfirmRequest dto = new HandoverConfirmRequest(true, null, mediaIds);
+        HandoverConfirmRequest dto = new HandoverConfirmRequest(mediaIds);
 
         requestService.confirmHandover(REQUEST_ID, RECEIVER_ID, dto);
 
-        verify(mediaService).attach(mediaIds, RECEIVER_ID);
+        verify(mediaService).attachPrivate(mediaIds, RECEIVER_ID);
         verify(requestMediaRepository).save(any(RequestMediaMapping.class));
     }
 
@@ -160,7 +160,7 @@ class RequestMediaServiceTest {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_NOT_FOUND);
                 });
 
-        verify(mediaService, never()).attach(any(), anyLong());
+        verify(mediaService, never()).attachPrivate(any(), anyLong());
     }
 
     @Test
@@ -173,7 +173,7 @@ class RequestMediaServiceTest {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_FORBIDDEN);
                 });
 
-        verify(mediaService, never()).attach(any(), anyLong());
+        verify(mediaService, never()).attachPrivate(any(), anyLong());
     }
 
     @Test
@@ -188,7 +188,7 @@ class RequestMediaServiceTest {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
                 });
 
-        verify(mediaService, never()).attach(any(), anyLong());
+        verify(mediaService, never()).attachPrivate(any(), anyLong());
     }
 
     @Test
@@ -202,7 +202,7 @@ class RequestMediaServiceTest {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_MEDIA_REQUIRED);
                 });
 
-        verify(mediaService, never()).attach(any(), anyLong());
+        verify(mediaService, never()).attachPrivate(any(), anyLong());
     }
 
     @Test
@@ -215,7 +215,7 @@ class RequestMediaServiceTest {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_MEDIA_STAGE_INVALID);
                 });
 
-        verify(mediaService, never()).attach(any(), anyLong());
+        verify(mediaService, never()).attachPrivate(any(), anyLong());
     }
 
     @Test
@@ -224,7 +224,7 @@ class RequestMediaServiceTest {
         when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request));
         org.mockito.Mockito.doThrow(new BusinessException(MediaErrorCode.MEDIA_NOT_OWNER))
                 .when(mediaService)
-                .attach(any(), anyLong());
+                .attachPrivate(any(), anyLong());
 
         assertThatThrownBy(() -> requestService.attachMedia(REQUEST_ID, RECEIVER_ID, List.of(999L), "HANDOVER"))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {

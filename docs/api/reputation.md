@@ -1,6 +1,6 @@
 # API module reputation
 
-Module quản lý điểm tín nhiệm, sao uy tín (`trust_stars`), tỉ lệ đúng mô tả và hạng (`Rank`) của người dùng theo SRS Final Report 09/11, mục 3.2.5; luật UT-01, UT-02, UT-04 đến UT-08.
+Module quản lý điểm tín nhiệm, sao uy tín (`trust_stars`) và hạng (`Rank`) của người dùng theo SRS Final Report 09/11, mục 3.2.5; luật UT-01, UT-02, UT-04 đến UT-08.
 
 Người sở hữu: BE4 (@kopslngbtram2110).
 
@@ -26,9 +26,7 @@ Lấy bản tóm tắt thông tin uy tín người dùng phục vụ hiển th�
 - `userId`: ID người dùng.
 - `trustStars`: Số sao uy tín (0–5 sao, mặc định 5).
 - `rank`: Hạng tín nhiệm tính theo tổng điểm (`BRONZE`, `SILVER`, `GOLD`, `DIAMOND`).
-- `asDescribedRate`: Tỉ lệ đúng mô tả khi người dùng là chủ bài, thang **0–1** (vd `0.92` là 92%), cùng thang với
-  `accuracyRate` của `/me/reputation`. Chỉ trả khi có **từ 3 giao dịch `COMPLETED` đã được đánh giá** "đúng mô tả?"
-  trở lên, dưới 3 thì `null`.
+- Không còn tỉ lệ đúng mô tả (bỏ từ 21/11/2026). Uy tín chỉ còn sao, điểm, hạng.
 
 ### 1.4. `void onCompleted(long requestId)`
 Tiếp nhận sự kiện giao dịch chuyển sang trạng thái `COMPLETED` (UT-06, Issue #114; UT-05, UT-07, UT-08, Issue #150):
@@ -96,8 +94,7 @@ Record trả về thông tin tổng quan về uy tín:
 public record ReputationSummary(
     Long userId,
     Integer trustStars,
-    Rank rank,
-    Double asDescribedRate
+    Rank rank
 ) {}
 ```
 
@@ -105,7 +102,7 @@ public record ReputationSummary(
 
 ## 3. GET /api/v1/me/reputation
 
-Xem thông tin uy tín cá nhân của chính người dùng đang đăng nhập (UC-05, Issue #128). Bao gồm tổng điểm, hạng, số sao uy tín, tỉ lệ đúng mô tả và lịch sử biến động điểm (mới nhất lên trước, có phân trang).
+Xem thông tin uy tín cá nhân của chính người dùng đang đăng nhập (UC-05, Issue #128). Bao gồm tổng điểm, hạng, số sao uy tín và lịch sử biến động điểm (mới nhất lên trước, có phân trang).
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT). ID người dùng được xác định qua `@CurrentUserId` từ token đăng nhập.
 - **Query Parameters:**
@@ -122,7 +119,6 @@ Xem thông tin uy tín cá nhân của chính người dùng đang đăng nhập
   "totalPoints": 320,
   "rank": "GOLD",
   "trustStars": 4,
-  "accuracyRate": 0.92,
   "history": {
     "content": [
       {
@@ -144,21 +140,25 @@ Xem thông tin uy tín cá nhân của chính người dùng đang đăng nhập
     }
   },
   "nextRank": "DIAMOND",
-  "pointsToNextRank": 80
+  "pointsToNextRank": 80,
+  "currentRankMinPoints": 200,
+  "nextRankMinPoints": 400
 }
 ```
 
-`nextRank` là hạng ngay trên hạng hiện tại, `pointsToNextRank` là số điểm còn thiếu tính theo ngưỡng cấu hình
-(`reputation_silver_min`, `reputation_gold_min`, `reputation_diamond_min`); cả hai là `null` khi đã ở Kim cương.
+`currentRankMinPoints` và `nextRankMinPoints` là điểm tối thiểu của hạng hiện tại và hạng kế tiếp.
+Hạng Đồng bắt đầu từ 0, các mốc còn lại lấy từ cấu hình `reputation_silver_min`, `reputation_gold_min` và
+`reputation_diamond_min`. `pointsToNextRank` là số điểm còn thiếu so với mốc kế tiếp.
+Khi đã ở Kim cương, `nextRank`, `nextRankMinPoints` và `pointsToNextRank` đều là `null`.
 
 Mỗi lần hoàn tất giao dịch, mỗi bên nhận một thông báo `POINTS_AWARDED` (link `/profile?tab=reputation`): tiêu đề
-"Bạn được cộng N điểm uy tín" hoặc "Giao dịch hoàn tất, chưa được cộng điểm", nội dung là `reason` ở trên kèm tổng
+"Bạn được cộng N điểm tích luỹ" hoặc "Giao dịch hoàn tất, chưa được cộng điểm", nội dung là `reason` ở trên kèm tổng
 điểm, câu lên hạng và câu hồi sao nếu có. Frontend hiện thông báo này thành một toast nhỏ.
 
 Giao dịch hoàn tất nhưng không được cộng đủ điểm vẫn có một dòng lịch sử; `reason` giải thích lý do:
 - Lặp cặp (UT-08): `delta = 0`, `"Không cộng điểm giao dịch món “Bàn học gỗ” (vai trò cho/tặng): giao dịch thứ 3 giữa cùng hai người trong 90 ngày"`.
 - Chạm trần ngày (UT-07): `"Cộng 5/10 điểm hoàn tất giao dịch món “Áo khoác” (vai trò cho/tặng): chạm trần 30 điểm trong ngày"`; đã đạt trần thì `delta = 0`, `"Không cộng điểm giao dịch món “Ghế xếp” (vai trò cho/tặng): đã đạt trần 30 điểm trong ngày"`.
-Lý do gọi giao dịch bằng tên món, không dùng `#id`. `accuracyRate` theo thang 0–1, `null` khi dưới 3 giao dịch đã được đánh giá.
+Lý do gọi giao dịch bằng tên món, không dùng `#id`.
 
 - **Mã lỗi:**
 
@@ -168,3 +168,7 @@ Lý do gọi giao dịch bằng tên món, không dùng `#id`. `accuracyRate` th
 | `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
 | `404` | Not Found | `USER_NOT_FOUND`: Tài khoản không tồn tại |
 
+
+## Hồi sao chỉ tính giao dịch với nhiều người khác nhau (F4)
+
+Giao dịch cặp lặp (từ lần thứ 3 giữa cùng một cặp trong cửa sổ `reputation_pair_window_days`) không tăng chuỗi giao dịch sạch và không thêm đối tác. Hồi 1 sao khi chuỗi đạt `reputation_clean_streak_for_star` và có ít nhất `star_restore_min_distinct_partners` (mặc định 5) người khác nhau. Các đối tác lưu ở cột `users.clean_streak_partners` (mảng id), được xoá mỗi khi chuỗi về 0 (lúc hồi sao hoặc lúc bị trừ sao).

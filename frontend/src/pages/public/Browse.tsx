@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Button,
   EmptyState,
+  Field,
   Icon,
   LoadingState,
   PageHeader,
@@ -13,6 +14,7 @@ import {
 import { CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import type { ItemType } from '../../types/domain';
+import { aiApi } from '../../services/aiApi';
 import { catalogApi, type CategoryResponse } from '../../services/catalogApi';
 import {
   itemApi,
@@ -39,6 +41,7 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import './browse.css';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
+import { loginPath } from '../../utils/authRedirect';
 
 // Giá trị hình thức ở thanh địa chỉ (gift, trade) khác tên của API
 const OFFER_TYPE_BY_TYPE: Record<ItemType, OfferType> = { gift: 'GIVE', trade: 'SWAP' };
@@ -120,6 +123,77 @@ interface SavedRotation {
   seed: number;
 }
 
+function BrowseAiPrompt({ signedIn }: { signedIn: boolean }) {
+  const [remaining, setRemaining] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!signedIn) return;
+    let active = true;
+    void aiApi.quota().then(
+      (quota) => { if (active) setRemaining(quota.freeUsesRemaining); },
+      () => { if (active) setRemaining(null); },
+    );
+    return () => { active = false; };
+  }, [signedIn]);
+
+  return (
+    <aside aria-label="Trợ lý AI" className="browse-ai-prompt rounded-lg border border-border bg-surface-low">
+      <div className="min-w-0 space-y-1">
+        <p className="text-sm font-semibold text-text-primary">Không biết tìm bằng từ khóa nào?</p>
+        <p className="text-sm text-text-secondary">Mô tả món đồ bạn cần, Trợ lý AI sẽ tìm giúp bạn.</p>
+        {remaining !== null ? (
+          <p className="text-sm font-medium text-primary">Còn {remaining} lượt miễn phí</p>
+        ) : null}
+        {!signedIn ? <p className="text-sm text-text-secondary">Đăng nhập để xem số lượt miễn phí.</p> : null}
+      </div>
+      <Link
+        to={signedIn ? '/ai' : loginPath('/ai')}
+        className="flex min-h-11 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
+      >
+        Thử Trợ lý AI
+      </Link>
+    </aside>
+  );
+}
+
+function PriceFilter({
+  minPrice,
+  maxPrice,
+  onApply,
+}: {
+  minPrice?: number;
+  maxPrice?: number;
+  onApply: (min: string, max: string) => void;
+}) {
+  const [minInput, setMinInput] = useState(minPrice?.toString() ?? '');
+  const [maxInput, setMaxInput] = useState(maxPrice?.toString() ?? '');
+  const [error, setError] = useState('');
+
+  function apply() {
+    const min = positiveIntegerParam(minInput.trim());
+    const max = positiveIntegerParam(maxInput.trim());
+    if ((minInput.trim() && min === undefined) || (maxInput.trim() && max === undefined)) {
+      setError('Nhập giá bằng số nguyên dương.');
+      return;
+    }
+    if (min !== undefined && max !== undefined && min > max) {
+      setError('Giá từ phải nhỏ hơn hoặc bằng giá đến.');
+      return;
+    }
+    setError('');
+    onApply(min?.toString() ?? '', max?.toString() ?? '');
+  }
+
+  return (
+    <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); apply(); }}>
+      <Field label="Giá từ (đồng)" inputMode="numeric" value={minInput} onChange={(event) => setMinInput(event.target.value)} />
+      <Field label="Giá đến (đồng)" inputMode="numeric" value={maxInput} onChange={(event) => setMaxInput(event.target.value)} />
+      {error ? <p role="alert" className="text-xs text-error">{error}</p> : null}
+      <Button variant="outline" type="submit">Áp dụng giá</Button>
+    </form>
+  );
+}
+
 export function Browse() {
   const [params, setParams] = useSearchParams();
   const currentUser = useAppSelector(selectCurrentUser);
@@ -145,6 +219,11 @@ export function Browse() {
   const lastAppliedQueryRef = useRef(q);
   const typeParam = params.get('type');
   const type: ItemType | '' = typeParam === 'gift' || typeParam === 'trade' ? typeParam : '';
+  const rawMinPrice = positiveIntegerParam(params.get('minPrice'));
+  const rawMaxPrice = positiveIntegerParam(params.get('maxPrice'));
+  const invalidPriceRange = rawMinPrice !== undefined && rawMaxPrice !== undefined && rawMinPrice > rawMaxPrice;
+  const minPrice = invalidPriceRange ? undefined : rawMinPrice;
+  const maxPrice = invalidPriceRange ? undefined : rawMaxPrice;
   const categoryId = positiveIntegerParam(params.get('categoryId'));
   const category = categoryId ? String(categoryId) : '';
   const conditionParam = params.get('condition');
@@ -220,6 +299,8 @@ export function Browse() {
       q: q.trim() || undefined,
       condition: condition || undefined,
       offerType: type ? OFFER_TYPE_BY_TYPE[type] : undefined,
+      ...(minPrice !== undefined ? { minPrice } : {}),
+      ...(maxPrice !== undefined ? { maxPrice } : {}),
     };
     // Mọi thứ quyết định tập kết quả, trừ số trang. Đổi bất kỳ phần nào thì là bộ lọc mới.
     const filterKey = JSON.stringify({ ...requestParams, boostedOnly, viewerKey });
@@ -290,7 +371,7 @@ export function Browse() {
     return () => {
       active = false;
     };
-  }, [areaId, boostedOnly, categoryId, condition, itemsReloadKey, page, q, type, viewerKey]);
+  }, [areaId, boostedOnly, categoryId, condition, itemsReloadKey, maxPrice, minPrice, page, q, type, viewerKey]);
 
   useEffect(() => {
     if (!legacyDistrict || params.has('areaId')) return;
@@ -306,6 +387,11 @@ export function Browse() {
 
   const setFilter = (key: BrowseFilterKey, value: string) => {
     setParams(updateBrowseSearchParams(params, { [key]: value }));
+    setPage(0);
+  };
+
+  const setPriceFilter = (min: string, max: string) => {
+    setParams(updateBrowseSearchParams(params, { minPrice: min, maxPrice: max }));
     setPage(0);
   };
 
@@ -337,6 +423,9 @@ export function Browse() {
           label: type === 'gift' ? 'Cho tặng' : 'Trao đổi',
           clear: () => setFilter('type', ''),
         }
+      : null,
+    minPrice !== undefined || maxPrice !== undefined
+      ? { key: 'price', label: 'Khoảng giá', clear: () => setPriceFilter('', '') }
       : null,
     // Chưa tải xong danh mục hoặc không tìm thấy tên thì ẩn chip, không hiện id kỹ thuật
     selectedCategoryName
@@ -381,6 +470,12 @@ export function Browse() {
         options={typeOptions}
         value={type}
         onChange={(value) => setFilter('type', value)}
+      />
+      <PriceFilter
+        key={String(rawMinPrice) + ':' + String(rawMaxPrice)}
+        minPrice={rawMinPrice}
+        maxPrice={rawMaxPrice}
+        onApply={setPriceFilter}
       />
       <Select
         label="Danh mục"
@@ -448,19 +543,24 @@ export function Browse() {
       </div>
 
       <div className="browse-layout">
-        <aside
+        {/* Sidebar đứng yên trên desktop, chỉ danh sách sản phẩm cuộn độc lập */}
+        <div
           id="browse-filters"
-          aria-label="Bộ lọc"
-          className={`${mobileFilters ? 'block' : 'hidden'} browse-filter-card lg:sticky lg:top-24 lg:block`}
+          className={`${mobileFilters ? 'block' : 'hidden'} browse-sidebar lg:block`}
         >
-          <div className="browse-filter-heading">
-            <h2>Bộ lọc</h2>
-            <button type="button" onClick={reset} className="browse-reset-button">
-              Đặt lại
-            </button>
-          </div>
-          {filters}
-        </aside>
+          <aside aria-label="Bộ lọc" className="browse-filter-card">
+            <div className="browse-filter-heading">
+              <h2>Bộ lọc</h2>
+              <button type="button" onClick={reset} className="browse-reset-button">
+                Đặt lại
+              </button>
+            </div>
+            {filters}
+          </aside>
+          {!boostedOnly ? (
+            <BrowseAiPrompt key={currentUser?.id ?? 'guest'} signedIn={Boolean(currentUser)} />
+          ) : null}
+        </div>
 
         <section className="browse-results" aria-label="Danh sách món đồ">
           <div className="browse-results-toolbar">
@@ -521,7 +621,7 @@ export function Browse() {
           ) : items.length ? (
             <div data-browse-results className="browse-product-grid">
               {items.map((item) => (
-                <ProductCard key={item.id} item={item} />
+                <ProductCard key={item.id} item={item} showReferencePrice />
               ))}
             </div>
           ) : (

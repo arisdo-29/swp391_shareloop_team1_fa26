@@ -88,6 +88,9 @@ public class PaymentOrder {
     @Column(name = "review_note", length = 500)
     private String reviewNote;
 
+    @Column(name = "payment_url", columnDefinition = "TEXT")
+    private String paymentUrl;
+
     public Instant getSubmittedAt() {
         return submittedAt;
     }
@@ -126,10 +129,74 @@ public class PaymentOrder {
         this.callbackData = Map.copyOf(callbackData);
     }
 
+    /** Khách hủy tại cổng thanh toán (VNPay mã 24): PENDING → CANCELLED. Trạng thái khác giữ nguyên. */
+    public void markCancelled() {
+        if (status == PaymentOrderStatus.PENDING) {
+            status = PaymentOrderStatus.CANCELLED;
+        }
+    }
+
+    /** Lưu URL thanh toán vừa dựng để "Tiếp tục thanh toán" mở lại đúng URL đó (cùng vnp_TxnRef, vnp_ExpireDate). */
+    public void attachPaymentUrl(String url) {
+        this.paymentUrl = url;
+    }
+
+    public String getPaymentUrl() {
+        return paymentUrl;
+    }
+
     public void markFailed() {
         if (status == PaymentOrderStatus.PENDING) {
             status = PaymentOrderStatus.FAILED;
         }
+    }
+
+    /**
+     * Cổng báo đã thu tiền cho đơn đã kết thúc mà không cộng Credit (FAILED, EXPIRED): giữ nguyên trạng thái, ghi chú để
+     * đối soát và hoàn tiền tay. Không đè callback_data để còn giữ mã lỗi lúc đơn bị hủy.
+     */
+    /**
+     * VNPay báo đã thu tiền nhưng đơn đã đóng (FAILED, CANCELLED, EXPIRED): không cộng Credit, chỉ ghi lại bằng chứng
+     * tiền đã về để Admin đối soát. paid_at ở đây là lúc VNPay báo đã thu, không có nghĩa đơn đã nạp thành công; mọi
+     * chỗ tính tiền thật đều lọc thêm status = SUCCESS.
+     */
+    public void flagPaidAfterClosed(String note, Instant paidAt, String transactionNo) {
+        reviewNote = note;
+        markPaidEvidence(paidAt, transactionNo);
+    }
+
+    /** Đơn PENDING quá hạn nhưng VNPay đã thu tiền: chuyển EXPIRED và ghi bằng chứng tiền đã về để đối soát. */
+    public void expireWithPaidEvidence(Instant paidAt, String transactionNo) {
+        markExpired();
+        markPaidEvidence(paidAt, transactionNo);
+    }
+
+    // Không đè paid_at đã có, vì lần báo đầu tiên mới là lúc tiền về.
+    private void markPaidEvidence(Instant paidAt, String transactionNo) {
+        if (this.paidAt == null) {
+            this.paidAt = paidAt.truncatedTo(ChronoUnit.MICROS);
+        }
+        if (transactionNo != null && !transactionNo.isBlank()) {
+            this.providerTxnId = transactionNo;
+        }
+    }
+
+    /**
+     * Đơn VNPAY đã đóng mà VNPay đã thu tiền (có paid_at) và Admin chưa xử lý. Đơn SUCCESS hoặc PENDING không bao giờ
+     * cần đối soát.
+     */
+    public boolean needsReconcile() {
+        boolean closedUnpaid = status == PaymentOrderStatus.FAILED
+                || status == PaymentOrderStatus.CANCELLED
+                || status == PaymentOrderStatus.EXPIRED;
+        return provider == PaymentProvider.VNPAY && closedUnpaid && paidAt != null && reviewedAt == null;
+    }
+
+    /** Admin xác nhận đã thu tiền và cộng Credit: đơn sang SUCCESS, giữ nguyên paid_at (lúc tiền thật về). */
+    public void markReconciledGranted(long adminId, Instant now, String note) {
+        this.status = PaymentOrderStatus.SUCCESS;
+        this.signatureVerified = true;
+        review(adminId, now, note);
     }
 
     public Map<String, String> getCallbackData() {

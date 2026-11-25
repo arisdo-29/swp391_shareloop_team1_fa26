@@ -1,0 +1,258 @@
+.admin-transactions-page {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+}
+
+.admin-transactions-header > div {
+  margin-bottom: 0;
+}
+
+.admin-transactions-header .page-title {
+  font-size: clamp(1.35rem, 2vw, 1.65rem);
+}
+
+.admin-transactions-header .page-intro {
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+.admin-transactions-header button,
+.admin-transactions-filters button {
+  min-height: 38px;
+  padding-block: 6px;
+  border-radius: 8px;
+}
+
+.admin-transactions-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: white;
+}
+
+.admin-transactions-filter-status {
+  min-width: 176px;
+}
+
+.admin-transactions-filter-type,
+.admin-transactions-filter-delivery {
+  min-width: 152px;
+}
+
+.admin-transactions-filter-date {
+  min-width: 150px;
+}
+
+.admin-transactions-filter-search {
+  min-width: 220px;
+  flex: 1 1 240px;
+}
+
+.admin-transactions-filters .label {
+  margin-bottom: 4px;
+}
+
+.admin-transactions-filters .input,
+.admin-transactions-search-input {
+  height: 38px;
+  min-height: 38px;
+  border-radius: 8px;
+}
+
+.admin-transactions-filters .input {
+  padding-block: 6px;
+}
+
+.admin-transactions-table-wrap {
+  max-height: clamp(380px, calc(100dvh - 330px), 720px);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  box-shadow: none;
+}
+
+.admin-transactions-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  font-size: 0.75rem;
+}
+
+.admin-transactions-table th:nth-child(1) {
+  width: 17%;
+}
+
+.admin-transactions-table th:nth-child(2) {
+  width: 17%;
+}
+
+.admin-transactions-table th:nth-child(3) {
+  width: 8%;
+}
+
+.admin-transactions-table th:nth-child(4) {
+  width: 9%;
+}
+
+.admin-transactions-table th:nth-child(5) {
+  width: 10%;
+}
+
+.admin-transactions-table th:nth-child(6) {
+  width: 11%;
+}
+
+.admin-transactions-table th:nth-child(7) {
+  width: 7%;
+}
+
+.admin-transactions-table th:nth-child(8) {
+  width: 9%;
+}
+
+.admin-transactions-table th:nth-child(9) {
+  width: 12%;
+}
+
+.admin-transactions-table th,
+.admin-transactions-table td {
+  padding: 10px;
+  overflow-wrap: anywhere;
+  vertical-align: middle;
+}
+
+.admin-transactions-table th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--color-surface-low);
+  white-space: normal;
+}
+
+.admin-transactions-table th:nth-child(3),
+.admin-transactions-table th:nth-child(6),
+.admin-transactions-table th:nth-child(9) {
+  text-align: center;
+}
+
+.admin-transactions-table tbody tr {
+  height: 114px;
+  transition: background-color 160ms ease;
+}
+
+.admin-transactions-table tbody tr:hover {
+  background: var(--color-primary-soft);
+}
+
+.admin-transaction-item {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-transaction-item-image {
+  flex: none;
+  border-radius: 8px;
+  outline: none;
+}
+
+.admin-transaction-item-image:focus-visible,
+.admin-transaction-item-title:focus-visible {
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px var(--color-primary-soft), 0 0 0 4px var(--color-primary);
+}
+
+.admin-transaction-item-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  line-height: 1.35;
+}
+
+.admin-transaction-item-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.admin-transaction-item-detail {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.admin-transaction-item-detail:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.admin-transaction-type-cell,
+.admin-transaction-status,
+.admin-transaction-actions {
+  text-align: center;
+}
+
+.admin-transaction-status > span {
+  justify-content: center;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.admin-transaction-type {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.admin-transaction-type-swap {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.admin-transaction-type-give {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.admin-transaction-person,
+.admin-transaction-time {
+  line-height: 1.4;
+}
+
+.admin-transaction-delivery {
+  white-space: normal;
+}
+
+.admin-transaction-actions button {
+  width: auto;
+  min-width: 0;
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+
+@media (max-width: 1023px) {
+  .admin-transactions-table-wrap {
+    overflow-x: auto;
+  }
+
+  .admin-transactions-table {
+    min-width: 1180px;
+  }
+}

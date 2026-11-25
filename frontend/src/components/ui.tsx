@@ -26,10 +26,12 @@ import { WarningCircle } from '@phosphor-icons/react/dist/csr/WarningCircle';
 import { SquaresFour } from '@phosphor-icons/react/dist/csr/SquaresFour';
 import { CheckSquare } from '@phosphor-icons/react/dist/csr/CheckSquare';
 import { ListBullets } from '@phosphor-icons/react/dist/csr/ListBullets';
+import { Notebook } from '@phosphor-icons/react/dist/csr/Notebook';
 import { ListChecks } from '@phosphor-icons/react/dist/csr/ListChecks';
 import { Prohibit } from '@phosphor-icons/react/dist/csr/Prohibit';
 import { Users } from '@phosphor-icons/react/dist/csr/Users';
 import { Medal } from '@phosphor-icons/react/dist/csr/Medal';
+import { Star } from '@phosphor-icons/react/dist/csr/Star';
 import { ArrowsLeftRight } from '@phosphor-icons/react/dist/csr/ArrowsLeftRight';
 import { Flag } from '@phosphor-icons/react/dist/csr/Flag';
 import { MagnifyingGlass } from '@phosphor-icons/react/dist/csr/MagnifyingGlass';
@@ -43,6 +45,7 @@ import { CaretRight } from '@phosphor-icons/react/dist/csr/CaretRight';
 import { Trash } from '@phosphor-icons/react/dist/csr/Trash';
 import { RocketLaunch } from '@phosphor-icons/react/dist/csr/RocketLaunch';
 import { HourglassMedium } from '@phosphor-icons/react/dist/csr/HourglassMedium';
+import { Copy } from '@phosphor-icons/react/dist/csr/Copy';
 import { Link } from 'react-router-dom';
 import type {
   Item,
@@ -53,6 +56,7 @@ import type {
   User,
 } from '../types/domain';
 import { conditionLabel, txLabel } from '../utils/formatting';
+import { formatReferencePrice } from '../utils/referencePrice';
 import { resolveMediaUrl } from '../services/mediaUrl';
 
 // Chỉ giữ icon có chức năng (đóng, mở menu, hiện mật khẩu, mở danh sách, thông báo, đính kèm ảnh,
@@ -79,11 +83,14 @@ const iconMap = {
   district: MapPin,
   users: Users,
   reputation: Medal,
+  star: Star,
   transactions: ArrowsLeftRight,
   complaints: Flag,
   lookup: MagnifyingGlass,
   report: ChartLineUp,
   topup: Receipt,
+  ledger: ListBullets,
+  manageItems: Notebook,
   fees: SlidersHorizontal,
   auditLog: Scroll,
   alert: Warning,
@@ -94,6 +101,7 @@ const iconMap = {
   // Thông báo đẩy bài (BOOST_*) và nhắc bài sắp hết hạn (ITEM_EXPIRING_*).
   boost: RocketLaunch,
   expiring: HourglassMedium,
+  copy: Copy,
 } as const;
 
 export type IconName = keyof typeof iconMap;
@@ -215,16 +223,17 @@ export function TextArea(
     label?: string;
     error?: string;
     hint?: string;
+    inputClassName?: string;
   },
 ) {
-  const { label, error, hint, className = '', ...rest } = props;
+  const { label, error, hint, className = '', inputClassName = '', ...rest } = props;
   const messageId = useId();
   const hasMessage = Boolean(error || hint);
   return (
-    <label className="block">
+    <label className={`block ${className}`}>
       {label ? <span className="label">{label}</span> : null}
       <textarea
-        className={`input min-h-28 resize-y ${error ? errorInputClass : ''} ${className}`}
+        className={`input min-h-28 resize-y ${error ? errorInputClass : ''} ${inputClassName}`}
         aria-invalid={error ? true : undefined}
         aria-describedby={hasMessage ? messageId : undefined}
         {...rest}
@@ -238,6 +247,7 @@ export function Select(
     label?: string;
     error?: string;
     hint?: string;
+    inputClassName?: string;
   },
 ) {
   const {
@@ -245,6 +255,7 @@ export function Select(
     error,
     hint,
     className = '',
+    inputClassName = '',
     children,
     value,
     defaultValue,
@@ -376,13 +387,13 @@ export function Select(
   }, [activeIndex, open]);
 
   return (
-    <label className="block" htmlFor={rest.id ?? selectId}>
+    <label className={`block ${className}`} htmlFor={rest.id ?? selectId}>
       {label ? <span className="label">{label}</span> : null}
       <span className="relative block">
         <select
           ref={selectRef}
           id={rest.id ?? selectId}
-          className={`input cursor-pointer appearance-none rounded-xl border-border bg-white pr-10 transition hover:border-[#A9C8BB] focus:border-primary disabled:cursor-not-allowed ${error ? errorInputClass : ''} ${className}`}
+          className={`input cursor-pointer appearance-none rounded-xl border-border bg-white pr-10 transition hover:border-[#A9C8BB] focus:border-primary disabled:cursor-not-allowed ${error ? errorInputClass : ''} ${inputClassName}`}
           aria-invalid={error ? true : undefined}
           aria-describedby={hasMessage ? messageId : undefined}
           aria-expanded={open}
@@ -452,7 +463,11 @@ export function Select(
                             : 'cursor-pointer text-text-primary hover:bg-[#D7E9E1]'
                     }`}
                   >
-                    <span className={`min-w-0 flex-1 truncate ${selected ? 'font-semibold' : ''}`}>{option.label}</span>
+                    <span
+                      className={`min-w-0 flex-1 whitespace-normal break-words leading-5 ${selected ? 'font-semibold' : ''}`}
+                    >
+                      {option.label}
+                    </span>
                     {selected ? <Check aria-hidden="true" className="size-4 shrink-0 text-primary" weight="bold" /> : null}
                   </li>
                 );
@@ -742,12 +757,14 @@ export function ProductCard({
   from,
   imageLabel,
   footer,
+  showReferencePrice,
 }: {
   item: Item;
   tradeFor?: string;
   from?: 'ai';
   imageLabel?: string;
   footer?: ReactNode;
+  showReferencePrice?: boolean;
 }) {
   const description = productCardDescription(item.description);
 
@@ -785,6 +802,11 @@ export function ProductCard({
         <p className="mt-2 h-5 !min-h-5 line-clamp-1 text-xs leading-5 text-[#6B7280] sm:text-[13px]">
           {description}
         </p>
+        {showReferencePrice ? (
+          <div className="mt-2 text-sm font-semibold text-primary">
+            {formatReferencePrice(item.referencePrice)}
+          </div>
+        ) : null}
         {tradeFor ? (
           <p className="mt-1 truncate text-xs text-[#6B7280]">
             <span className="font-medium text-[#374151]">Đang tìm:</span> {tradeFor}

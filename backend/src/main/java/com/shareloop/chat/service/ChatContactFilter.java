@@ -120,6 +120,32 @@ public class ChatContactFilter {
     }
 
     /**
+     * Từ khoá mức REVIEW (gắn cờ) khớp trong tin nhắn chat (D3). Khác {@link #checkViolation}: không chặn tin nhắn, chỉ để
+     * báo Admin xem xét. Chỉ xét luật có phạm vi chat.
+     *
+     * @return từ khoá khớp đầu tiên, rỗng nếu không có
+     */
+    public Optional<String> findReviewMatch(String content) {
+        if (content == null || content.isBlank() || configService == null) {
+            return Optional.empty();
+        }
+        List<LexiconEntry> lexicon = configService.lexicon();
+        if (lexicon == null || lexicon.isEmpty()) {
+            return Optional.empty();
+        }
+        List<LexiconEntry> applicable = lexicon.stream()
+                .filter(e -> e != null
+                        && (e.scope() == null
+                                || "CHAT".equalsIgnoreCase(e.scope())
+                                || "BOTH".equalsIgnoreCase(e.scope())))
+                .toList();
+        return lexiconMatcher.match(content, applicable).stream()
+                .filter(m -> "REVIEW".equalsIgnoreCase(m.level()))
+                .map(LexiconMatch::keyword)
+                .findFirst();
+    }
+
+    /**
      * Kiểm tra nội dung tin nhắn. Nếu phát hiện vi phạm thì ném {@link BusinessException}
      * kèm lý do chi tiết theo CH-05.
      *

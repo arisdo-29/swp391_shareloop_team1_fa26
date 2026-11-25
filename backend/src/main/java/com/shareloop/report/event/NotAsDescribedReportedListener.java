@@ -5,7 +5,7 @@ import com.shareloop.request.event.NotAsDescribedReportedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-/** Mở report NOT_AS_DESCRIBED khi bên nhận báo không đúng mô tả (GN-07, D-04). */
+/** Mở báo cáo vi phạm "Không đúng mô tả" khi một bên từ chối nhận món đồ (GN-07, BC-09). */
 @Component
 public class NotAsDescribedReportedListener {
     private final ReportService reportService;
@@ -14,10 +14,16 @@ public class NotAsDescribedReportedListener {
         this.reportService = reportService;
     }
 
-    // @EventListener thường (không phải AFTER_COMMIT): chạy cùng transaction với lúc Request sang DISPUTED.
-    // Mở khiếu nại lỗi thì cả hai cùng rollback, tránh giao dịch DISPUTED mà không có report để Admin xử lý.
+    // @EventListener thường (không phải AFTER_COMMIT): chạy cùng transaction với lúc giao dịch bị huỷ.
+    // Mở báo cáo lỗi thì cả hai cùng rollback, tránh món bị ẩn mà không có báo cáo để Admin xem xét.
     @EventListener
     public void onNotAsDescribed(NotAsDescribedReportedEvent event) {
-        reportService.openNotAsDescribedReport(event.receiverId(), event.requestId(), event.reason());
+        reportService.openRefusalReport(
+                event.reporterId(),
+                event.requestId(),
+                event.refusedItemId(),
+                event.reportedUserId(),
+                event.reason(),
+                event.evidenceMediaIds());
     }
 }

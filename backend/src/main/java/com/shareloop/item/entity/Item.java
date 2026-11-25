@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import org.hibernate.annotations.SQLRestriction;
 
 /**
@@ -49,9 +50,19 @@ public class Item extends BaseEntity {
     @Column(name = "brand", length = 80)
     private String brand;
 
+    @Column(name = "reference_price")
+    private Long referencePrice;
+
+    @Column(name = "review_submitted_at")
+    private Instant reviewSubmittedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
     private ItemStatus status = ItemStatus.PENDING_REVIEW;
+
+    // Bài do Admin ẩn: chỉ nút "Hiện lại" của Admin mới hiện lại được, các đường tự động bỏ qua bài có cờ này.
+    @Column(name = "hidden_by_admin", nullable = false)
+    private boolean hiddenByAdmin = false;
 
     protected Item() {}
 
@@ -119,8 +130,36 @@ public class Item extends BaseEntity {
         return brand;
     }
 
+    public Long getReferencePrice() {
+        return referencePrice;
+    }
+
+    public void setReferencePrice(long referencePrice) {
+        this.referencePrice = referencePrice;
+    }
+
+    public Instant getReviewSubmittedAt() {
+        return reviewSubmittedAt;
+    }
+
     public ItemStatus getStatus() {
         return status;
+    }
+
+    public boolean isHiddenByAdmin() {
+        return hiddenByAdmin;
+    }
+
+    /** Admin ẩn bài: tắt hiển thị và gắn cờ để các đường tự động không hiện lại. */
+    public void hideByAdmin() {
+        deactivate();
+        hiddenByAdmin = true;
+    }
+
+    /** Admin hiện lại bài: bật hiển thị và xoá cờ. */
+    public void unhideByAdmin() {
+        activate();
+        hiddenByAdmin = false;
     }
 
     public void approve() {
@@ -140,6 +179,7 @@ public class Item extends BaseEntity {
         if (status != ItemStatus.PENDING_REVIEW) {
             transitionTo(ItemStatus.PENDING_REVIEW);
         }
+        this.reviewSubmittedAt = Instant.now();
         this.categoryId = categoryId;
         this.areaId = areaId;
         this.offerType = offerType;

@@ -1,0 +1,357 @@
+.admin-accounts-page {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.admin-accounts-header > div {
+  margin-bottom: 0;
+}
+
+.admin-accounts-header .page-title {
+  font-size: clamp(1.35rem, 2vw, 1.65rem);
+}
+
+.admin-accounts-header .page-intro {
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+.admin-accounts-stats {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.admin-accounts-stat {
+  min-height: 82px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: white;
+}
+
+.admin-accounts-stat p,
+.admin-accounts-stat span {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  line-height: 1.35;
+}
+
+.admin-accounts-stat strong {
+  display: block;
+  margin: 2px 0;
+  font-size: 1.125rem;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-accounts-stat--total {
+  border-left-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.admin-accounts-stat--active {
+  border-left-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.admin-accounts-stat--locked {
+  border-left-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.admin-accounts-filters {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: white;
+}
+
+.admin-accounts-filters .label {
+  margin-bottom: 4px;
+}
+
+.admin-accounts-filters .input,
+.admin-accounts-filter-search > div {
+  height: 38px;
+  min-height: 38px;
+  border-radius: 8px;
+}
+
+.admin-accounts-filters .input {
+  padding-block: 6px;
+}
+
+.admin-accounts-table-section {
+  min-width: 0;
+}
+
+.admin-accounts-table-wrap {
+  max-height: clamp(340px, calc(100dvh - 390px), 640px);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  box-shadow: none;
+}
+
+.admin-accounts-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  font-size: 0.75rem;
+}
+
+.admin-accounts-table th:nth-child(1) {
+  width: 20%;
+}
+.admin-accounts-table th:nth-child(2) {
+  width: 10%;
+}
+.admin-accounts-table th:nth-child(3) {
+  width: 9%;
+}
+.admin-accounts-table th:nth-child(4) {
+  width: 9%;
+}
+.admin-accounts-table th:nth-child(5) {
+  width: 8%;
+}
+.admin-accounts-table th:nth-child(6) {
+  width: 12%;
+}
+.admin-accounts-table th:nth-child(7) {
+  width: 11%;
+}
+.admin-accounts-table th:nth-child(8) {
+  width: 21%;
+}
+
+.admin-accounts-table th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-low);
+  color: var(--color-text-secondary);
+  font-size: 0.6875rem;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.admin-accounts-table td {
+  height: 70px;
+  padding: 8px;
+  line-height: 1.4;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.admin-accounts-row {
+  transition: background-color 160ms ease;
+}
+
+.admin-accounts-row:hover {
+  background: var(--color-primary-soft);
+}
+
+.admin-accounts-user {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.admin-accounts-user-name {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.35;
+}
+
+.admin-accounts-user-email {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.admin-accounts-credit {
+  color: var(--color-text-primary);
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-accounts-reputation {
+  color: var(--color-text-secondary);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-accounts-state {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  padding: 3px 7px;
+  border-radius: 6px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1rem;
+  white-space: nowrap;
+}
+
+.admin-accounts-date {
+  color: var(--color-text-secondary);
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+
+.admin-accounts-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.admin-accounts-action,
+.admin-accounts-action-size {
+  display: inline-flex;
+  min-width: 0;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.admin-accounts-action {
+  border: 1px solid var(--color-border);
+  background: white;
+  color: var(--color-primary);
+}
+
+.admin-accounts-action:hover,
+.admin-accounts-action:focus-visible {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  outline: none;
+}
+
+.admin-account-detail-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-low);
+}
+
+.admin-account-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-account-detail-item {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-low);
+}
+
+.admin-account-detail-item dt {
+  margin-bottom: 4px;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.admin-account-detail-item dd {
+  overflow-wrap: anywhere;
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.admin-account-detail-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.admin-account-detail-links a {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.admin-account-detail-links a:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+@media (min-width: 640px) {
+  .admin-accounts-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-accounts-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .admin-accounts-filters {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  .admin-accounts-filter-search {
+    grid-column: span 6;
+  }
+  .admin-accounts-filter-state {
+    grid-column: span 3;
+  }
+  .admin-accounts-filter-role {
+    grid-column: span 3;
+  }
+}
+
+@media (max-width: 1023px) {
+  .admin-accounts-table-wrap {
+    overflow-x: auto;
+  }
+
+  .admin-accounts-table {
+    min-width: 1050px;
+  }
+}
+
+@media (max-width: 639px) {
+  .admin-account-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}

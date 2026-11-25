@@ -32,6 +32,8 @@ function reasonLabel(report: MyReportSummary) {
 function againstMeStatus(report: MyReportSummary): [string, Tone] {
   if (report.status === 'RESOLVED') return ['Đã kết luận: có vi phạm', 'error'];
   if (report.status === 'DISMISSED') return ['Đã kết luận: không vi phạm', 'success'];
+  // Báo cáo từ chối nhận không có hạn: giải trình không bắt buộc (GN-07)
+  if (!report.responseDueAt && report.responseWindowOpen) return ['Có thể gửi giải trình', 'info'];
   if (report.responseWindowOpen) return ['Cần giải trình', 'warning'];
   if (report.respondedAt) return ['Đã giải trình, chờ kết luận', 'info'];
   return ['Quá hạn giải trình, chờ kết luận', 'neutral'];
@@ -134,7 +136,7 @@ function SentCard({ report }: { report: MyReportSummary }) {
 }
 
 /**
- * Tab "Khiếu nại & Báo cáo" của trang Hoạt động: phần 1 là hồ sơ cần tôi giải trình, phần 2 là báo cáo tôi đã gửi.
+ * Tab "Khiếu nại và Báo cáo" của trang Hoạt động: phần 1 là hồ sơ cần tôi giải trình, phần 2 là báo cáo tôi đã gửi.
  * Hai danh sách tải song song; một bên lỗi không làm mất bên còn lại.
  */
 export function ActivitiesComplaints() {
@@ -193,7 +195,7 @@ export function ActivitiesComplaints() {
       </section>
       <section aria-labelledby="sent-reports-title">
         <h2 id="sent-reports-title" className="mb-1 text-lg font-bold">
-          Báo cáo & Khiếu nại đã gửi
+          Báo cáo và Khiếu nại đã gửi
         </h2>
         <p className="mb-3 text-sm text-text-muted">
           Theo dõi báo cáo bài đăng, người dùng và khiếu nại giao dịch bạn đã gửi.
