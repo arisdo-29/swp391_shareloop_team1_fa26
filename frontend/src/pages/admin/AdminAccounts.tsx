@@ -496,7 +496,11 @@ function AccountDetailDialog({
       ) : null}
 
       <div className="admin-account-detail-links">
+ fix/admin-user-profile
         <Link to={`/admin/users/${account.id}/profile`}>Xem hồ sơ người dùng</Link>
+
+        <Link to={`/users/${account.id}`}>Xem hồ sơ người dùng</Link>
+ develop
         {account.role === 'USER' ? (
           <Link to={`/admin/finance/users/${account.id}`}>Xem lịch sử Credit</Link>
         ) : null}
