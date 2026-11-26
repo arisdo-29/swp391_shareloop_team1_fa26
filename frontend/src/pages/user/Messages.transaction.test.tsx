@@ -157,12 +157,12 @@ afterEach(() => {
 // Huỷ giao dịch, hạn giải trình, báo chưa nhận được: đã chuyển sang TransactionProgress.test.tsx
 // cùng với chức năng (trang Tiến trình giao dịch).
 describe('Trang Tin nhắn sau khi tách trang Tiến trình', () => {
-  it('không còn cột Tiến trình giao dịch cũ, chỉ còn nút Xem tiến trình', async () => {
+  it('mở chi tiết giao dịch bằng nút Xem giao dịch trong khung chat', async () => {
     await renderMessages(RECEIVER_ID, request());
 
     expect(screen.queryByLabelText('Tiến trình giao dịch')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Huỷ giao dịch' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Xem tiến trình' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Xem giao dịch' })).toBeTruthy();
   });
 
   it.each([
@@ -432,7 +432,7 @@ describe('Khung chat gọn', () => {
     expect(within(chat).getByRole('img', { name: 'Mũ bảo hiểm' }).getAttribute('src'))
       .toContain('/api/v1/media/77');
     expect(within(chat).getAllByRole('button', { name: 'Xem chi tiết' })).toHaveLength(2);
-    expect(within(chat).getByRole('button', { name: 'Xem tiến trình' })).toBeTruthy();
+    expect(within(chat).getByRole('button', { name: 'Xem giao dịch' })).toBeTruthy();
     expect(within(chat).getByRole('button', { name: 'Xem hồ sơ' })).toBeTruthy();
   });
 });

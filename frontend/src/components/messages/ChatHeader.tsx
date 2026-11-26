@@ -245,7 +245,7 @@ export function ChatHeader({
           className="!min-h-7 !px-2.5 !py-0.5"
           onClick={() => navigate(transactionProgressPath(request.id))}
         >
-          Xem tiến trình
+          Xem giao dịch
         </Button>
         {nearestDeadlineLine(request, viewerIsDonor, participantName) ? (
           <p className="w-full text-xs text-text-secondary" data-testid="chat-nearest-deadline">

@@ -220,13 +220,13 @@ describe('ChatHeader', () => {
     expect(screen.queryByRole('button', { name: 'Xem hồ sơ' })).toBeNull();
   });
 
-  it('Xem tiến trình mở trang tiến trình của đúng giao dịch', async () => {
+  it('Xem giao dịch mở chi tiết của đúng giao dịch', async () => {
     // given
     const user = userEvent.setup();
     renderHeader(RECEIVER_ID, conversation());
 
     // when
-    await user.click(screen.getByRole('button', { name: 'Xem tiến trình' }));
+    await user.click(screen.getByRole('button', { name: 'Xem giao dịch' }));
 
     // then
     expect(screen.getByTestId('location').textContent).toBe('/messages/101/progress');
@@ -242,7 +242,7 @@ describe('ChatHeader', () => {
 
     // then
     expect(screen.queryByRole('button', { name: /Xe đạp cũ/ })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Xem tiến trình' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Xem giao dịch' })).toBeTruthy();
 
     // when
     await user.click(screen.getByRole('button', { name: 'Hiện món đồ' }));

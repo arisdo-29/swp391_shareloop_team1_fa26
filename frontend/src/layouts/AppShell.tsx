@@ -226,6 +226,7 @@ function AppShellContent() {
           ['/activities', 'Hoạt động'],
           ['/ai', 'Trợ lý AI'],
           ['/about', 'Giới thiệu'],
+          ['/transactions', 'Giao dịch'],
           ['/messages', 'Tin nhắn'],
         ]
       : [

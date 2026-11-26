@@ -35,7 +35,7 @@ export function DisputeBanner({ request, partnerName, progressPath, onResponded 
 
   const progressLink = (
     <Link to={progressPath} className="font-semibold text-primary hover:underline">
-      Xem tiến trình
+      Xem giao dịch
     </Link>
   );
 

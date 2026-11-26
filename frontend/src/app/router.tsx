@@ -26,6 +26,7 @@ const Post = lazy(() => import('../pages/user/Post').then((module) => ({ default
 const Activities = lazy(() => import('../pages/user/Activities').then((module) => ({ default: module.Activities })));
 const Messages = lazy(() => import('../pages/user/Messages').then((module) => ({ default: module.Messages })));
 const Profile = lazy(() => import('../pages/user/Profile').then((module) => ({ default: module.Profile })));
+const Transactions = lazy(() => import('../pages/user/Transactions').then((module) => ({ default: module.Transactions })));
 const TransactionProgress = lazy(() => import('../pages/user/TransactionProgress').then((module) => ({ default: module.TransactionProgress })));
 const UserProfile = lazy(() => import('../pages/user/UserProfile').then((module) => ({ default: module.UserProfile })));
 const Credit = lazy(() => import('../pages/user/Credit').then((module) => ({ default: module.Credit })));
@@ -92,6 +93,8 @@ export const router = createBrowserRouter([
           { path: '/post', element: <Post /> },
           { path: '/ai', element: <AI /> },
           { path: '/activities', element: <Activities /> },
+          { path: '/transactions', element: <Transactions /> },
+          { path: '/transactions/:conversationId', element: <TransactionProgress fromTransactions /> },
           { path: '/messages', element: <Messages /> },
           { path: '/requests/:requestId', element: <Messages /> },
           // conversationId là id của Request; chỉ hai bên giao dịch xem được (backend trả 403 cho người ngoài).
