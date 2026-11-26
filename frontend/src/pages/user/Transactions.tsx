@@ -162,13 +162,16 @@ function TransactionList({ currentUserId }: { currentUserId: number }) {
             </Button>
           ))}
         </div>
-        <SearchField
-          type="search"
-          aria-label="Tìm theo tên món hoặc người giao dịch"
-          placeholder="Tìm món hoặc người giao dịch"
-          value={query}
-          onChange={(event) => updateFilter('q', event.target.value)}
-        />
+        <div className="w-full min-w-0 md:w-80 lg:w-96">
+          <SearchField
+            showIcon
+            type="search"
+            aria-label="Tìm theo tên món hoặc người giao dịch"
+            placeholder="Tìm món hoặc người giao dịch"
+            value={query}
+            onChange={(event) => updateFilter('q', event.target.value)}
+          />
+        </div>
       </div>
       <p className="sr-only" role="status">
         {visibleTransactions.length} giao dịch phù hợp

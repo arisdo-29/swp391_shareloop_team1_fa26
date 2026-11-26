@@ -535,12 +535,16 @@ function lastEnabledOption(options: SelectOption[]): number {
   }
   return 0;
 }
-export function SearchField(props: InputHTMLAttributes<HTMLInputElement>) {
+export function SearchField({
+  showIcon = false,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & { showIcon?: boolean }) {
   // Ô tìm kiếm không có viền riêng; wrapper đổi sang một viền xanh khi focus.
   return (
     <div className="flex min-h-11 items-center rounded-md border border-border bg-white px-1 transition hover:border-text-muted focus-within:border-primary">
+      {showIcon ? <Icon name="lookup" className="ml-2 size-4 shrink-0 text-text-muted" /> : null}
       <input
-        className="w-full border-0 bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-text-muted"
+        className="w-full min-w-0 border-0 bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-text-muted"
         {...props}
       />
     </div>
