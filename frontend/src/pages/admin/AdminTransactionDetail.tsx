@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { Alert, Button, ItemImage, PageHeader, SkeletonRows } from '../../components/ui';
 import { PrivateImage } from '../../components/PrivateImage';
 import {
@@ -14,13 +14,13 @@ import { formatDeadline } from '../../utils/request';
 import { requestStatusLabel } from '../../utils/request';
 import { adminErrorMessage } from './adminErrors';
 import {
-  deliveryMethodLabels,
   formatDateTime,
   itemStatusLabels,
   reportReasonLabels,
   reportStatusLabels,
 } from './adminItemDisplay';
 import { CancelDialog } from './AdminTransactions';
+import { AdminTransactionLogistics } from './AdminTransactionLogistics';
 
 const stageLabels: Record<string, string> = {
   HANDOVER: 'Lúc giao nhận',
@@ -105,6 +105,8 @@ function ItemBox({ title, info }: { title: string; info: AdminRequestItemInfo })
 
 export function AdminTransactionDetail() {
   const { transactionId } = useParams();
+  const { search } = useLocation();
+  const listPath = `/admin/transactions${search}`;
   const id = Number(transactionId);
   const [detail, setDetail] = useState<AdminRequestDetail | null>(null);
   const [error, setError] = useState('');
@@ -155,7 +157,7 @@ export function AdminTransactionDetail() {
             Thử lại
           </Button>
           <Link
-            to="/admin/transactions"
+            to={listPath}
             className="inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-semibold"
           >
             Về danh sách giao dịch
@@ -174,7 +176,7 @@ export function AdminTransactionDetail() {
         action={
           <div className="flex flex-wrap gap-2">
             <Link
-              to="/admin/transactions"
+              to={listPath}
               className="inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-semibold"
             >
               Về danh sách
@@ -204,40 +206,9 @@ export function AdminTransactionDetail() {
             </div>
           </Card>
 
-          {detail.shippingLegs && detail.shippingLegs.length > 0 ? (
-            <Card title="Giao hàng hai chiều">
-              <div className="space-y-3">
-                {detail.shippingLegs.map((leg) => (
-                  <div key={leg.leg} className="rounded-md bg-surface-low p-3 text-sm" data-testid={`admin-leg-${leg.leg}`}>
-                    <p className="font-semibold text-text-primary">
-                      Chiều {leg.leg}: {leg.itemTitle || 'Món đã xoá'} ({leg.step})
-                    </p>
-                    <dl className="mt-1 divide-y divide-border/60">
-                      <Row label="Người gửi">{leg.senderRole}</Row>
-                      <Row label="Người nhận">{leg.receiverRole}</Row>
-                      <Row label="Địa chỉ giao tới">{leg.address || 'Chưa nhập'}</Row>
-                      <Row label="Ngày gửi">{formatDateTime(leg.shippedAt)}</Row>
-                      <Row label="Mã vận đơn">{leg.trackingCode || '—'}</Row>
-                      <Row label="Ngày nhận">{formatDateTime(leg.receivedAt)}</Row>
-                    </dl>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          ) : null}
+          <AdminTransactionLogistics detail={detail} />
 
-          <Card title="Giao nhận">
-            <dl className="divide-y divide-border/60">
-              <Row label="Hình thức">
-                {detail.deliveryMethod ? deliveryMethodLabels[detail.deliveryMethod] : 'Chưa chọn'}
-              </Row>
-              <Row label="Địa điểm hoặc địa chỉ">{detail.meetingPlace || '—'}</Row>
-              <Row label={detail.deliveryMethod === 'SHIPPING' ? 'Ngày gửi hàng dự kiến' : 'Giờ hẹn'}>
-                {formatDateTime(detail.meetingTime)}
-              </Row>
-              {detail.reschedule ? <Row label="Số lần đã dời lịch">{detail.reschedule.count}</Row> : null}
-              {detail.autoConfirmed ? <Row label="Hoàn tất">Hệ thống tự ghi nhận do bên nhận im lặng</Row> : null}
-            </dl>
+          <Card title="Ảnh giao nhận">
             {detail.photos.length > 0 ? (
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {detail.photos.map((photo) => (
@@ -270,8 +241,8 @@ export function AdminTransactionDetail() {
                 <Row label="Lý do">
                   {[detail.cancelRequest.label, detail.cancelRequest.reason].filter(Boolean).join('. ') || '—'}
                 </Row>
-                {detail.cancelRequest.expiresAt ? (
-                  <Row label="Hạn phản hồi">{when(detail.cancelRequest.expiresAt)}</Row>
+                {detail.cancelRequest.state === 'PENDING' ? (
+                  <Row label="Hạn phản hồi">{when(detail.deadlines?.cancelRequestExpiresAt ?? detail.cancelRequest.expiresAt)}</Row>
                 ) : null}
               </dl>
             </Card>
@@ -285,24 +256,11 @@ export function AdminTransactionDetail() {
                   <>
                     <Row label="Đề nghị đang chờ">{detail.reschedule.proposedByRole} đề nghị</Row>
                     <Row label="Giờ mới đề nghị">{formatDateTime(detail.reschedule.proposedMeetingTime)}</Row>
-                    <Row label="Hạn phản hồi">{when(detail.reschedule.expiresAt)}</Row>
+                    {detail.deliveryMethod !== 'SHIPPING' && detail.reschedule.proposedMeetingPlace ? (
+                      <Row label="Địa điểm đề xuất mới">{detail.reschedule.proposedMeetingPlace}</Row>
+                    ) : null}
+                    <Row label="Hạn phản hồi">{when(detail.deadlines?.rescheduleExpiresAt ?? detail.reschedule.expiresAt)}</Row>
                   </>
-                ) : null}
-              </dl>
-            </Card>
-          ) : null}
-
-          {detail.deadlines && Object.values(detail.deadlines).some(Boolean) ? (
-            <Card title="Mốc hạn">
-              <dl className="divide-y divide-border/60">
-                {detail.deadlines.autoCancelAt ? <Row label="Tự huỷ nếu không ai làm gì">{when(detail.deadlines.autoCancelAt)}</Row> : null}
-                {detail.deadlines.autoConfirmAt ? <Row label="Tự hoàn tất">{when(detail.deadlines.autoConfirmAt)}</Row> : null}
-                {detail.deadlines.sendDeadlineAt ? <Row label="Hạn gửi hàng">{when(detail.deadlines.sendDeadlineAt)}</Row> : null}
-                {detail.deadlines.cancelRequestExpiresAt ? (
-                  <Row label="Hạn phản hồi đề nghị huỷ">{when(detail.deadlines.cancelRequestExpiresAt)}</Row>
-                ) : null}
-                {detail.deadlines.rescheduleExpiresAt ? (
-                  <Row label="Hạn phản hồi đề nghị dời lịch">{when(detail.deadlines.rescheduleExpiresAt)}</Row>
                 ) : null}
               </dl>
             </Card>

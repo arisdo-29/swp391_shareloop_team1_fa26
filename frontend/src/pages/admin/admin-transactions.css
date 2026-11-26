@@ -356,7 +356,7 @@
   white-space: normal;
 }
 
-.admin-transaction-actions button {
+.admin-transaction-actions :is(button, a) {
   width: auto;
   min-width: 0;
   height: 32px;
@@ -385,44 +385,7 @@
   gap: 6px;
 }
 
-/* Hộp thoại chi tiết giao dịch: nhóm thông tin tách bằng khung, màu nhấn xanh Admin. */
-.admin-tx-modal {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.admin-tx-modal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 12px;
-  border-bottom: 3px solid var(--color-primary);
-}
-
-.admin-tx-modal-close {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  color: var(--color-text-muted);
-}
-
-.admin-tx-modal-close:hover {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-}
-
-.admin-tx-modal-body {
-  display: grid;
-  gap: 14px;
-}
-
-.admin-tx-modal-section {
+.admin-transaction-detail-section {
   border: 1px solid var(--color-border);
   border-left: 4px solid var(--color-primary);
   border-radius: 10px;
@@ -430,7 +393,7 @@
   background: #ffffff;
 }
 
-.admin-tx-modal-section-title {
+.admin-transaction-detail-section-title {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -440,7 +403,7 @@
   font-weight: 700;
 }
 
-.admin-tx-modal-section-icon {
+.admin-transaction-detail-section-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -450,19 +413,12 @@
   background: var(--color-primary-soft);
 }
 
-.admin-tx-modal-section-icon svg {
+.admin-transaction-detail-section-icon svg {
   width: 16px;
   height: 16px;
 }
 
-.admin-tx-modal-subtitle {
-  margin: 12px 0 6px;
-  color: var(--color-text-primary);
-  font-size: 0.8125rem;
-  font-weight: 700;
-}
-
-.admin-tx-modal-row {
+.admin-transaction-detail-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -473,15 +429,15 @@
   font-size: 0.875rem;
 }
 
-.admin-tx-modal-row:last-child {
+.admin-transaction-detail-row:last-child {
   border-bottom: 0;
 }
 
-.admin-tx-modal-row dt {
+.admin-transaction-detail-row dt {
   color: var(--color-text-muted);
 }
 
-.admin-tx-modal-row dd {
+.admin-transaction-detail-row dd {
   min-width: 0;
   color: var(--color-text-primary);
   font-weight: 500;
@@ -489,110 +445,16 @@
   overflow-wrap: anywhere;
 }
 
-.admin-tx-modal-missing {
+.admin-transaction-detail-missing {
   color: var(--color-text-muted) !important;
   font-style: italic;
   font-weight: 400 !important;
 }
 
-.admin-tx-modal-grid {
-  display: grid;
-  gap: 10px;
-}
-
-@media (min-width: 640px) {
-  .admin-tx-modal-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.admin-tx-modal-box {
+.admin-transaction-detail-box {
   min-width: 0;
   border-radius: 8px;
   padding: 10px 12px;
   background: var(--color-surface-low);
   font-size: 0.875rem;
-}
-
-.admin-tx-modal-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.admin-tx-modal-box-label {
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-}
-
-.admin-tx-modal-timeline {
-  display: grid;
-  gap: 0;
-  margin-top: 10px;
-}
-
-.admin-tx-modal-step {
-  --step-color: var(--color-info);
-  position: relative;
-  display: flex;
-  gap: 12px;
-  padding: 0 0 14px 2px;
-  font-size: 0.875rem;
-}
-
-.admin-tx-modal-step::before {
-  content: '';
-  position: absolute;
-  top: 14px;
-  bottom: 0;
-  left: 7px;
-  width: 2px;
-  background: var(--color-border);
-}
-
-.admin-tx-modal-step:last-child {
-  padding-bottom: 0;
-}
-
-.admin-tx-modal-step:last-child::before {
-  display: none;
-}
-
-.admin-tx-modal-step--success {
-  --step-color: var(--color-success);
-}
-
-.admin-tx-modal-step--warning {
-  --step-color: var(--color-warning);
-}
-
-.admin-tx-modal-step--error {
-  --step-color: var(--color-error);
-}
-
-.admin-tx-modal-dot {
-  position: relative;
-  z-index: 1;
-  flex: none;
-  width: 12px;
-  height: 12px;
-  margin-top: 4px;
-  border: 2px solid var(--step-color);
-  border-radius: 999px;
-  background: #ffffff;
-}
-
-.admin-tx-modal-step[aria-current='step'] .admin-tx-modal-dot {
-  background: var(--step-color);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--step-color) 20%, transparent);
-}
-
-.admin-tx-modal-footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border);
 }

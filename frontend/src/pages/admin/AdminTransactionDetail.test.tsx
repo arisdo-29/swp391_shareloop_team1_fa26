@@ -297,11 +297,12 @@ describe('AdminTransactionDetail luật huỷ có xác nhận, dời lịch và 
     );
     renderPage();
 
-    await screen.findByText('Giao hàng hai chiều');
+    await screen.findByText('Thông tin gửi hàng');
     const first = within(screen.getByTestId('admin-leg-1'));
     expect(first.getByText('12 Lê Lợi')).toBeTruthy();
     expect(first.getByText('GHN111')).toBeTruthy();
-    expect(first.getByText(/Chiều 1: Xe đạp cũ \(Đã nhận\)/)).toBeTruthy();
+    expect(first.getByText('Xe đạp cũ')).toBeTruthy();
+    expect(first.getByText('Đã nhận')).toBeTruthy();
     const second = within(screen.getByTestId('admin-leg-2'));
     expect(second.getByText('34 Trần Phú')).toBeTruthy();
     expect(second.getByText(/Chờ gửi/)).toBeTruthy();
