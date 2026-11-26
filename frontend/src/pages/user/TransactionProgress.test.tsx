@@ -93,21 +93,22 @@ function LocationProbe() {
 }
 
 /** Dựng trang Tiến trình cho người xem `viewerId`, chi tiết giao dịch là `current`. */
-async function renderProgress(viewerId: number, current: RequestResponse) {
+async function renderProgress(viewerId: number, current: RequestResponse, path = '/messages/101/progress') {
   store.dispatch(actions.loginFromApi(user(viewerId)));
   vi.mocked(requestApi.get).mockResolvedValue(current);
   vi.mocked(requestApi.forItem).mockResolvedValue([current]);
   render(
     <Provider store={store}>
-      <MemoryRouter initialEntries={['/messages/101/progress']}>
+      <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/messages/:conversationId/progress" element={<TransactionProgress />} />
+          <Route path="/transactions/:conversationId" element={<TransactionProgress fromTransactions />} />
           <Route path="*" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>
     </Provider>,
   );
-  await screen.findByRole('heading', { level: 1, name: 'Tiến trình giao dịch' });
+  await screen.findByRole('heading', { level: 1, name: 'Chi tiết giao dịch' });
 }
 
 beforeEach(() => {
@@ -329,6 +330,15 @@ describe('Nút theo trạng thái và vai', () => {
 
     // then
     expect(screen.getByTestId('location').textContent).toBe('/requests/101');
+  });
+
+  it('trở về danh sách khi mở chi tiết từ mục Giao dịch', async () => {
+    const userEvents = userEvent.setup();
+    await renderProgress(RECEIVER_ID, request(), '/transactions/101?status=active&q=xe');
+
+    expect(requestApi.get).toHaveBeenCalledWith(101, RECEIVER_ID);
+    await userEvents.click(screen.getByRole('button', { name: 'Về danh sách giao dịch' }));
+    expect(screen.getByTestId('location').textContent).toBe('/transactions?status=active&q=xe');
   });
 
   it('mở bài đăng kèm nguồn từ trang tin nhắn', async () => {

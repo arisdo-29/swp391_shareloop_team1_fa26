@@ -54,8 +54,8 @@ type OpenDialog =
   | 'report'
   | null;
 
-/** Trang Tiến trình giao dịch (route /messages/:conversationId/progress, conversationId là id Request). */
-export function TransactionProgress() {
+/** Chi tiết giao dịch mở từ danh sách giao dịch hoặc cuộc trò chuyện. */
+export function TransactionProgress({ fromTransactions = false }: { fromTransactions?: boolean }) {
   const user = useAppSelector(selectCurrentUser);
   const currentUserId = toBackendUserId(user?.id);
   const { conversationId } = useParams();
@@ -71,6 +71,7 @@ export function TransactionProgress() {
       key={conversationId}
       requestId={Number(conversationId)}
       currentUserId={currentUserId}
+      fromTransactions={fromTransactions}
     />
   );
 }
@@ -78,12 +79,15 @@ export function TransactionProgress() {
 function TransactionProgressView({
   requestId,
   currentUserId,
+  fromTransactions,
 }: {
   requestId: number;
   currentUserId: number;
+  fromTransactions: boolean;
 }) {
   const navigate = useNavigate();
-  const { hash } = useLocation();
+  const { hash, search } = useLocation();
+  const backPath = fromTransactions ? `/transactions${search}` : '/messages';
   const { request, offeredItem, loading, error, applyUpdate, reload } = useTransactionDetail(
     requestId,
     currentUserId,
@@ -121,8 +125,12 @@ function TransactionProgressView({
       <div className="page-shell">
         <EmptyState
           title="Không xem được giao dịch này"
-          text="Chỉ hai bên của giao dịch mới xem được tiến trình. Giao dịch có thể không tồn tại."
-          action={<Button onClick={() => navigate('/messages')}>Về trang Tin nhắn</Button>}
+          text="Chỉ hai bên mới xem được chi tiết giao dịch. Giao dịch có thể không tồn tại."
+          action={
+            <Button onClick={() => navigate(backPath)}>
+              {fromTransactions ? 'Về danh sách giao dịch' : 'Về trang Tin nhắn'}
+            </Button>
+          }
         />
       </div>
     );
@@ -151,12 +159,15 @@ function TransactionProgressView({
 
   return (
     <div className="page-shell py-6 sm:py-8">
-      <Button variant="outline" onClick={() => navigate(requestConversationPath(request.id))}>
-        Quay lại tin nhắn
+      <Button
+        variant="outline"
+        onClick={() => navigate(fromTransactions ? backPath : requestConversationPath(request.id))}
+      >
+        {fromTransactions ? 'Về danh sách giao dịch' : 'Quay lại tin nhắn'}
       </Button>
       <div className="mb-6 mt-2 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="page-title">Tiến trình giao dịch</h1>
+          <h1 className="page-title">Chi tiết giao dịch</h1>
           <p className="mt-1 truncate text-sm text-text-secondary">{title}</p>
         </div>
         <StatusBadge status={request.status} label={requestStatusLabel[request.status]} />

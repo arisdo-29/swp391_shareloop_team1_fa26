@@ -182,6 +182,18 @@ describe.each([
     expect(headerLinks[aboutIndex].getAttribute('href')).toBe('/about');
   });
 
+  it('opens the signed-in transactions page from the navigation', async () => {
+    const user = userEvent.setup();
+    renderShell(width);
+    const header = within(screen.getByRole('banner'));
+    if (width < 1280) await user.click(header.getByRole('button', { name: 'Mở điều hướng' }));
+
+    const menus = header.getAllByRole('navigation');
+    const menu = within(menus[menus.length - 1]);
+    await user.click(menu.getByRole('link', { name: 'Giao dịch' }));
+    expect(screen.getByTestId('pathname').textContent).toBe('/transactions');
+  });
+
   it('closes dropdowns on route changes, outside clicks, Escape, and menu item clicks', async () => {
     const user = userEvent.setup();
     renderShell(width);

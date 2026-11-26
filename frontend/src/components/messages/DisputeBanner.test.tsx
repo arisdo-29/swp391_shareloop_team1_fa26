@@ -53,14 +53,14 @@ function renderBanner(disputes: RequestDispute[] | null) {
 }
 
 describe('DisputeBanner', () => {
-  it('bên bị khiếu nại thấy banner vàng có nút Giải trình ngay và liên kết Xem tiến trình', async () => {
+  it('bên bị khiếu nại thấy banner vàng có nút Giải trình ngay và liên kết Xem giao dịch', async () => {
     // given
     const user = userEvent.setup();
     renderBanner([dispute()]);
 
     // then
     expect(screen.getByText(/An Chủ Bài đã khiếu nại giao dịch này: Không đúng mô tả/)).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Xem tiến trình' }).getAttribute('href')).toBe('/messages/101/progress');
+    expect(screen.getByRole('link', { name: 'Xem giao dịch' }).getAttribute('href')).toBe('/messages/101/progress');
 
     // when
     await user.click(screen.getByRole('button', { name: 'Giải trình ngay' }));
