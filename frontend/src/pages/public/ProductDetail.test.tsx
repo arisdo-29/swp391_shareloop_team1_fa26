@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Provider } from 'react-redux';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -234,6 +234,7 @@ describe('Gửi yêu cầu có hoặc không kèm món', () => {
     // given
     const user = userEvent.setup();
     await renderDetail(detail({ offerType: 'SWAP' }), [myChair]);
+    expect(screen.queryByRole('navigation', { name: 'Phân trang món mang đổi' })).toBeNull();
 
     // when
     await user.click(screen.getByRole('button', { name: 'Gửi đề nghị, miễn phí' }));
@@ -243,5 +244,39 @@ describe('Gửi yêu cầu có hoặc không kèm món', () => {
     expect(
       screen.getByText('Vui lòng chọn một món để trao đổi hoặc chọn "Chỉ xin nhận, không kèm món".'),
     ).toBeTruthy();
+  });
+
+  it('ưu tiên món giá tương đương và giữ món đã chọn khi chuyển trang', async () => {
+    const user = userEvent.setup();
+    const otherItems = Array.from({ length: 6 }, (_, index) =>
+      detail({ id: 60 + index, donorId: VIEWER_ID, title: `Món số ${index + 1}`, referencePrice: 900_000 }),
+    );
+    const similarItem = detail({ id: 70, donorId: VIEWER_ID, title: 'Bàn gỗ', referencePrice: 300_000 });
+    vi.mocked(requestApi.forItem).mockResolvedValue([]);
+    vi.mocked(requestApi.create).mockResolvedValue(createdRequest(65));
+    await renderDetail(detail({ offerType: 'SWAP', referencePrice: 300_000 }), [...otherItems, similarItem]);
+
+    const options = within(screen.getByRole('group', { name: 'Chọn món bạn mang đổi' }));
+    const pagination = within(await options.findByRole('navigation', { name: 'Phân trang món mang đổi' }));
+    const previous = pagination.getByRole<HTMLButtonElement>('button', { name: 'Trang trước' });
+    const next = pagination.getByRole<HTMLButtonElement>('button', { name: 'Trang sau' });
+
+    const cards = options.getAllByRole('button', { name: /Bàn gỗ|Món số/ });
+    expect(cards).toHaveLength(5);
+    expect(cards[0]).toBe(options.getByRole('button', { name: /Bàn gỗ.*Giá tương đương/ }));
+    expect(cards[0].classList.contains('border-warning')).toBe(true);
+    expect(previous.disabled).toBe(true);
+
+    await user.click(next);
+    expect(pagination.getByText('Trang 2/2')).toBeTruthy();
+    expect(next.disabled).toBe(true);
+    expect(options.getAllByRole('button', { name: /Bàn gỗ|Món số/ })).toHaveLength(2);
+    await user.click(options.getByRole('button', { name: /Món số 6/ }));
+
+    await user.click(previous);
+    expect(pagination.getByText('Trang 1/2')).toBeTruthy();
+    expect(options.getByText('Đã chọn “Món số 6”')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Gửi đề nghị, miễn phí' }));
+    expect(requestApi.create).toHaveBeenCalledWith(45, VIEWER_ID, 65);
   });
 });
