@@ -548,6 +548,7 @@ export function ProductDetail() {
                   <OfferedItemOptions
                     items={swapOffers.items}
                     similarPriceIds={swapOffers.similarIds}
+                    pageSize={5}
                     selectedItemId={offeredItemId}
                     onSelect={chooseOfferedItem}
                   />
