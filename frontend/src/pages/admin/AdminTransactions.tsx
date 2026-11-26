@@ -28,7 +28,6 @@ import type { ApiError } from '../../services/http';
 import type { ItemRequestStatus } from '../../types/domain';
 import { requestStatusLabel } from '../../utils/request';
 import { deliveryMethodLabels } from './adminItemDisplay';
-import { TransactionDetailModal } from './AdminTransactionDetailModal';
 import './admin-transactions.css';
 
 const PAGE_SIZE = 20;
@@ -109,25 +108,33 @@ export function AdminTransactions() {
   // Thẻ ở trang Tổng quan mở sẵn bộ lọc trạng thái qua ?status=.
   const [status, setStatus] = useState<ItemRequestStatus | ''>(() => {
     const initial = searchParams.get('status');
-    return initial && initial in requestStatusLabel ? (initial as ItemRequestStatus) : '';
+    return initial && Object.hasOwn(requestStatusLabel, initial) ? (initial as ItemRequestStatus) : '';
   });
-  const [stuckOnly, setStuckOnly] = useState(false);
-  const [type, setType] = useState<'GIVE' | 'SWAP' | ''>('');
-  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod | ''>('');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [queryInput, setQueryInput] = useState('');
-  const [query, setQuery] = useState('');
-  const [page, setPage] = useState(0);
+  const [stuckOnly, setStuckOnly] = useState(() => searchParams.get('stuck') === 'true');
+  const [type, setType] = useState<'GIVE' | 'SWAP' | ''>(() => {
+    const value = searchParams.get('type');
+    return value === 'GIVE' || value === 'SWAP' ? value : '';
+  });
+  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod | ''>(() => {
+    const value = searchParams.get('deliveryMethod');
+    return value === 'IN_PERSON' || value === 'SHIPPING' ? value : '';
+  });
+  const [fromDate, setFromDate] = useState(() => searchParams.get('from') ?? '');
+  const [toDate, setToDate] = useState(() => searchParams.get('to') ?? '');
+  const [queryInput, setQueryInput] = useState(() => searchParams.get('draft') ?? searchParams.get('q') ?? '');
+  const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
+  const [page, setPage] = useState(() => {
+    const value = Number(searchParams.get('page'));
+    return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+  });
   const [reloadKey, setReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [cancelling, setCancelling] = useState<AdminRequestRow | null>(null);
-  const [viewingId, setViewingId] = useState<number | null>(null);
   // Hai bộ lọc của luật mới: có đề nghị huỷ đang chờ, Giao hàng quá hạn gửi
-  const [pendingCancelOnly, setPendingCancelOnly] = useState(false);
-  const [sendOverdueOnly, setSendOverdueOnly] = useState(false);
+  const [pendingCancelOnly, setPendingCancelOnly] = useState(() => searchParams.get('pendingCancel') === 'true');
+  const [sendOverdueOnly, setSendOverdueOnly] = useState(() => searchParams.get('sendOverdue') === 'true');
 
   const [stats, setStats] = useState<TransactionStats>(EMPTY_STATS);
 
@@ -272,7 +279,24 @@ export function AdminTransactions() {
   ]);
 
   const closeDialog = useCallback(() => setCancelling(null), []);
-  const closeDetail = useCallback(() => setViewingId(null), []);
+  const detailParams = new URLSearchParams();
+  const listFilters = {
+    status,
+    type,
+    deliveryMethod,
+    from: fromDate,
+    to: toDate,
+    q: query,
+    stuck: stuckOnly,
+    pendingCancel: pendingCancelOnly,
+    sendOverdue: sendOverdueOnly,
+    page,
+  };
+  for (const [key, value] of Object.entries(listFilters)) {
+    if (value) detailParams.set(key, String(value));
+  }
+  if (queryInput !== query) detailParams.set('draft', queryInput);
+  const detailSearch = detailParams.toString();
 
   const onCancelled = () => {
     setCancelling(null);
@@ -508,7 +532,7 @@ export function AdminTransactions() {
                     key={row.id}
                     row={row}
                     items={rowItems[row.id]}
-                    onView={() => setViewingId(row.id)}
+                    detailSearch={detailSearch}
                     onCancel={() => {
                       setNotice('');
                       setCancelling(row);
@@ -533,10 +557,6 @@ export function AdminTransactions() {
             onPageChange={setPage}
           />
         </div>
-      ) : null}
-
-      {viewingId !== null ? (
-        <TransactionDetailModal requestId={viewingId} onClose={closeDetail} />
       ) : null}
 
       {cancelling ? (
@@ -591,12 +611,12 @@ function TransactionItem({ item }: { item: AdminRequestItemInfo | null }) {
 function TransactionRow({
   row,
   items,
-  onView,
+  detailSearch,
   onCancel,
 }: {
   row: AdminRequestRow;
   items?: RequestItems;
-  onView: () => void;
+  detailSearch: string;
   onCancel: () => void;
 }) {
   const mainItem: AdminRequestItemInfo = items?.item ?? {
@@ -649,14 +669,13 @@ function TransactionRow({
       <td className="admin-transaction-time text-xs">{formatDateTime(row.meetingTime)}</td>
       <td className="admin-transaction-actions">
         <div className="admin-transaction-actions-stack">
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label={`Xem chi tiết giao dịch #${row.id}`}
-            onClick={onView}
+          <Link
+            to={{ pathname: `/admin/transactions/${row.id}`, search: detailSearch }}
+            className="inline-flex items-center justify-center border border-primary bg-primary text-white hover:bg-primary-hover"
+            aria-label={`Xem giao dịch${mainItem.title ? ` ${mainItem.title}` : ''}`}
           >
-            Xem chi tiết
-          </Button>
+            Xem giao dịch
+          </Link>
           {cancellableStatuses.includes(row.status) ? (
             <Button variant="danger" size="sm" onClick={onCancel}>
               Huỷ giao dịch
