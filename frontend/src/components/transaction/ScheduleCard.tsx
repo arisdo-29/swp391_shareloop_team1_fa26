@@ -345,7 +345,7 @@ function ScheduleForm({
       </fieldset>
       <p className="text-xs leading-5 text-text-secondary">
         {isShipping
-          ? 'Nên quay video khi mở kiện. Giữ lại video và mã vận đơn để đối chiếu nếu có sự cố.'
+          ? 'Nên quay video khi mở kiện và giữ lại để đối chiếu nếu có sự cố.'
           : 'Nên quay video kiểm tra món đồ tại điểm hẹn. Giữ lại video để đối chiếu nếu có sự cố.'}
       </p>
       <div className="space-y-3 rounded-lg border border-border bg-surface-low p-3 sm:p-4">

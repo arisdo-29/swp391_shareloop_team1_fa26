@@ -60,7 +60,6 @@ public enum RequestErrorCode implements ErrorCode {
     REQUEST_LEG_NOT_SHIPPED(HttpStatus.CONFLICT, "Bên kia chưa gửi hàng nên chưa thể xác nhận đã nhận."),
     REQUEST_LEG_ALREADY_SHIPPED(HttpStatus.CONFLICT, "Bạn đã gửi hàng cho giao dịch này rồi."),
     REQUEST_LEG_NOT_APPLICABLE(HttpStatus.CONFLICT, "Giao dịch này không có chiều giao hàng đó dành cho bạn."),
-    REQUEST_TRACKING_CODE_INVALID(HttpStatus.BAD_REQUEST, "Mã vận đơn phải từ 3 đến 50 ký tự."),
     REQUEST_SEND_DEADLINE_NOT_PASSED(HttpStatus.CONFLICT, "Bên kia chưa quá hạn gửi hàng nên chưa thể báo chưa nhận."),
     REQUEST_NOT_SHIPPING(HttpStatus.CONFLICT, "Chỉ giao dịch Giao hàng mới có thao tác này."),
     REQUEST_ITEM_OUTCOMES_REQUIRED(

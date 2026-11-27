@@ -151,7 +151,6 @@ describe('Mở chi tiết từ danh sách giao dịch', () => {
             receiverRole: 'Người nhận',
             address: '12 Lê Lợi, Quận 1',
             shippedAt: '2026-10-26T09:00:00Z',
-            trackingCode: 'GHN123456',
             receivedAt: null,
             step: 'Đã gửi',
           },
@@ -160,7 +159,7 @@ describe('Mở chi tiết từ danh sách giao dịch', () => {
           { label: 'Người nhận gửi yêu cầu', at: '2026-10-20T08:00:00Z', note: null },
           { label: 'Chủ bài đồng ý lịch hẹn', at: '2026-10-21T08:00:00Z', note: null },
           { label: 'Người nhận đồng ý lịch hẹn', at: '2026-10-22T09:00:00Z', note: null },
-          { label: 'Chủ bài gửi hàng (chiều 1)', at: '2026-10-26T09:00:00Z', note: 'GHN123456' },
+          { label: 'Chủ bài gửi hàng (chiều 1)', at: '2026-10-26T09:00:00Z', note: null },
         ],
         deadlines: {
           ...detail().deadlines!,
@@ -184,7 +183,7 @@ describe('Mở chi tiết từ danh sách giao dịch', () => {
     const leg = within(screen.getByTestId('admin-leg-1'));
     expect(leg.getByText('Tự ghi nhận đã nhận lúc')).toBeTruthy();
     expect(leg.getByText(/16:00.*29\/10\/2026/)).toBeTruthy();
-    expect(within(rowOf('Mã vận đơn')).getByText('GHN123456')).toBeTruthy();
+    expect(leg.queryByText('Mã vận đơn')).toBeNull();
     expect(screen.queryByText(/Mở.*chi tiết đầy đủ|Thu gọn chi tiết/)).toBeNull();
   });
 

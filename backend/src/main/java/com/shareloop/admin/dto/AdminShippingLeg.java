@@ -15,6 +15,5 @@ public record AdminShippingLeg(
         String receiverRole,
         String address,
         Instant shippedAt,
-        String trackingCode,
         Instant receivedAt,
         String step) {}

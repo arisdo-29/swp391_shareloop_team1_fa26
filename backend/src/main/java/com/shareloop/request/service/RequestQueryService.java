@@ -194,9 +194,7 @@ public class RequestQueryService {
                 request.getReceiverAddress(),
                 request.getDonorAddress(),
                 request.getDonorShippedAt(),
-                request.getDonorTrackingCode(),
                 request.getReceiverShippedAt(),
-                request.getReceiverTrackingCode(),
                 request.getReceiverAddress() != null,
                 request.getDonorAddress() != null);
     }

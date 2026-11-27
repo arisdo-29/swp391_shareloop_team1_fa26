@@ -14,6 +14,7 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.dto.ItemSummary;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
+import com.shareloop.media.service.MediaService;
 import com.shareloop.notification.service.NotificationService;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.RequestErrorCode;
@@ -77,6 +78,9 @@ class RequestShippingTest {
     ReputationService reputationService;
 
     @Mock
+    MediaService mediaService;
+
+    @Mock
     ApplicationEventPublisher eventPublisher;
 
     RequestService requestService;
@@ -92,7 +96,7 @@ class RequestShippingTest {
                 userService,
                 reputationService,
                 null,
-                null,
+                mediaService,
                 null,
                 eventPublisher,
                 null);
@@ -256,26 +260,26 @@ class RequestShippingTest {
         Request request = shippingRequest(null, 0);
 
         // when
-        requestService.markShipped(REQUEST_ID, DONOR_ID, new ShipmentRequest("GHN12345", null));
+        requestService.markShipped(REQUEST_ID, DONOR_ID, new ShipmentRequest(null));
 
         // then
         assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
-        assertThat(request.getDonorTrackingCode()).isEqualTo("GHN12345");
+        assertThat(request.getDonorShippedAt()).isNotNull();
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(notificationService)
                 .notify(eq(RECEIVER_ID), eq("SHIPMENT_SENT"), anyString(), body.capture(), anyString());
-        assertThat(body.getValue()).contains("mã vận đơn GHN12345");
+        assertThat(body.getValue()).contains("Người gửi báo đã gửi hàng", "Tôi đã nhận được hàng");
     }
 
     @Test
-    void markShipped_whenTrackingCodeTooShort_throwsInvalid() {
-        // given
-        shippingRequest(null, 0);
+    void markShipped_whenSwapReceiverSendsWithPhoto_attachesPrivateEvidence() {
+        Request request = shippingRequest(OFFERED_ITEM_ID, 0);
+        var photos = List.of(42L);
 
-        // when / then
-        assertThat(expectError(() -> requestService.markShipped(REQUEST_ID, DONOR_ID, new ShipmentRequest("ab", null)))
-                        .getErrorCode())
-                .isEqualTo(RequestErrorCode.REQUEST_TRACKING_CODE_INVALID);
+        requestService.markShipped(REQUEST_ID, RECEIVER_ID, new ShipmentRequest(photos));
+
+        assertThat(request.getReceiverShippedAt()).isNotNull();
+        verify(mediaService).attachPrivate(photos, RECEIVER_ID);
     }
 
     @Test
@@ -284,8 +288,7 @@ class RequestShippingTest {
         shippingRequest(null, 0);
 
         // when / then
-        assertThat(expectError(() -> requestService.markShipped(
-                                REQUEST_ID, RECEIVER_ID, new ShipmentRequest("GHN12345", null)))
+        assertThat(expectError(() -> requestService.markShipped(REQUEST_ID, RECEIVER_ID, new ShipmentRequest(null)))
                         .getErrorCode())
                 .isEqualTo(RequestErrorCode.REQUEST_LEG_NOT_APPLICABLE);
     }
@@ -294,7 +297,7 @@ class RequestShippingTest {
     void confirmHandover_whenSwapOneLegReceived_staysAwaitingHandover() {
         // given: chiều 1 đã gửi, người nhận (A) đã nhận, chiều 2 (B) chưa
         Request request = shippingRequest(OFFERED_ITEM_ID, 0);
-        request.markShipped(true, "GHN111", Instant.now());
+        request.markShipped(true, Instant.now());
 
         // when
         RequestResponse response =
@@ -311,8 +314,8 @@ class RequestShippingTest {
     void confirmHandover_whenSwapBothLegsReceived_completesAndMarksBothItemsTraded() {
         // given
         Request request = shippingRequest(OFFERED_ITEM_ID, 0);
-        request.markShipped(true, "GHN111", Instant.now());
-        request.markShipped(false, "GHN222", Instant.now());
+        request.markShipped(true, Instant.now());
+        request.markShipped(false, Instant.now());
         request.markReceived(false, Instant.now());
 
         // when
@@ -330,7 +333,7 @@ class RequestShippingTest {
     void confirmHandover_whenGiveDonorTries_throwsLegNotApplicable() {
         // given: Cho tặng, chủ bài không có nút nhận hàng
         Request request = shippingRequest(null, 0);
-        request.markShipped(true, "GHN111", Instant.now());
+        request.markShipped(true, Instant.now());
 
         // when / then
         assertThat(expectError(() ->
@@ -342,10 +345,10 @@ class RequestShippingTest {
     // ---------- báo chưa nhận ----------
 
     @Test
-    void handoverFailed_whenLegShipped_movesToDisputedWithTrackingCodeInNote() {
+    void handoverFailed_whenLegShipped_movesToDisputedWithItemAndReasonInNote() {
         // given: chiều 2 (B là chủ bài nhận) đã gửi nhưng chưa tới
         Request request = shippingRequest(OFFERED_ITEM_ID, -1);
-        request.markShipped(false, "VTP999", Instant.now());
+        request.markShipped(false, Instant.now());
 
         // when
         RequestResponse response = requestService.handoverFailed(
@@ -355,14 +358,14 @@ class RequestShippingTest {
         assertThat(response.status()).isEqualTo("DISPUTED");
         ArgumentCaptor<HandoverIssueReportedEvent> event = ArgumentCaptor.forClass(HandoverIssueReportedEvent.class);
         verify(eventPublisher).publishEvent(event.capture());
-        assertThat(event.getValue().note()).contains("VTP999").contains("Chờ mãi không thấy");
+        assertThat(event.getValue().note()).contains("Chiều giao hàng món đổi", "Chờ mãi không thấy");
     }
 
     @Test
     void handoverFailed_whenOtherLegReceivedAndMyLegNotShipped_movesToDisputedImmediately() {
         // given: A (người nhận) đã nhận chiều 1, B (chủ bài) chưa nhận chiều 2 và A chưa gửi
         Request request = shippingRequest(OFFERED_ITEM_ID, 0);
-        request.markShipped(true, "GHN111", Instant.now());
+        request.markShipped(true, Instant.now());
         request.markReceived(false, Instant.now());
 
         // when
@@ -420,7 +423,7 @@ class RequestShippingTest {
         assertThat(request.hasPendingCancelRequest()).isTrue();
 
         // when
-        requestService.markShipped(REQUEST_ID, DONOR_ID, new ShipmentRequest("GHN12345", null));
+        requestService.markShipped(REQUEST_ID, DONOR_ID, new ShipmentRequest(null));
 
         // then
         assertThat(request.hasPendingCancelRequest()).isFalse();
@@ -445,7 +448,7 @@ class RequestShippingTest {
     void acceptCancelRequest_whenOtherLegAlreadyShipped_noticeSaysItemShippedAndContactToReturn() {
         // given: chủ bài đã gửi chiều 1, người nhận chưa gửi chiều 2 quá hạn, chủ bài báo và người nhận đồng ý huỷ
         Request request = shippingRequest(OFFERED_ITEM_ID, -4);
-        request.markShipped(true, "GHN111", Instant.now());
+        request.markShipped(true, Instant.now());
         requestService.handoverFailed(
                 REQUEST_ID, DONOR_ID, new HandoverFailedRequest(CancelRequestCode.COUNTERPART_NOT_SHIPPED, null, null));
 
@@ -466,7 +469,7 @@ class RequestShippingTest {
     void autoReceiveShippingLegs_whenOnlyShippedLegIsOverdue_receivesOnlyThatLeg() {
         // given: Trao đổi, chiều 1 gửi 8 ngày trước, chiều 2 chưa gửi
         Request request = shippingRequest(OFFERED_ITEM_ID, -9);
-        request.markShipped(true, "GHN111", Instant.now().minus(8, ChronoUnit.DAYS));
+        request.markShipped(true, Instant.now().minus(8, ChronoUnit.DAYS));
 
         // when
         boolean changed = requestService.autoReceiveShippingLegs(REQUEST_ID, Instant.now());
@@ -495,7 +498,7 @@ class RequestShippingTest {
     void autoReceiveShippingLegs_whenAllLegsReceivedAutomatically_completesWithAutoConfirmedAndTwoDifferentSentences() {
         // given: Cho tặng, chiều 1 gửi 8 ngày trước
         Request request = shippingRequest(null, -9);
-        request.markShipped(true, "GHN111", Instant.now().minus(8, ChronoUnit.DAYS));
+        request.markShipped(true, Instant.now().minus(8, ChronoUnit.DAYS));
 
         // when
         requestService.autoReceiveShippingLegs(REQUEST_ID, Instant.now());
@@ -518,7 +521,7 @@ class RequestShippingTest {
     void openShippingOneLegStuck_whenOneLegReceivedAndOtherNotSentPastDeadline_movesToDisputedWithNoShowReport() {
         // given: A đã nhận chiều 1, B chưa gửi chiều 2, ngày gửi dự kiến cách đây 7 ngày (hạn 3 + chờ 3 ngày đã qua)
         Request request = shippingRequest(OFFERED_ITEM_ID, -7);
-        request.markShipped(true, "GHN111", Instant.now().minus(6, ChronoUnit.DAYS));
+        request.markShipped(true, Instant.now().minus(6, ChronoUnit.DAYS));
         request.markReceived(false, Instant.now().minus(5, ChronoUnit.DAYS));
 
         // when
@@ -538,7 +541,7 @@ class RequestShippingTest {
     void openShippingOneLegStuck_whenNotYetPastDeadlinePlusWaitDays_doesNothing() {
         // given: mới 5 ngày kể từ ngày gửi dự kiến, chưa tới 3 + 3 ngày
         Request request = shippingRequest(OFFERED_ITEM_ID, -5);
-        request.markShipped(true, "GHN111", Instant.now().minus(4, ChronoUnit.DAYS));
+        request.markShipped(true, Instant.now().minus(4, ChronoUnit.DAYS));
         request.markReceived(false, Instant.now().minus(3, ChronoUnit.DAYS));
 
         // when

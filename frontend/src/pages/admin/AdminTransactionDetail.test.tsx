@@ -258,7 +258,7 @@ describe('AdminTransactionDetail luật huỷ có xác nhận, dời lịch và 
     expect(document.body.textContent).not.toContain('REJECTED');
   });
 
-  it('Giao hàng hai chiều hiện từng chiều với địa chỉ, ngày gửi, mã vận đơn và ngày nhận', async () => {
+  it('Giao hàng hai chiều hiện từng chiều với địa chỉ, ngày gửi và ngày nhận', async () => {
     vi.mocked(adminRequestApi.detail).mockResolvedValue(
       detail({
         status: 'AWAITING_HANDOVER',
@@ -273,7 +273,6 @@ describe('AdminTransactionDetail luật huỷ có xác nhận, dời lịch và 
             receiverRole: 'Người nhận',
             address: '12 Lê Lợi',
             shippedAt: '2026-11-25T08:00:00Z',
-            trackingCode: 'GHN111',
             receivedAt: '2026-11-26T08:00:00Z',
             step: 'Đã nhận',
           },
@@ -284,7 +283,6 @@ describe('AdminTransactionDetail luật huỷ có xác nhận, dời lịch và 
             receiverRole: 'Chủ bài',
             address: '34 Trần Phú',
             shippedAt: null,
-            trackingCode: null,
             receivedAt: null,
             step: 'Chờ gửi',
           },
@@ -305,7 +303,7 @@ describe('AdminTransactionDetail luật huỷ có xác nhận, dời lịch và 
     await screen.findByText('Thông tin gửi hàng');
     const first = within(screen.getByTestId('admin-leg-1'));
     expect(first.getByText('12 Lê Lợi')).toBeTruthy();
-    expect(first.getByText('GHN111')).toBeTruthy();
+    expect(first.queryByText('Mã vận đơn')).toBeNull();
     expect(first.getByText('Xe đạp cũ')).toBeTruthy();
     expect(first.getByText('Đã nhận')).toBeTruthy();
     const second = within(screen.getByTestId('admin-leg-2'));

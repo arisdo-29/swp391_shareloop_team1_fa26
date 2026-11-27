@@ -222,11 +222,13 @@ public class RequestController {
         return requestService.withdrawCancelRequest(id, currentUserId);
     }
 
-    /** Người gửi báo đã gửi hàng cho chiều của mình, kèm mã vận đơn (GN-12). */
+    /** Người gửi báo đã gửi hàng cho chiều của mình, có thể kèm ảnh biên nhận (GN-12). */
     @Operation(summary = "Báo đã gửi hàng")
     @PostMapping("/api/v1/requests/{id}/shipment")
     public RequestResponse markShipped(
-            @PathVariable long id, @CurrentUserId Long currentUserId, @Valid @RequestBody ShipmentRequest request) {
+            @PathVariable long id,
+            @CurrentUserId Long currentUserId,
+            @Valid @RequestBody(required = false) ShipmentRequest request) {
         return requestService.markShipped(id, currentUserId, request);
     }
 

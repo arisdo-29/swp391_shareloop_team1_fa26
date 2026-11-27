@@ -4431,7 +4431,7 @@ Những chỗ code nhánh develop khác với BR v12 (02/11/2026) và kết qu�
 | requests | ux_requests_active_offered_item (index) | Một món chỉ được đem đổi ở một giao dịch đang chạy (C3) |
 | requests | cancel_requested_by, cancel_requested_at, cancel_request_code, cancel_request_reason | Đề nghị huỷ chờ bên kia xác nhận, thay luật huỷ ngay ngày 21/11 (GN-06, đợt 3 ngày 23/11) |
 | requests | reschedule_proposed_by, reschedule_proposed_at, reschedule_meeting_time, reschedule_meeting_place, reschedule_count | Đề nghị dời lịch sau khi chốt và số lần đã dời (GN-11) |
-| requests | receiver_address, donor_address, donor_shipped_at, donor_tracking_code, receiver_shipped_at, receiver_tracking_code | Giao hàng hai chiều: địa chỉ nhận hàng và tiến độ gửi từng chiều (GN-12) |
+| requests | receiver_address, donor_address, donor_shipped_at, donor_tracking_code, receiver_shipped_at, receiver_tracking_code | Giao hàng hai chiều: địa chỉ nhận hàng và tiến độ gửi từng chiều (GN-12). Hai cột mã vận đơn chỉ lưu lịch sử, xác nhận gửi hàng có thể kèm ảnh biên nhận. |
 
 
 ---

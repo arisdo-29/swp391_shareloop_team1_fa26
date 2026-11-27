@@ -149,11 +149,11 @@ INSERT INTO requests
   (item_id, receiver_id, offered_item_id, type, status, delivery_method, meeting_time,
    donor_schedule_ok_at, receiver_schedule_ok_at, donor_waiver_at, receiver_waiver_at,
    reserved_at, contact_revealed_at, receiver_address, donor_address,
-   donor_shipped_at, donor_tracking_code, receiver_handover_at)
+   donor_shipped_at, receiver_handover_at)
 SELECT i.id, r.id, o.id, 'SWAP', 'AWAITING_HANDOVER', 'SHIPPING', now() - INTERVAL '3 days',
        now() - INTERVAL '6 days', now() - INTERVAL '6 days', now() - INTERVAL '6 days', now() - INTERVAL '6 days',
        now() - INTERVAL '6 days', now() - INTERVAL '6 days', '12 Lê Lợi, Quận 1', '34 Trần Phú, Quận 5',
-       now() - INTERVAL '2 days', 'DEMO-GHN-001', now() - INTERVAL '1 day'
+       now() - INTERVAL '2 days', now() - INTERVAL '1 day'
 FROM items i
 JOIN users d ON d.id = i.donor_id AND d.email = 'an.demo@shareloop.local'
 JOIN users r ON r.email = 'chi.demo@shareloop.local'

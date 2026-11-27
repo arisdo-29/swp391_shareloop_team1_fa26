@@ -124,7 +124,6 @@ export interface AdminShippingLeg {
   receiverRole: string;
   address: string | null;
   shippedAt: string | null;
-  trackingCode: string | null;
   receivedAt: string | null;
   step: string;
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Button, Field } from '../ui';
+import { Alert, Button } from '../ui';
 import { DialogFrame } from '../Dialog';
 import { ReportEvidenceField } from '../ReportEvidenceField';
 import { mediaApi } from '../../services/mediaApi';
@@ -31,12 +31,9 @@ interface ShipmentCardProps {
   onOpenRejectCancel: () => void;
 }
 
-const TRACKING_MIN = 3;
-const TRACKING_MAX = 50;
-
 /**
  * Khối "Giao nhận" của Giao hàng hai chiều (GN-12): mỗi chiều có ba bước Chờ gửi, Đã gửi, Đã nhận. Bên gửi bấm Tôi đã
- * gửi hàng kèm mã vận đơn, bên nhận chỉ bấm Tôi đã nhận được hàng sau khi chiều đó Đã gửi. Mọi hạn do backend tính.
+ * gửi hàng, bên nhận chỉ bấm Tôi đã nhận được hàng sau khi chiều đó Đã gửi. Mọi hạn do backend tính.
  */
 export function ShipmentCard(props: ShipmentCardProps) {
   const { request, currentUserId, viewerIsDonor, partnerName, onUpdated, onOpenRejectCancel } = props;
@@ -183,15 +180,6 @@ function LegBlock({
             <dd className="break-words">{leg.address}</dd>
           </div>
         ) : null}
-        {leg.trackingCode ? (
-          <div>
-            <dt className="label">Mã vận đơn</dt>
-            <dd className="flex items-center gap-2 break-all">
-              <span>{leg.trackingCode}</span>
-              <CopyButton value={leg.trackingCode} />
-            </dd>
-          </div>
-        ) : null}
         {leg.shippedAt ? (
           <div>
             <dt className="label">{sends ? 'Bạn báo đã gửi lúc' : 'Người gửi báo đã gửi lúc'}</dt>
@@ -230,7 +218,7 @@ function LegBlock({
             Tôi đã gửi hàng
           </Button>
           <p className="text-xs leading-5 text-text-secondary">
-            Nhập mã vận đơn và có thể kèm ảnh biên nhận. {partnerName} sẽ được báo để kiểm tra khi hàng tới.
+            Bạn có thể kèm ảnh biên nhận. {partnerName} sẽ được thông báo khi bạn xác nhận.
             {hasPendingCancel ? ' Nếu bên kia đã báo chưa nhận được hàng thì đề nghị huỷ của họ tự rút.' : ''}
           </p>
         </div>
@@ -323,23 +311,6 @@ function StepIndicator({ step }: { step: ShippingLeg['step'] }) {
   );
 }
 
-function CopyButton({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
-  };
-  return (
-    <Button size="sm" variant="outline" onClick={() => void copy()}>
-      {copied ? 'Đã sao chép' : 'Sao chép'}
-    </Button>
-  );
-}
-
 function ShipDialog({
   request,
   currentUserId,
@@ -353,19 +324,12 @@ function ShipDialog({
   onClose: () => void;
   onDone: (request: RequestResponse) => void;
 }) {
-  const [trackingCode, setTrackingCode] = useState('');
   const [photos, setPhotos] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const trimmed = trackingCode.trim();
-  const codeError =
-    trimmed.length > 0 && (trimmed.length < TRACKING_MIN || trimmed.length > TRACKING_MAX)
-      ? `Mã vận đơn phải từ ${TRACKING_MIN} đến ${TRACKING_MAX} ký tự.`
-      : undefined;
-  const canSubmit = trimmed.length >= TRACKING_MIN && trimmed.length <= TRACKING_MAX;
 
   const submit = async () => {
-    if (submitting || !canSubmit) return;
+    if (submitting) return;
     setSubmitting(true);
     setError('');
     try {
@@ -373,7 +337,6 @@ function ShipDialog({
       const mediaIds = uploaded.map((entry) => entry.mediaId);
       onDone(
         await requestApi.markShipped(request.id, currentUserId, {
-          trackingCode: trimmed,
           mediaIds: mediaIds.length ? mediaIds : undefined,
         }),
       );
@@ -391,18 +354,8 @@ function ShipDialog({
       </h2>
       <p className="mt-1 text-sm text-text-muted">{leg.itemTitle}</p>
       <p className="mt-3 text-sm leading-6 text-text-secondary">
-        Nhập mã vận đơn để bên nhận theo dõi. Ảnh biên nhận không bắt buộc và chỉ hai bên cùng Admin xem được.
+        Bạn có thể đính kèm ảnh biên nhận. Chỉ hai bên và quản trị viên xem được ảnh.
       </p>
-      <div className="mt-4">
-        <Field
-          label="Mã vận đơn"
-          value={trackingCode}
-          maxLength={TRACKING_MAX}
-          error={codeError}
-          disabled={submitting}
-          onChange={(event) => setTrackingCode(event.target.value)}
-        />
-      </div>
       <div className="mt-4">
         <ReportEvidenceField files={photos} onChange={setPhotos} disabled={submitting} />
       </div>
@@ -415,7 +368,7 @@ function ShipDialog({
         <Button variant="outline" disabled={submitting} onClick={onClose}>
           Đóng
         </Button>
-        <Button disabled={submitting || !canSubmit} onClick={() => void submit()}>
+        <Button disabled={submitting} onClick={() => void submit()}>
           {submitting ? 'Đang gửi...' : 'Xác nhận đã gửi'}
         </Button>
       </div>

@@ -20,7 +20,6 @@ export interface ShippingLeg {
   // Chiều 1 do chủ bài gửi, chiều 2 do người nhận gửi.
   senderIsDonor: boolean;
   shippedAt?: string | null;
-  trackingCode?: string | null;
   receivedAt?: string | null;
   // Địa chỉ giao tới của chiều này (địa chỉ của bên nhận). Có thể null khi chưa được phép xem.
   address?: string | null;
@@ -38,7 +37,6 @@ export function shippingLegs(request: RequestResponse): ShippingLeg[] {
     itemTitle: request.itemTitle ?? 'Món chính',
     senderIsDonor: true,
     shippedAt: request.donorShippedAt,
-    trackingCode: request.donorTrackingCode,
     receivedAt: request.receiverHandoverAt,
     address: request.receiverAddress,
   });
@@ -48,7 +46,6 @@ export function shippingLegs(request: RequestResponse): ShippingLeg[] {
     itemTitle: request.offeredItemTitle ?? 'Món đổi',
     senderIsDonor: false,
     shippedAt: request.receiverShippedAt,
-    trackingCode: request.receiverTrackingCode,
     receivedAt: request.donorHandoverAt,
     address: request.donorAddress,
   });

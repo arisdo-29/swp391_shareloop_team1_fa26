@@ -270,15 +270,9 @@ class RequestLifecycleIT extends IntegrationTest {
                 .andExpect(jsonPath("$.status").value("LOGISTICS_CONFIRMED"));
 
         // Mỗi bên gửi chiều của mình rồi bên nhận bấm đã nhận được hàng
-        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId)
-                        .header("Authorization", donorToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"trackingCode\":\"GHN1111\"}"))
+        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId).header("Authorization", donorToken))
                 .andExpect(status().isOk());
-        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId)
-                        .header("Authorization", receiverToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"trackingCode\":\"VTP2222\"}"))
+        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId).header("Authorization", receiverToken))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)

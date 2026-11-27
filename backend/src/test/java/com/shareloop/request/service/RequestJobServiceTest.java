@@ -518,7 +518,7 @@ class RequestJobServiceTest {
                     "12 Lê Lợi");
             request.confirmLogistics(true, true, now.minus(5, ChronoUnit.DAYS));
             // Người nhận bấm đã nhận được hàng 4 ngày trước: dù có lọt vào danh sách cũ, việc cũ cũng không hoàn tất
-            request.markShipped(true, "GHN123", now.minus(5, ChronoUnit.DAYS));
+            request.markShipped(true, now.minus(5, ChronoUnit.DAYS));
             request.markReceived(false, now.minus(4, ChronoUnit.DAYS));
             ReflectionTestUtils.setField(request, "status", RequestStatus.AWAITING_HANDOVER);
             ReflectionTestUtils.setField(request, "completedAt", null);

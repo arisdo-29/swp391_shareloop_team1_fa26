@@ -647,10 +647,7 @@ class RequestCancelRequestIT extends IntegrationTest {
                 "UPDATE requests SET delivery_method = 'SHIPPING', meeting_place = NULL, receiver_address = ? WHERE id = ?",
                 "12 Lê Lợi",
                 requestId);
-        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId)
-                        .header("Authorization", token(donorId))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"trackingCode\":\"GHN1111\"}"))
+        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId).header("Authorization", token(donorId)))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/requests/{id}/handover-failed", requestId)
                         .header("Authorization", token(receiverId))

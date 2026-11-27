@@ -143,15 +143,9 @@ public class Request extends BaseEntity {
     @Column(name = "donor_shipped_at")
     private Instant donorShippedAt;
 
-    @Column(name = "donor_tracking_code", length = 50)
-    private String donorTrackingCode;
-
     // Chiều 2: người nhận gửi món đổi cho chủ bài (chỉ có ở Trao đổi)
     @Column(name = "receiver_shipped_at")
     private Instant receiverShippedAt;
-
-    @Column(name = "receiver_tracking_code", length = 50)
-    private String receiverTrackingCode;
 
     protected Request() {}
 
@@ -545,8 +539,8 @@ public class Request extends BaseEntity {
         return isShipping() ? !isAnyLegShipped() : isBeforeMeetingTime(now);
     }
 
-    /** GN-12: người gửi một chiều báo đã gửi, kèm mã vận đơn 3 đến 50 ký tự. Lần gửi đầu chuyển sang AWAITING_HANDOVER. */
-    public void markShipped(boolean isDonor, String trackingCode, Instant now) {
+    /** GN-12: người gửi một chiều báo đã gửi. Lần gửi đầu chuyển sang AWAITING_HANDOVER. */
+    public void markShipped(boolean isDonor, Instant now) {
         if (!isShipping() || !isHandoverOpen()) {
             throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
         }
@@ -557,10 +551,6 @@ public class Request extends BaseEntity {
         if (isLegShipped(leg)) {
             throw new BusinessException(RequestErrorCode.REQUEST_LEG_ALREADY_SHIPPED);
         }
-        String code = trackingCode == null ? "" : trackingCode.trim();
-        if (code.length() < 3 || code.length() > 50) {
-            throw new BusinessException(RequestErrorCode.REQUEST_TRACKING_CODE_INVALID);
-        }
         withdrawNotShippedRequestOnShipping(isDonor);
         if (hasPendingCancelRequest()) {
             // Đang có đề nghị huỷ khác chờ thì phải trả lời nó trước
@@ -568,10 +558,8 @@ public class Request extends BaseEntity {
         }
         if (leg == 1) {
             this.donorShippedAt = now;
-            this.donorTrackingCode = code;
         } else {
             this.receiverShippedAt = now;
-            this.receiverTrackingCode = code;
         }
         // GN-11: đã có chiều Đã gửi thì không dời lịch nữa
         clearReschedule();
@@ -1023,16 +1011,8 @@ public class Request extends BaseEntity {
         return donorShippedAt;
     }
 
-    public String getDonorTrackingCode() {
-        return donorTrackingCode;
-    }
-
     public Instant getReceiverShippedAt() {
         return receiverShippedAt;
-    }
-
-    public String getReceiverTrackingCode() {
-        return receiverTrackingCode;
     }
 
     public Long getRescheduleProposedBy() {
