@@ -424,13 +424,14 @@ describe('Khung chat gọn', () => {
       </Provider>,
     );
     const chat = await screen.findByRole('region', { name: 'Cuộc trò chuyện với An Chủ Bài' });
-    await within(chat).findByText('Mũ bảo hiểm');
+    await waitFor(() => {
+      expect(within(chat).getByRole('img', { name: 'Mũ bảo hiểm' }).getAttribute('src'))
+        .toEqual(expect.stringContaining('/api/v1/media/77'));
+    });
 
     // then
     expect(within(chat).getAllByText('Xe đạp cũ')).toHaveLength(1);
     expect(within(chat).getAllByText('Mũ bảo hiểm')).toHaveLength(1);
-    expect(within(chat).getByRole('img', { name: 'Mũ bảo hiểm' }).getAttribute('src'))
-      .toContain('/api/v1/media/77');
     expect(within(chat).getAllByRole('button', { name: 'Xem chi tiết' })).toHaveLength(2);
     expect(within(chat).getByRole('button', { name: 'Xem giao dịch' })).toBeTruthy();
     expect(within(chat).getByRole('button', { name: 'Xem hồ sơ' })).toBeTruthy();
