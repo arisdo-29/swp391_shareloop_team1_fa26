@@ -1655,6 +1655,12 @@ public class RequestService {
                 "Bên kia chưa trả lời kịp nên đề nghị dời lịch hết hạn. Lịch cũ được giữ là "
                         + VietnamTime.format(request.getMeetingTime()) + ".",
                 "/requests/" + request.getId());
+        if (proposerId == request.getReceiverId()) {
+            findItemSnapshot(request.getItemId())
+                    .ifPresent(item -> notificationService.publishRealtimeUpdate(item.donorId(), "REQUEST", requestId));
+        } else {
+            notificationService.publishRealtimeUpdate(request.getReceiverId(), "REQUEST", requestId);
+        }
         return true;
     }
 
@@ -2765,16 +2771,18 @@ public class RequestService {
         request.confirmLogistics(isDonor, agreeToWaiver, now, shippingAddress);
         Request saved = requestRepository.save(request);
 
+        long otherUserId = isDonor ? request.getReceiverId() : item.donorId();
         // Nếu cả hai đã xác nhận và sang LOGISTICS_CONFIRMED, thông báo cho bên còn lại
         if (saved.getStatus() == RequestStatus.LOGISTICS_CONFIRMED) {
             publishNegotiationEnded(saved);
-            long otherUserId = isDonor ? request.getReceiverId() : item.donorId();
             notificationService.notify(
                     otherUserId,
                     "LOGISTICS_CONFIRMED",
                     "Lịch hẹn đã được chốt",
                     "Cả hai bên đã xác nhận lịch hẹn giao nhận thành công.",
                     "/requests/" + saved.getId());
+        } else {
+            notificationService.publishRealtimeUpdate(otherUserId, "REQUEST", requestId);
         }
 
         return toResponse(saved, currentUserId);

@@ -7,6 +7,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.shareloop.auth.service.JwtService;
+import com.shareloop.notification.event.RealtimeUpdateEvent;
+import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.service.RequestDeadlineJobService;
 import com.shareloop.support.IntegrationTest;
@@ -23,12 +25,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.ObjectMapper;
 
 /** Giới hạn giờ hẹn, dời lịch và việc nền tự huỷ giao dịch kẹt (GN-11, GN-12) chạy thật trên PostgreSQL. */
 @AutoConfigureMockMvc
+@RecordApplicationEvents
 class RequestRescheduleIT extends IntegrationTest {
     private static final AtomicInteger SEQ = new AtomicInteger();
 
@@ -46,6 +51,9 @@ class RequestRescheduleIT extends IntegrationTest {
 
     @Autowired
     RequestDeadlineJobService deadlineJobService;
+
+    @Autowired
+    ApplicationEvents applicationEvents;
 
     private final List<Long> requestIds = new ArrayList<>();
     private final List<Long> itemIds = new ArrayList<>();
@@ -129,6 +137,38 @@ class RequestRescheduleIT extends IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("LOGISTICS_CONFIRMED"))
                 .andExpect(jsonPath("$.meetingPlace").value("Thư viện"));
+    }
+
+    @Test
+    void confirmLogistics_withChangedAddress_updatesOtherPartyWhileWaitingForConfirmation() throws Exception {
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long requestId = createReservedRequest(insertItem(donorId), donorId, receiverId);
+        Instant shippingTime = Instant.now().plus(1, ChronoUnit.DAYS);
+        mockMvc.perform(post("/api/v1/requests/{id}/schedule", requestId)
+                        .header("Authorization", token(receiverId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new ScheduleRequest("SHIPPING", null, shippingTime, true, "12 Lê Lợi"))))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/requests/{id}/schedule", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new ScheduleRequest("SHIPPING", null, shippingTime, true))))
+                .andExpect(status().isOk());
+        applicationEvents.clear();
+
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
+                        .header("Authorization", token(receiverId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ConfirmLogisticsRequest(true, "14 Lê Lợi", 2L))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scheduleRevision").value(3))
+                .andExpect(jsonPath("$.status").value("AWAITING_LOGISTICS"));
+
+        assertThat(applicationEvents.stream(RealtimeUpdateEvent.class))
+                .contains(new RealtimeUpdateEvent(donorId, "REQUEST", requestId));
     }
 
     @Test
@@ -260,6 +300,7 @@ class RequestRescheduleIT extends IntegrationTest {
                         .content("{\"meetingTime\":\"" + Instant.now().plus(3, ChronoUnit.DAYS) + "\"}"))
                 .andExpect(status().isOk());
         jdbc.update("UPDATE requests SET reschedule_proposed_at = now() - interval '25 hours' WHERE id = ?", requestId);
+        applicationEvents.clear();
 
         // when
         int expired = deadlineJobService.expireReschedules(Instant.now());
@@ -271,6 +312,8 @@ class RequestRescheduleIT extends IntegrationTest {
                 .isNull();
         assertThat(jdbc.queryForObject("SELECT reschedule_count FROM requests WHERE id = ?", Integer.class, requestId))
                 .isZero();
+        assertThat(applicationEvents.stream(RealtimeUpdateEvent.class))
+                .contains(new RealtimeUpdateEvent(receiverId, "REQUEST", requestId));
     }
 
     @Test

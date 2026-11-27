@@ -28,6 +28,7 @@ interface ScheduleCardProps {
   currentUserId: number;
   viewerIsDonor: boolean;
   partnerName: string;
+  scheduleUpdateCount?: number;
   onUpdated: (request: RequestResponse) => void;
 }
 
@@ -52,8 +53,14 @@ export function ScheduleCard(props: ScheduleCardProps) {
       <h2 id={SCHEDULE_SECTION_ID} tabIndex={-1} className="section-title scroll-mt-24">
         Lịch giao nhận
       </h2>
-      {reloadedSchedule ? (
-        <Alert tone="warning">Lịch giao nhận đã thay đổi. Hãy xem lại thông tin mới trước khi xác nhận.</Alert>
+      {reloadedSchedule || Boolean(props.scheduleUpdateCount) ? (
+        <div key={props.scheduleUpdateCount} role="alert">
+          <Alert tone="warning">
+            {reloadedSchedule
+              ? 'Lịch giao nhận đã thay đổi. Hãy xem lại thông tin mới trước khi xác nhận.'
+              : 'Thông tin lịch giao nhận vừa được cập nhật. Vui lòng kiểm tra lại.'}
+          </Alert>
+        </div>
       ) : null}
       {editable ? (
         <ScheduleForm

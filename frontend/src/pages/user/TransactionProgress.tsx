@@ -88,7 +88,7 @@ function TransactionProgressView({
   const navigate = useNavigate();
   const { hash, search } = useLocation();
   const backPath = fromTransactions ? `/transactions${search}` : '/messages';
-  const { request, offeredItem, loading, error, applyUpdate, reload } = useTransactionDetail(
+  const { request, offeredItem, loading, error, scheduleUpdateCount, applyUpdate, reload } = useTransactionDetail(
     requestId,
     currentUserId,
   );
@@ -218,9 +218,11 @@ function TransactionProgressView({
           ) : null}
           <ScheduleCard
             request={request}
+            key={request.id}
             currentUserId={currentUserId}
             viewerIsDonor={viewerIsDonor}
             partnerName={partnerName}
+            scheduleUpdateCount={scheduleUpdateCount}
             onUpdated={applyUpdate}
           />
           {request.deliveryMethod === 'SHIPPING' ? (
