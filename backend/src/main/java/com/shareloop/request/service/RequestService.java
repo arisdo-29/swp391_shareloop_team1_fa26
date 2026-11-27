@@ -2743,6 +2743,14 @@ public class RequestService {
         boolean isDonor = item.donorId() == currentUserId;
         boolean agreeToWaiver = requestDto != null && Boolean.TRUE.equals(requestDto.agreeToWaiver());
 
+        if (request.getStatus() == RequestStatus.AWAITING_LOGISTICS
+                && request.getMeetingTime() != null
+                && request.getDeliveryMethod() != null
+                && (requestDto == null
+                        || requestDto.scheduleRevision() == null
+                        || requestDto.scheduleRevision() != request.getScheduleRevision())) {
+            throw new BusinessException(RequestErrorCode.REQUEST_SCHEDULE_CHANGED);
+        }
         String shippingAddress = requestDto == null ? null : requestDto.shippingAddress();
         Instant now = Instant.now();
         if (request.getStatus() == RequestStatus.AWAITING_LOGISTICS && request.getMeetingTime() != null) {

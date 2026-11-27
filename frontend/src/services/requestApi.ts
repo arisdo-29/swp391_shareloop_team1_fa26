@@ -33,6 +33,7 @@ export interface RequestResponse {
   deliveryMethod?: string;
   meetingPlace?: string;
   meetingTime?: string;
+  scheduleRevision?: number;
   donorScheduleOkAt?: string;
   receiverScheduleOkAt?: string;
   donorWaiverAt?: string;
@@ -127,6 +128,7 @@ export interface ScheduleRequestBody {
 }
 
 export interface ConfirmLogisticsRequestBody {
+  scheduleRevision: number;
   agreeToWaiver?: boolean;
   shippingAddress?: string;
 }
@@ -298,10 +300,10 @@ export const requestApi = {
     });
     return data;
   },
-  async confirmLogistics(id: number, currentUserId: number, body?: ConfirmLogisticsRequestBody) {
+  async confirmLogistics(id: number, currentUserId: number, body: ConfirmLogisticsRequestBody) {
     const { data } = await http.post<RequestResponse>(
       `/api/v1/requests/${id}/confirm-logistics`,
-      body ?? {},
+      body,
       {
         params: { currentUserId },
       },

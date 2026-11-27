@@ -91,6 +91,47 @@ class RequestRescheduleIT extends IntegrationTest {
     }
 
     @Test
+    void confirmLogistics_requiresTheLatestProposalRevision() throws Exception {
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long requestId = createReservedRequest(insertItem(donorId), donorId, receiverId);
+        Instant meetingTime = Instant.now().plus(1, ChronoUnit.DAYS);
+        for (String place : List.of("Cổng trường", "Thư viện")) {
+            mockMvc.perform(post("/api/v1/requests/{id}/schedule", requestId)
+                            .header("Authorization", token(donorId))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(
+                                    new ScheduleRequest("IN_PERSON", place, meetingTime, true))))
+                    .andExpect(status().isOk());
+        }
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                                "/api/v1/requests/{id}", requestId)
+                        .header("Authorization", token(receiverId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scheduleRevision").value(2))
+                .andExpect(jsonPath("$.meetingPlace").value("Thư viện"));
+
+        for (String confirmation :
+                List.of("{\"agreeToWaiver\":true}", "{\"agreeToWaiver\":true,\"scheduleRevision\":1}")) {
+            mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
+                            .header("Authorization", token(receiverId))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(confirmation))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("REQUEST_SCHEDULE_CHANGED"));
+            assertThat(statusOf(requestId)).isEqualTo("AWAITING_LOGISTICS");
+        }
+
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
+                        .header("Authorization", token(receiverId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"agreeToWaiver\":true,\"scheduleRevision\":2}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("LOGISTICS_CONFIRMED"))
+                .andExpect(jsonPath("$.meetingPlace").value("Thư viện"));
+    }
+
+    @Test
     void reschedule_whenAccepted_changesMeetingTimeAndRaisesCounterInResponse() throws Exception {
         // given
         long donorId = insertUser("Donor");
@@ -154,7 +195,7 @@ class RequestRescheduleIT extends IntegrationTest {
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
                         .header("Authorization", token(receiverId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"agreeToWaiver\":true,\"shippingAddress\":\"12 Lê Lợi\"}"))
+                        .content("{\"agreeToWaiver\":true,\"shippingAddress\":\"12 Lê Lợi\",\"scheduleRevision\":1}"))
                 .andExpect(reservationExpired ? status().isConflict() : status().isBadRequest())
                 .andExpect(jsonPath("$.code")
                         .value(reservationExpired ? "REQUEST_SCHEDULE_WINDOW_EXPIRED" : "REQUEST_SCHEDULE_PAST_TIME"));
@@ -322,7 +363,7 @@ class RequestRescheduleIT extends IntegrationTest {
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
                         .header("Authorization", token(receiverId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"agreeToWaiver\":true}"))
+                        .content("{\"scheduleRevision\":1,\"agreeToWaiver\":true}"))
                 .andExpect(status().isOk());
         return requestId;
     }

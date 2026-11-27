@@ -37,12 +37,13 @@ interface ScheduleCardProps {
  */
 export function ScheduleCard(props: ScheduleCardProps) {
   const { request, currentUserId, viewerIsDonor } = props;
+  const [reloadedSchedule, setReloadedSchedule] = useState(false);
   const editable = canSchedule(request.status) && !request.contactRevealedAt;
   if (!editable && !request.meetingTime && !request.meetingPlace) return null;
 
   const currentPartyWaiverAt = viewerIsDonor ? request.donorWaiverAt : request.receiverWaiverAt;
   const scheduleKey = JSON.stringify([
-    request.id, currentUserId, request.meetingTime, request.meetingPlace,
+    request.id, currentUserId, request.scheduleRevision, request.meetingTime, request.meetingPlace,
     request.deliveryMethod, ownShippingAddress(request, viewerIsDonor), currentPartyWaiverAt,
   ]);
 
@@ -51,8 +52,23 @@ export function ScheduleCard(props: ScheduleCardProps) {
       <h2 id={SCHEDULE_SECTION_ID} tabIndex={-1} className="section-title scroll-mt-24">
         Lịch giao nhận
       </h2>
+      {reloadedSchedule ? (
+        <Alert tone="warning">Lịch giao nhận đã thay đổi. Hãy xem lại thông tin mới trước khi xác nhận.</Alert>
+      ) : null}
       {editable ? (
-        <ScheduleForm key={scheduleKey} {...props} currentPartyWaiverAt={currentPartyWaiverAt} />
+        <ScheduleForm
+          key={scheduleKey}
+          {...props}
+          currentPartyWaiverAt={currentPartyWaiverAt}
+          onUpdated={(updated) => {
+            setReloadedSchedule(false);
+            props.onUpdated(updated);
+          }}
+          onScheduleChanged={(updated) => {
+            setReloadedSchedule(true);
+            props.onUpdated(updated);
+          }}
+        />
       ) : <ScheduleSummary {...props} />}
     </section>
   );
@@ -131,8 +147,12 @@ function ScheduleForm({
   viewerIsDonor,
   partnerName,
   onUpdated,
+  onScheduleChanged,
   currentPartyWaiverAt,
-}: ScheduleCardProps & { currentPartyWaiverAt?: string }) {
+}: ScheduleCardProps & {
+  currentPartyWaiverAt?: string;
+  onScheduleChanged: (request: RequestResponse) => void;
+}) {
   const savedMethod = request.deliveryMethod === 'SHIPPING' ? 'SHIPPING' : 'IN_PERSON';
   const savedPlace = request.meetingPlace ?? '';
   const savedAddress = ownShippingAddress(request, viewerIsDonor);
@@ -239,6 +259,7 @@ function ScheduleForm({
 
   const confirmSchedule = async () => {
     if (waiting || submitting || requirements.length) return;
+    const { scheduleRevision } = request;
     const checkNow = new Date();
     const validationError = validateStoredMeetingTime(request.meetingTime, checkNow);
     if (validationError) {
@@ -249,13 +270,26 @@ function ScheduleForm({
     setSubmitting(true);
     setError('');
     try {
+      if (scheduleRevision == null) {
+        onScheduleChanged(await requestApi.get(request.id, currentUserId));
+        return;
+      }
       onUpdated(
         await requestApi.confirmLogistics(request.id, currentUserId, {
+          scheduleRevision,
           agreeToWaiver,
           shippingAddress: needsOwnAddress ? shippingAddress.trim() : undefined,
         }),
       );
     } catch (caught) {
+      if ((caught as ApiError).code === 'REQUEST_SCHEDULE_CHANGED') {
+        try {
+          onScheduleChanged(await requestApi.get(request.id, currentUserId));
+        } catch {
+          setError('Lịch giao nhận đã thay đổi. Hãy tải lại trang để xem lịch mới.');
+        }
+        return;
+      }
       setError(scheduleApiErrorMessage(caught, 'Không xác nhận được lịch giao nhận.'));
     } finally {
       setSubmitting(false);
