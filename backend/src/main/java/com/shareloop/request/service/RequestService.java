@@ -1043,7 +1043,7 @@ public class RequestService {
         // Listener của module report chạy ngay trong transaction này để report và DISPUTED cùng thành công hoặc cùng
         // rollback.
         eventPublisher.publishEvent(
-                new HandoverIssueReportedEvent(requestId, currentUserId, reason, requestDto.evidenceMediaIds()));
+                new HandoverIssueReportedEvent(requestId, currentUserId, reason, requestDto.evidenceMediaIds(), null));
         return withReports(toResponse(saved, currentUserId), requestId, currentUserId);
     }
 
@@ -1070,8 +1070,8 @@ public class RequestService {
             request.openShippingIssue();
             Request saved = requestRepository.save(request);
             // Listener của module report chạy ngay trong transaction này để khiếu nại và DISPUTED cùng thành công
-            eventPublisher.publishEvent(
-                    new HandoverIssueReportedEvent(saved.getId(), userId, note, requestDto.evidenceMediaIds()));
+            eventPublisher.publishEvent(new HandoverIssueReportedEvent(
+                    saved.getId(), userId, note, requestDto.evidenceMediaIds(), itemOfLeg(saved, incomingLeg)));
             return withReports(toResponse(saved, userId), saved.getId(), userId);
         }
 
@@ -1096,11 +1096,15 @@ public class RequestService {
 
     // Mô tả một chiều cho nội dung khiếu nại: món nào, mã vận đơn của bên gửi (GN-12).
     private String describeLeg(Request request, int leg) {
-        Long itemId = leg == 1 ? request.getItemId() : request.getOfferedItemId();
+        Long itemId = itemOfLeg(request, leg);
         String title = itemId == null ? null : findItemTitle(itemId);
         String tracking = leg == 1 ? request.getDonorTrackingCode() : request.getReceiverTrackingCode();
         return "Chiều giao hàng món " + (title == null ? (leg == 1 ? "chính" : "đổi") : title)
                 + (tracking == null ? ", bên gửi chưa có mã vận đơn" : ", mã vận đơn " + tracking);
+    }
+
+    private Long itemOfLeg(Request request, int leg) {
+        return leg == 1 ? request.getItemId() : request.getOfferedItemId();
     }
 
     // Câu báo hai bên khi giao dịch Giao hàng huỷ mà đã có chiều được gửi: món nằm ở chỗ người nhận (GN-12).
@@ -2043,7 +2047,8 @@ public class RequestService {
                 saved.getId(),
                 reporterId,
                 describeLeg(saved, unsentLeg) + ". Chiều còn lại đã được nhận nhưng chiều này chưa được gửi quá hạn.",
-                null));
+                null,
+                itemOfLeg(saved, unsentLeg)));
         notificationService.notify(
                 reporterId,
                 "DISPUTE_OPENED",

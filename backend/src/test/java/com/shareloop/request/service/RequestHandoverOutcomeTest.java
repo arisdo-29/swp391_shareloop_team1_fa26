@@ -163,8 +163,8 @@ class RequestHandoverOutcomeTest {
         ArgumentCaptor<HandoverIssueReportedEvent> captor = ArgumentCaptor.forClass(HandoverIssueReportedEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue())
-                .isEqualTo(
-                        new HandoverIssueReportedEvent(REQUEST_ID, RECEIVER_ID, "Chưa thấy ai giao đồ", List.of(7L)));
+                .isEqualTo(new HandoverIssueReportedEvent(
+                        REQUEST_ID, RECEIVER_ID, "Chưa thấy ai giao đồ", List.of(7L), null));
         verify(itemService, never()).releaseAfterCancel(eq(ITEM_ID), any());
     }
 

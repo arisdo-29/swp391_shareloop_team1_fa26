@@ -167,11 +167,11 @@ class RequestShippingIT extends IntegrationTest {
         // then: sang DISPUTED với khiếu nại NO_SHOW, không tự huỷ và không tự trừ sao
         assertThat(jdbc.queryForObject("SELECT status FROM requests WHERE id = ?", String.class, requestId))
                 .isEqualTo("DISPUTED");
-        assertThat(jdbc.queryForObject(
-                        "SELECT COUNT(*) FROM reports WHERE request_id = ? AND reason = 'NO_SHOW'",
-                        Integer.class,
+        assertThat(jdbc.queryForList(
+                        "SELECT item_id FROM reports WHERE request_id = ? AND reason = 'NO_SHOW'",
+                        Long.class,
                         requestId))
-                .isEqualTo(1);
+                .containsExactly(offeredId);
         assertThat(trustStarsOf(donorId)).isEqualTo(donorStars);
         assertThat(trustStarsOf(receiverId)).isEqualTo(receiverStars);
     }

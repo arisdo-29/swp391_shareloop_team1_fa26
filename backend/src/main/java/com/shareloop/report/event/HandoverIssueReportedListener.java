@@ -19,6 +19,6 @@ public class HandoverIssueReportedListener {
     @EventListener
     public void onHandoverIssue(HandoverIssueReportedEvent event) {
         reportService.openHandoverIssueReport(
-                event.reporterId(), event.requestId(), event.note(), event.evidenceMediaIds());
+                event.reporterId(), event.requestId(), event.note(), event.evidenceMediaIds(), event.affectedItemId());
     }
 }

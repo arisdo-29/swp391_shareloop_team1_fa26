@@ -568,12 +568,14 @@ public class ReportService {
      *
      * @param reporterId bên báo sự cố, phải là chủ bài hoặc người nhận của giao dịch
      * @param evidenceMediaIds id media minh chứng, có thể null hoặc rỗng
+     * @param affectedItemId món thuộc chiều gửi hàng được báo, có thể null khi gặp trực tiếp
      * @throws BusinessException REPORT_TARGET_NOT_FOUND khi không thấy giao dịch hoặc bài đăng; DISPUTE_NOT_A_PARTY
      *     khi reporterId không thuộc giao dịch
      */
     @Transactional
-    public void openHandoverIssueReport(Long reporterId, Long requestId, String note, List<Long> evidenceMediaIds) {
-        openNoShowDispute(reporterId, requestId, note, evidenceMediaIds, null, ReportReason.NO_SHOW);
+    public void openHandoverIssueReport(
+            Long reporterId, Long requestId, String note, List<Long> evidenceMediaIds, Long affectedItemId) {
+        openNoShowDispute(reporterId, requestId, note, evidenceMediaIds, null, ReportReason.NO_SHOW, affectedItemId);
     }
 
     /**
@@ -594,7 +596,8 @@ public class ReportService {
                 note,
                 null,
                 CancelNotice.NONE,
-                accusation ? ReportReason.NO_SHOW : ReportReason.OTHER);
+                accusation ? ReportReason.NO_SHOW : ReportReason.OTHER,
+                null);
     }
 
     /**
@@ -605,7 +608,8 @@ public class ReportService {
      */
     @Transactional
     public void openSilentCancelReport(Long reporterId, Long requestId, String issuePhrase, String note) {
-        openNoShowDispute(reporterId, requestId, note, null, CancelNotice.silent(issuePhrase), ReportReason.NO_SHOW);
+        openNoShowDispute(
+                reporterId, requestId, note, null, CancelNotice.silent(issuePhrase), ReportReason.NO_SHOW, null);
     }
 
     // Cách báo cho bên bị khiếu nại: null là câu của sự cố giao nhận (bên kia đã bấm hoàn tất), NONE là không báo.
@@ -623,7 +627,8 @@ public class ReportService {
             String note,
             List<Long> evidenceMediaIds,
             CancelNotice notice,
-            ReportReason reason) {
+            ReportReason reason,
+            Long affectedItemId) {
         if (reportRepository.existsByReporterIdAndTargetTypeAndRequestId(reporterId, TargetType.REQUEST, requestId)) {
             return;
         }
@@ -650,7 +655,7 @@ public class ReportService {
         Report report = Report.createDispute(
                 reporterId,
                 requestId,
-                requestSnapshot.itemId(),
+                affectedItemId == null ? requestSnapshot.itemId() : affectedItemId,
                 respondentId,
                 reason,
                 note,

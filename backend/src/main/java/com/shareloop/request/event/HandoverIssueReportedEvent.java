@@ -12,4 +12,5 @@ import java.util.List;
  * @param note mô tả sự cố, dùng làm nội dung khiếu nại
  * @param evidenceMediaIds id media minh chứng, có thể rỗng hoặc null
  */
-public record HandoverIssueReportedEvent(long requestId, long reporterId, String note, List<Long> evidenceMediaIds) {}
+public record HandoverIssueReportedEvent(
+        long requestId, long reporterId, String note, List<Long> evidenceMediaIds, Long affectedItemId) {}
