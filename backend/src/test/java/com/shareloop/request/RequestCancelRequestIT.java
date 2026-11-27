@@ -289,6 +289,35 @@ class RequestCancelRequestIT extends IntegrationTest {
     }
 
     @Test
+    void rejectLaterCancellation_whenEarlierReportIsClosed_opensPendingReport() throws Exception {
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long requestId = rejectedCancelRequest(insertItem(donorId), donorId, receiverId, "BUSY", false);
+        long earlierReportId = reportOf(requestId);
+        concludeAsAdmin(earlierReportId, "{\"decision\":\"DISMISS\"}").andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/requests/{id}/cancel-request", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"NO_LONGER_NEEDED\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/requests/{id}/cancel-request/reject", requestId)
+                        .header("Authorization", token(receiverId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"explanation\":\"Tôi muốn tiếp tục giao dịch này\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DISPUTED"));
+
+        assertThat(jdbc.queryForObject("SELECT status FROM reports WHERE id = ?", String.class, earlierReportId))
+                .isEqualTo("DISMISSED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM reports WHERE request_id = ? AND status IN ('OPEN', 'AWAITING_RESPONSE')",
+                        Integer.class,
+                        requestId))
+                .isEqualTo(1);
+    }
+
+    @Test
     void concludeUphold_whenRejectedNoShowCancel_deductsOneStarFromAccusedParty() throws Exception {
         // given: người nhận tố người cho không đến, người cho không đồng ý
         long donorId = insertUser("Donor");

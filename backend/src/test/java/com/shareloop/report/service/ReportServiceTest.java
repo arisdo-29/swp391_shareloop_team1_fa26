@@ -482,6 +482,9 @@ class ReportServiceTest {
         // given
         when(reportRepository.existsByReporterIdAndTargetTypeAndRequestId(10L, TargetType.REQUEST, 100L))
                 .thenReturn(true);
+        when(reportRepository.existsByReporterIdAndTargetTypeAndRequestIdAndStatusIn(
+                        10L, TargetType.REQUEST, 100L, List.of(ReportStatus.OPEN, ReportStatus.AWAITING_RESPONSE)))
+                .thenReturn(true);
 
         // when
         reportService.openHandoverIssueReport(10L, 100L, "Chưa nhận được", null, null);
