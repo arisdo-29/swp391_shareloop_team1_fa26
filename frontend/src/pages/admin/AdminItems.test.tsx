@@ -99,6 +99,10 @@ describe('AdminItems', () => {
     await user.selectOptions(screen.getByLabelText('Trạng thái'), 'APPROVED');
     await user.selectOptions(screen.getByLabelText('Hiển thị'), 'hidden');
     await user.selectOptions(screen.getByLabelText('Danh mục'), '5');
+    const moreFilters = screen.getByRole('button', { name: 'Bộ lọc khác' });
+    expect(moreFilters.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('checkbox', { name: 'Chỉ bài đang đẩy' })).toBeNull();
+    await user.click(moreFilters);
     await user.click(screen.getByLabelText('Chỉ bài đang đẩy'));
 
     await waitFor(() =>
@@ -111,6 +115,10 @@ describe('AdminItems', () => {
         size: 20,
       }),
     );
+    await user.click(moreFilters);
+    expect(moreFilters.getAttribute('aria-expanded')).toBe('false');
+    expect(moreFilters.textContent).toContain('(1)');
+    expect(screen.queryByRole('checkbox', { name: 'Chỉ bài đang đẩy' })).toBeNull();
   });
 
   it('xóa tất cả bộ lọc và tải danh sách từ trang đầu', async () => {
@@ -127,6 +135,7 @@ describe('AdminItems', () => {
     const clearButton = screen.getByRole<HTMLButtonElement>('button', { name: 'Xóa bộ lọc' });
     expect(clearButton.disabled).toBe(true);
     expect(screen.queryByRole('button', { name: 'Tải lại' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Bộ lọc khác' }));
 
     const search = screen.getByLabelText<HTMLInputElement>('Tìm bài đăng');
     const status = screen.getByLabelText<HTMLSelectElement>('Trạng thái');
@@ -296,6 +305,7 @@ describe('AdminItems', () => {
     expect(clear.disabled).toBe(true);
 
     await user.selectOptions(screen.getByLabelText('Trạng thái'), 'APPROVED');
+    await user.click(screen.getByRole('button', { name: 'Bộ lọc khác' }));
     await user.click(screen.getByLabelText('Chỉ bài đang đẩy'));
     await waitFor(() => expect(clear.disabled).toBe(false));
     await user.click(clear);
