@@ -85,7 +85,7 @@ describe('ScheduleCard waiver', () => {
       const confirmButton = screen.getByRole<HTMLButtonElement>('button', { name: /^Đồng ý/ });
       expect(waiverCheckbox().checked).toBe(false);
       expect(confirmButton.disabled).toBe(true);
-      expect(screen.queryByRole('button', { name: /^Gửi (lại )?(lịch hẹn|thông tin giao hàng)$/ })).toBeNull();
+      expect(screen.queryByRole('button', { name: /^Gửi (lại )?(lịch hẹn|lịch gửi hàng)$/ })).toBeNull();
 
       fireEvent.click(waiverCheckbox());
       expect(confirmButton.disabled).toBe(false);
@@ -99,7 +99,7 @@ describe('ScheduleCard waiver', () => {
     render(scheduleCard(savedRequest));
     fireEvent.click(screen.getByRole('button', { name: /^Giao hàng/ }));
     fireEvent.click(waiverCheckbox());
-    fireEvent.click(screen.getByRole('button', { name: 'Gửi lại thông tin giao hàng' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi lại lịch gửi hàng' }));
 
     await waitFor(() =>
       // Luật mới (GN-12): Giao hàng không dùng địa điểm, chủ bài ở Cho tặng cũng không cần địa chỉ
@@ -203,8 +203,10 @@ describe('ScheduleCard giao hàng', () => {
   });
 
   it('hiện trạng thái địa chỉ của bên kia mà không hiện nội dung', () => {
-    render(card({ ...shippingRequest, receiverAddressProvided: true }, true));
+    render(card({ ...shippingRequest, type: 'SWAP', offeredItemId: 77, receiverAddressProvided: true }, true));
     expect(screen.getByText(/Bình đã nhập địa chỉ nhận hàng/)).toBeTruthy();
+    expect(screen.getByText(/Địa chỉ nhận hàng sẽ hiện sau khi hai bên chốt lịch/)).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: /đồng ý lịch gửi hàng dự kiến/ })).toBeTruthy();
     cleanup();
     render(card({ ...shippingRequest, receiverAddressProvided: false }, true));
     expect(screen.getByText(/Bình chưa nhập địa chỉ nhận hàng/)).toBeTruthy();
@@ -215,7 +217,7 @@ describe('ScheduleCard giao hàng', () => {
     const update = vi.spyOn(requestApi, 'updateSchedule');
     render(card(shippingRequest, false));
     fireEvent.click(screen.getByRole('checkbox'));
-    const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Đồng ý thông tin giao hàng' });
+    const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Đồng ý lịch gửi hàng' });
     expect(button.disabled).toBe(true);
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Địa chỉ nhận hàng của bạn' }), {
@@ -242,7 +244,7 @@ describe('ScheduleCard giao hàng', () => {
       target: { value: toLocalMeetingTimeValue(new Date(Date.now() + 172_800_000)) },
     });
     fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.click(screen.getByRole('button', { name: 'Gửi lại thông tin giao hàng' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi lại lịch gửi hàng' }));
     await waitFor(() => expect(update).toHaveBeenCalledWith(101, 9, expect.objectContaining({
       deliveryMethod: 'SHIPPING', shippingAddress: '5 Lê Lai',
     })));

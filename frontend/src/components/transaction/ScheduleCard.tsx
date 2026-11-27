@@ -192,7 +192,7 @@ function ScheduleForm({
     timeError ? (meetingTime ? timeError : `Chọn ${isShipping ? 'ngày gửi hàng dự kiến' : 'thời gian gặp'}.`) : null,
     agreeToWaiver ? null : 'Đánh dấu cam kết trách nhiệm giao nhận.',
   ].filter((reason) => reason !== null);
-  const subject = isShipping ? 'thông tin giao hàng' : 'lịch hẹn';
+  const subject = isShipping ? 'lịch gửi hàng' : 'lịch hẹn';
   const primaryLabel = proposes
     ? `${hasSavedSchedule ? 'Gửi lại' : 'Gửi'} ${subject}`
     : waiting ? `Đã gửi, chờ ${partnerName} đồng ý` : `Đồng ý ${subject}${isShipping ? '' : ' này'}`;
@@ -370,7 +370,7 @@ function ScheduleForm({
         {isShipping && partnerNeedsAddress(request, viewerIsDonor) ? (
           <p className="text-xs leading-5 text-text-secondary">
             {partnerName} {partnerAddressProvided(request, viewerIsDonor) ? 'đã nhập' : 'chưa nhập'} địa chỉ nhận hàng.
-            Hai bên xem được địa chỉ của nhau sau khi chốt lịch.
+            Địa chỉ nhận hàng sẽ hiện sau khi hai bên chốt lịch.
           </p>
         ) : null}
         {isShipping ? (
@@ -391,7 +391,11 @@ function ScheduleForm({
           disabled={submitting}
           onChange={(event) => setAgreeToWaiver(event.target.checked)}
         />
-        <span>Tôi đồng ý cam kết trách nhiệm giao nhận.</span>
+        <span>
+          {isShipping
+            ? 'Tôi đồng ý lịch gửi hàng dự kiến và cam kết trách nhiệm giao nhận.'
+            : 'Tôi đồng ý cam kết trách nhiệm giao nhận.'}
+        </span>
       </label>
       {error ? (
         <div role="alert">
