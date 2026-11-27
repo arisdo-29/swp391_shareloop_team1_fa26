@@ -505,7 +505,7 @@ export function ProductDetail() {
 
         <aside
           aria-label={item.type === 'gift' ? 'Xin món này' : 'Đề nghị trao đổi'}
-          className="space-y-4 rounded-xl bg-white p-5 ring-1 ring-border/80 lg:sticky lg:top-24"
+          className="space-y-3 rounded-panel border border-detail-border bg-white p-4 sm:p-5 lg:sticky lg:top-24"
         >
           {own ? (
             <>
@@ -581,15 +581,30 @@ export function ProductDetail() {
             </>
           ) : (
             <>
-              <h2 className="text-lg font-bold">{item.type === 'gift' ? 'Xin món này' : 'Đề nghị trao đổi'}</h2>
+              <h2 className="flex items-center gap-2 text-lg font-bold text-primary">
+                <Icon
+                  name={item.type === 'gift' ? 'manageItems' : 'transactions'}
+                  className="size-5 shrink-0"
+                  weight="bold"
+                />
+                {item.type === 'gift' ? 'Xin món này' : 'Đề nghị trao đổi'}
+              </h2>
               {item.type === 'gift' && user && eligibleOfferedItems.length ? (
-                <fieldset className="min-w-0 w-full max-w-full space-y-2">
-                  <legend className="label">Kèm món của bạn để đề nghị trao đổi</legend>
+                <fieldset className="min-w-0 w-full max-w-full space-y-2.5">
+                  <legend className="w-full text-sm font-semibold text-text-primary">
+                    <span className="flex items-center justify-between gap-2">
+                      <span>Kèm món của bạn để đề nghị trao đổi</span>
+                      <span className="shrink-0 text-xs font-medium text-text-muted">
+                        {eligibleOfferedItems.length} món
+                      </span>
+                    </span>
+                  </legend>
                   <p className="text-xs leading-5 text-text-secondary">
                     Không bắt buộc. Nếu chủ bài chọn bạn, món đồ sẽ được trao đổi thay vì cho tặng.
                   </p>
                   <OfferedItemOptions
                     items={eligibleOfferedItems}
+                    compactScrollable
                     selectedItemId={offeredItemId}
                     onSelect={chooseOfferedItem}
                   />
@@ -605,12 +620,19 @@ export function ProductDetail() {
                 </fieldset>
               ) : null}
               {item.type === 'trade' && user ? (
-                <fieldset className="min-w-0 w-full max-w-full space-y-2">
-                  <legend className="label">Chọn món bạn mang đổi</legend>
+                <fieldset className="min-w-0 w-full max-w-full space-y-2.5">
+                  <legend className="w-full text-sm font-semibold text-text-primary">
+                    <span className="flex items-center justify-between gap-2">
+                      <span>Chọn món bạn mang đổi</span>
+                      <span className="shrink-0 text-xs font-medium text-text-muted">
+                        {swapOffers.items.length} món
+                      </span>
+                    </span>
+                  </legend>
                   <OfferedItemOptions
                     items={swapOffers.items}
                     similarPriceIds={swapOffers.similarIds}
-                    pageSize={5}
+                    compactScrollable
                     selectedItemId={offeredItemId}
                     onSelect={chooseOfferedItem}
                   />
@@ -618,7 +640,7 @@ export function ProductDetail() {
                     type="button"
                     aria-pressed={receiveOnlyChosen}
                     onClick={chooseReceiveOnly}
-                    className={`box-border flex min-h-11 w-full items-center rounded-md border p-2.5 text-left text-sm font-semibold transition ${receiveOnlyChosen ? 'border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
+                    className={`box-border flex min-h-11 w-full items-center rounded-action border px-3 py-2 text-left text-sm font-semibold transition ${receiveOnlyChosen ? 'border-exchange bg-detail-selected text-primary' : 'border-detail-border bg-white hover:border-exchange/50 hover:bg-detail-note'}`}
                   >
                     Chỉ xin nhận, không kèm món
                   </button>
@@ -630,15 +652,16 @@ export function ProductDetail() {
                   ) : null}
                   <Link
                     to="/post"
-                    className="flex h-[42px] w-full items-center justify-center rounded-action border border-exchange bg-white text-sm font-semibold text-primary transition-colors hover:bg-primary-soft"
+                    className="flex h-11 w-full items-center justify-center gap-2 rounded-action border border-exchange bg-white text-sm font-semibold text-primary transition-colors hover:bg-detail-selected"
                   >
+                    <Icon name="plus" className="size-4" weight="bold" />
                     Đăng món mới để đổi
                   </Link>
                 </fieldset>
               ) : null}
               <Button
-                size="lg"
-                className="!mt-3 w-full"
+                size="md"
+                className="!mt-2.5 h-11 w-full !border-primary !bg-primary hover:!bg-primary-hover"
                 disabled={requestSubmitting}
                 onClick={() => void submitRequest()}
               >
@@ -648,7 +671,7 @@ export function ProductDetail() {
                     ? 'Đăng nhập để gửi yêu cầu'
                     : submitButtonLabel}
               </Button>
-              <ul className="list-disc space-y-1 pl-5 text-xs leading-5 text-text-secondary">
+              <ul className="list-disc space-y-1 rounded-action bg-detail-note py-3 pl-8 pr-3 text-xs leading-5 text-text-secondary">
                 <li>Chat mở khi chủ bài chọn bạn. Bạn có thể hủy yêu cầu tới lúc đó.</li>
                 <li>Số điện thoại chỉ hiện khi hai bên đã chốt lịch hẹn.</li>
               </ul>
@@ -667,13 +690,15 @@ export function ProductDetail() {
           {currentUserId && !own ? (
             <Button
               type="button"
-              variant="warning"
-              className="w-full"
+              variant="ghost"
+              size="sm"
+              className="w-full !text-error/80 hover:!bg-error-soft hover:!text-error"
               onClick={() => {
                 setReportNotice('');
                 setReportOpen(true);
               }}
             >
+              <Icon name="complaints" className="size-4" />
               Báo cáo bài đăng
             </Button>
           ) : null}

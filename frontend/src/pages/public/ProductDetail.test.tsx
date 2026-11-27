@@ -172,14 +172,15 @@ describe('Chi tiết bài đã giao dịch', () => {
     expect(screen.queryByText('Đã giao dịch')).toBeNull();
   });
 
-  it('nút Báo cáo bài đăng dùng Button variant warning', async () => {
+  it('nút Báo cáo bài đăng hiển thị dạng text-button màu đỏ nhẹ', async () => {
     // when
     await renderDetail(detail());
 
     // then
     const reportButton = screen.getByRole('button', { name: 'Báo cáo bài đăng' });
     expect(reportButton).toBeTruthy();
-    expect(reportButton.className).toContain('bg-warning-soft');
+    expect(reportButton.className).toContain('text-error/80');
+    expect(reportButton.className).not.toContain('bg-warning-soft');
   });
 });
 
@@ -275,7 +276,7 @@ describe('Gửi yêu cầu có hoặc không kèm món', () => {
     ).toBeTruthy();
   });
 
-  it('ưu tiên món giá tương đương và giữ món đã chọn khi chuyển trang', async () => {
+  it('hiển thị toàn bộ món trong vùng cuộn và chỉ đánh dấu sau khi người dùng chọn', async () => {
     const user = userEvent.setup();
     const otherItems = Array.from({ length: 6 }, (_, index) =>
       detail({ id: 60 + index, donorId: VIEWER_ID, title: `Món số ${index + 1}`, referencePrice: 900_000 }),
@@ -285,26 +286,21 @@ describe('Gửi yêu cầu có hoặc không kèm món', () => {
     vi.mocked(requestApi.create).mockResolvedValue(createdRequest(65));
     await renderDetail(detail({ offerType: 'SWAP', referencePrice: 300_000 }), [...otherItems, similarItem]);
 
-    const options = within(screen.getByRole('group', { name: 'Chọn món bạn mang đổi' }));
-    const pagination = within(await options.findByRole('navigation', { name: 'Phân trang món mang đổi' }));
-    const previous = pagination.getByRole<HTMLButtonElement>('button', { name: 'Trang trước' });
-    const next = pagination.getByRole<HTMLButtonElement>('button', { name: 'Trang sau' });
-
+    const options = within(screen.getByRole('group', { name: /Chọn món bạn mang đổi/ }));
     const cards = options.getAllByRole('button', { name: /Bàn gỗ|Món số/ });
-    expect(cards).toHaveLength(5);
+    expect(cards).toHaveLength(7);
     expect(cards[0]).toBe(options.getByRole('button', { name: /Bàn gỗ.*Giá tương đương/ }));
-    expect(cards[0].classList.contains('border-warning')).toBe(true);
-    expect(previous.disabled).toBe(true);
+    expect(cards.every((card) => card.getAttribute('aria-pressed') === 'false')).toBe(true);
+    expect(screen.getByText('7 món')).toBeTruthy();
+    expect(screen.queryByRole('navigation', { name: 'Phân trang món mang đổi' })).toBeNull();
+    expect(screen.getByTestId('offered-item-scroll').className).toContain('max-h-[300px]');
 
-    await user.click(next);
-    expect(pagination.getByText('Trang 2/2')).toBeTruthy();
-    expect(next.disabled).toBe(true);
-    expect(options.getAllByRole('button', { name: /Bàn gỗ|Món số/ })).toHaveLength(2);
-    await user.click(options.getByRole('button', { name: /Món số 6/ }));
+    const selectedCard = options.getByRole('button', { name: /Món số 6/ });
+    await user.click(selectedCard);
+    expect(selectedCard.getAttribute('aria-pressed')).toBe('true');
+    expect(selectedCard.className).toContain('border-exchange');
+    expect(selectedCard.className).toContain('bg-detail-selected');
 
-    await user.click(previous);
-    expect(pagination.getByText('Trang 1/2')).toBeTruthy();
-    expect(options.getByText('Đã chọn “Món số 6”')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Gửi đề nghị, miễn phí' }));
     expect(requestApi.create).toHaveBeenCalledWith(45, VIEWER_ID, 65);
   });

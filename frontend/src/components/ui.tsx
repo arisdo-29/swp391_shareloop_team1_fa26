@@ -54,6 +54,7 @@ import { CheckCircle } from '@phosphor-icons/react/dist/csr/CheckCircle';
 import { Scales } from '@phosphor-icons/react/dist/csr/Scales';
 import { ArrowUp } from '@phosphor-icons/react/dist/csr/ArrowUp';
 import { ArrowDown } from '@phosphor-icons/react/dist/csr/ArrowDown';
+import { Plus } from '@phosphor-icons/react/dist/csr/Plus';
 import { Link } from 'react-router-dom';
 import type {
   Item,
@@ -69,7 +70,7 @@ import { resolveMediaUrl } from '../services/mediaUrl';
 
 // Chỉ giữ icon có chức năng (đóng, mở menu, hiện mật khẩu, mở danh sách, thông báo, đính kèm ảnh,
 // dấu đã xong của bước giao dịch).
-// Icon trang trí như mũi tên, kính lúp, dấu cộng đã bỏ: nút và nhãn dùng chữ.
+// Icon trang trí được lược bỏ; icon trong nút vẫn phải thể hiện một chức năng rõ ràng.
 const iconMap = {
   close: X,
   menu: List,
@@ -120,6 +121,7 @@ const iconMap = {
   // Nút chỉ có icon để đổi thứ tự (luôn kèm aria-label và tooltip).
   arrowUp: ArrowUp,
   arrowDown: ArrowDown,
+  plus: Plus,
 } as const;
 
 export type IconName = keyof typeof iconMap;

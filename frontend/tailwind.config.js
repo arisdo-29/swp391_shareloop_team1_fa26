@@ -35,6 +35,8 @@ export default {
           border: '#D5E3DB',
           exchange: '#E6F1EA',
           'exchange-border': '#B9D5C3',
+          selected: '#EAF4EE',
+          note: '#F3F6F4',
         },
         highlight: '#E0B25A',
         admin: {
@@ -92,6 +94,7 @@ export default {
         md: '10px',
         detail: '12px',
         lg: '14px',
+        panel: '16px',
         xl: '18px',
       },
       boxShadow: {

@@ -8,6 +8,7 @@ interface OfferedItemOptionsProps {
   items: Array<Pick<Item, 'id' | 'title' | 'images' | 'district' | 'referencePrice'>>;
   similarPriceIds?: ReadonlySet<string>;
   pageSize?: number;
+  compactScrollable?: boolean;
   selectedItemId: string;
   onSelect: (itemId: string) => void;
 }
@@ -17,65 +18,97 @@ export function OfferedItemOptions({
   items,
   similarPriceIds,
   pageSize,
+  compactScrollable = false,
   selectedItemId,
   onSelect,
 }: OfferedItemOptionsProps) {
   const [page, setPage] = useState(0);
-  const totalPages = pageSize ? Math.max(1, Math.ceil(items.length / pageSize)) : 1;
+  const effectivePageSize = compactScrollable ? undefined : pageSize;
+  const totalPages = effectivePageSize
+    ? Math.max(1, Math.ceil(items.length / effectivePageSize))
+    : 1;
   const currentPage = Math.min(page, totalPages - 1);
-  const visibleItems = pageSize
-    ? items.slice(currentPage * pageSize, (currentPage + 1) * pageSize)
+  const visibleItems = effectivePageSize
+    ? items.slice(currentPage * effectivePageSize, (currentPage + 1) * effectivePageSize)
     : items;
   const selectedItemOnAnotherPage =
     totalPages > 1 && !visibleItems.some((entry) => entry.id === selectedItemId)
       ? items.find((entry) => entry.id === selectedItemId)
       : undefined;
 
+  const itemCards = visibleItems.map((entry) => {
+    const selected = selectedItemId === entry.id;
+    const similar = similarPriceIds?.has(entry.id);
+    let cardStyle = 'border-border hover:border-primary/40';
+    if (compactScrollable) {
+      cardStyle = selected
+        ? 'border-exchange bg-detail-selected'
+        : 'border-detail-border bg-white hover:border-exchange/50 hover:bg-detail-note';
+    } else if (similar) {
+      cardStyle = 'border-warning bg-warning-soft hover:border-warning hover:shadow-sm';
+    } else if (selected) {
+      cardStyle = 'border-primary bg-primary-faint';
+    }
+
+    return (
+      <button
+        key={entry.id}
+        type="button"
+        aria-pressed={selected}
+        onClick={() => onSelect(entry.id)}
+        className={`box-border flex w-full min-w-0 max-w-full items-center gap-3 overflow-hidden rounded-md border p-2.5 text-left transition focus-visible:outline-primary ${cardStyle}`}
+      >
+        <ItemImage
+          src={entry.images[0]}
+          alt={entry.title}
+          className={`${compactScrollable ? 'h-14 w-14' : 'h-11 w-14'} shrink-0 rounded-md object-cover`}
+        />
+        <span className="min-w-0 max-w-full flex-1 overflow-hidden">
+          <strong
+            className={`block whitespace-normal break-words font-semibold leading-5 ${compactScrollable ? 'text-[15px]' : 'text-sm'}`}
+          >
+            {entry.title}
+          </strong>
+          <span className="block break-words text-xs text-text-muted">{entry.district}</span>
+          {compactScrollable || similarPriceIds ? (
+            <span
+              className={`block text-xs font-medium ${entry.referencePrice == null ? 'text-text-muted' : 'text-primary'}`}
+            >
+              {formatReferencePrice(entry.referencePrice)}
+            </span>
+          ) : null}
+          {similar ? (
+            <span className="mt-1 inline-block rounded-sm bg-surface px-2 py-0.5 text-xs font-semibold text-warning">
+              Giá tương đương
+            </span>
+          ) : null}
+        </span>
+        {compactScrollable ? (
+          <span
+            aria-hidden="true"
+            className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-exchange bg-exchange text-white' : 'border-detail-exchange-border bg-white'}`}
+          >
+            {selected ? <Icon name="check" className="size-3.5" weight="bold" /> : null}
+          </span>
+        ) : similar && selected ? (
+          <Icon name="completed" className="h-5 w-5 shrink-0 text-primary" weight="fill" />
+        ) : null}
+      </button>
+    );
+  });
+
   return (
     <>
-      {visibleItems.map((entry) => {
-        const selected = selectedItemId === entry.id;
-        const similar = similarPriceIds?.has(entry.id);
-        let cardStyle = 'border-border hover:border-primary/40';
-        if (similar)
-          cardStyle = 'border-warning bg-warning-soft hover:border-warning hover:shadow-sm';
-        else if (selected) cardStyle = 'border-primary bg-primary-faint';
-
-        return (
-          <button
-            key={entry.id}
-            type="button"
-            aria-pressed={selected}
-            onClick={() => onSelect(entry.id)}
-            className={`box-border flex w-full min-w-0 max-w-full items-center gap-3 overflow-hidden rounded-md border p-2.5 text-left transition focus-visible:outline-primary ${cardStyle}`}
-          >
-            <ItemImage
-              src={entry.images[0]}
-              alt={entry.title}
-              className="h-11 w-14 shrink-0 rounded-md object-cover"
-            />
-            <span className="min-w-0 max-w-full flex-1 overflow-hidden">
-              <strong className="block whitespace-normal break-words text-sm leading-5">
-                {entry.title}
-              </strong>
-              <span className="block break-words text-xs text-text-muted">{entry.district}</span>
-              {similarPriceIds ? (
-                <span className="block text-xs text-text-secondary">
-                  {formatReferencePrice(entry.referencePrice)}
-                </span>
-              ) : null}
-              {similar ? (
-                <span className="mt-1 inline-block rounded-sm bg-surface px-2 py-0.5 text-xs font-semibold text-warning">
-                  Giá tương đương
-                </span>
-              ) : null}
-            </span>
-            {similar && selected ? (
-              <Icon name="completed" className="h-5 w-5 shrink-0 text-primary" weight="fill" />
-            ) : null}
-          </button>
-        );
-      })}
+      <div
+        data-testid={compactScrollable ? 'offered-item-scroll' : undefined}
+        className={`space-y-2 ${
+          compactScrollable
+            ? 'max-h-[300px] overflow-y-auto overscroll-contain pr-1 [scrollbar-color:theme(colors.detail.exchange-border)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-detail-exchange-border [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:w-1.5'
+            : ''
+        }`}
+      >
+        {itemCards}
+      </div>
       {totalPages > 1 ? (
         <nav
           aria-label="Phân trang món mang đổi"
