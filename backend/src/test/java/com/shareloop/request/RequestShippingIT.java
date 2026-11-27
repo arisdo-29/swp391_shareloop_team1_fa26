@@ -22,6 +22,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
@@ -135,6 +137,39 @@ class RequestShippingIT extends IntegrationTest {
                 .isEqualTo("TRADED");
         assertThat(jdbc.queryForObject("SELECT status FROM items WHERE id = ?", String.class, offeredId))
                 .isEqualTo("TRADED");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void refusal_whenSwappingOnlyReopensItemsThatHaveNotBeenSent(boolean otherItemShipped) throws Exception {
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId, "SWAP");
+        long offeredId = insertItem(receiverId, "SWAP");
+        long requestId = createSwapRequest(itemId, offeredId, donorId, receiverId);
+        propose(requestId, receiverId, "12 Lê Lợi");
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"agreeToWaiver\":true,\"shippingAddress\":\"34 Trần Phú\"}"))
+                .andExpect(status().isOk());
+        ship(requestId, donorId, "GHN1111");
+        if (otherItemShipped) {
+            ship(requestId, receiverId, "VTP2222");
+        }
+
+        mockMvc.perform(post("/api/v1/requests/{id}/refuse-handover", requestId)
+                        .header("Authorization", token(receiverId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Món nhận được không đúng mô tả\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+        assertThat(jdbc.queryForObject("SELECT is_active FROM items WHERE id = ?", Boolean.class, itemId))
+                .isFalse();
+        assertThat(jdbc.queryForObject("SELECT is_active FROM items WHERE id = ?", Boolean.class, offeredId))
+                .isEqualTo(!otherItemShipped);
+        assertThat(jdbc.queryForObject("SELECT hidden_by_admin FROM items WHERE id = ?", Boolean.class, offeredId))
+                .isEqualTo(otherItemShipped);
     }
 
     @Test

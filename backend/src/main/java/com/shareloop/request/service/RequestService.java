@@ -1184,7 +1184,7 @@ public class RequestService {
      */
     @Transactional
     public RequestResponse refuseHandover(long requestId, long currentUserId, RefuseHandoverRequest requestDto) {
-        Request request = loadRequest(requestId);
+        Request request = loadRequestForUpdate(requestId);
         ItemSnapshot item = loadItemSnapshot(request);
         boolean isDonor = requireParty(request, item, currentUserId);
         boolean isSwap = request.getOfferedItemId() != null;
@@ -1209,6 +1209,11 @@ public class RequestService {
         // Người nhận từ chối thì món bị từ chối là bài chính; chủ bài từ chối (chỉ ở Trao đổi) thì là món đổi
         long refusedItemId = isDonor ? saved.getOfferedItemId() : saved.getItemId();
         long reportedUserId = isDonor ? saved.getReceiverId() : item.donorId();
+        boolean ownShipmentHeld = saved.isShipping() && isSwap && saved.isLegShipped(saved.outgoingLegOf(isDonor));
+        if (ownShipmentHeld) {
+            long ownItemId = isDonor ? saved.getItemId() : saved.getOfferedItemId();
+            itemService.hideByAdmin(ownItemId);
+        }
         releaseReservedItems(saved);
         itemService.hide(refusedItemId);
 
@@ -1216,7 +1221,7 @@ public class RequestService {
         // rollback.
         eventPublisher.publishEvent(new NotAsDescribedReportedEvent(
                 requestId, currentUserId, refusedItemId, reportedUserId, reason, requestDto.evidenceMediaIds()));
-        notifyRefusal(saved, currentUserId, reportedUserId);
+        notifyRefusal(saved, currentUserId, reportedUserId, ownShipmentHeld);
         if (activityLogService != null) {
             activityLogService.log(
                     ActivityType.REQUEST_CANCEL.name(),
@@ -1230,13 +1235,19 @@ public class RequestService {
     }
 
     // Báo cả hai bên khi giao dịch huỷ vì từ chối nhận; bên bị báo cáo biết món đang tạm ẩn và có thể giải trình.
-    private void notifyRefusal(Request request, long refuserId, long reportedUserId) {
+    private void notifyRefusal(Request request, long refuserId, long reportedUserId, boolean ownShipmentHeld) {
         String link = "/requests/" + request.getId();
+        String ownItemNotice = " Bài của bạn được mở lại.";
+        if (ownShipmentHeld) {
+            ownItemNotice = " Bài của món bạn đã gửi được giữ ẩn để Admin kiểm tra việc hoàn trả.";
+        } else if (request.isShipping() && request.getOfferedItemId() == null) {
+            ownItemNotice = "";
+        }
         notificationService.notify(
                 refuserId,
                 "TRANSACTION_CANCELLED",
                 "Đã từ chối nhận",
-                "Bạn đã từ chối nhận và gửi báo cáo. Giao dịch đã huỷ, bài của bạn được mở lại. Admin đang xem xét.",
+                "Bạn đã từ chối nhận và gửi báo cáo. Giao dịch đã huỷ." + ownItemNotice + " Admin đang xem xét.",
                 link);
         notificationService.notify(
                 reportedUserId,

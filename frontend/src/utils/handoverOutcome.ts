@@ -1,4 +1,5 @@
-import type { CancelRequestCode } from '../services/requestApi';
+import type { CancelRequestCode, RequestResponse } from '../services/requestApi';
+import { isShippingRequest, shippingLegs, viewerSendsLeg } from './shipping';
 
 // Câu chữ cho các nút kết quả giao nhận (docs/api/request.md mục 10, 14, 15). Backend vẫn là nơi quyết định nhánh.
 
@@ -59,5 +60,17 @@ export function cancelRequestConsequence(partnerName: string, cancelResponseHour
 // Từ chối nhận là huỷ giao dịch kèm báo cáo vi phạm, không phải khiếu nại (GN-07).
 export const REFUSE_HANDOVER_CONSEQUENCE =
   'Giao dịch sẽ bị huỷ. Bài của bạn được mở lại. Món bị từ chối sẽ tạm ẩn cho đến khi Admin xem xét.';
+
+export function refuseHandoverConsequence(request: RequestResponse, viewerIsDonor: boolean) {
+  if (!isShippingRequest(request)) return REFUSE_HANDOVER_CONSEQUENCE;
+
+  const outcome = 'Giao dịch sẽ bị huỷ. Món bị từ chối sẽ tạm ẩn cho đến khi Admin xem xét.';
+  const outbound = shippingLegs(request).find((leg) => viewerSendsLeg(leg, viewerIsDonor));
+  if (!outbound) return outcome;
+  if (outbound.shippedAt) {
+    return `${outcome} Bài của món bạn đã gửi được giữ ẩn để Admin kiểm tra việc hoàn trả.`;
+  }
+  return `${outcome} Bài của món bạn chưa gửi được mở lại.`;
+}
 
 export const REFUSE_HANDOVER_REASON_LABEL = 'Không đúng mô tả';
