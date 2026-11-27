@@ -121,7 +121,7 @@ function SectionHeading({
       {href ? (
         <Link
           to={href}
-          className="shrink-0 text-sm font-semibold text-link transition hover:text-secondary"
+          className="standalone-nav-action"
         >
           {linkLabel}
         </Link>
@@ -601,7 +601,7 @@ export function Home() {
                 ) : (
                   <button type="button" onClick={() => navigate(loginPath('/post'))} className="home-final-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-primary transition">Đăng món đồ</button>
                 )}
-                <Link to="/browse" className="text-sm font-bold text-link">Tìm đồ</Link>
+                <Link to="/browse" className="standalone-nav-action">Tìm đồ</Link>
               </div>
             </div>
           </HomeSection>

@@ -279,9 +279,9 @@ describe('trạng thái tải bài đăng trên Home', () => {
       ]),
     );
     expect(itemApi.featured).toHaveBeenCalledWith({ limit: 5, viewerKey: expect.any(Number) });
-    expect(within(section!).getByRole('link', { name: 'Xem tất cả' }).getAttribute('href')).toBe(
-      '/browse?boosted=true',
-    );
+    const viewAllLink = within(section!).getByRole('link', { name: 'Xem tất cả' });
+    expect(viewAllLink.getAttribute('href')).toBe('/browse?boosted=true');
+    expect(viewAllLink.className).toContain('standalone-nav-action');
     const newItemsSection = screen.getByRole('heading', { name: 'Món đồ mới' }).closest('section');
     expect(section!.querySelector('.home-product-grid')?.className).toContain(
       newItemsSection!.querySelector('.home-product-grid')?.className,

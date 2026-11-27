@@ -110,8 +110,10 @@ describe('Nội dung chi tiết sản phẩm', () => {
   it('hiển thị giá có khung vàng và giá trống bằng chữ xám', async () => {
     await renderDetail(detail({ referencePrice: 120000 }));
 
-    const referencePrice = screen.getByText(/Giá tham khảo 120\.000/);
+    const referencePrice = screen.getByLabelText('Giá tham khảo');
     expect(referencePrice.className).toContain('border-warning');
+    expect(within(referencePrice).getByText('Giá tham khảo')).toBeTruthy();
+    expect(within(referencePrice).getByText(/120\.000/).className).toContain('text-xl');
 
     cleanup();
     await renderDetail(detail({ referencePrice: null }));
@@ -172,15 +174,17 @@ describe('Chi tiết bài đã giao dịch', () => {
     expect(screen.queryByText('Đã giao dịch')).toBeNull();
   });
 
-  it('nút Báo cáo bài đăng hiển thị dạng text-button màu đỏ nhẹ', async () => {
+  it('nút Báo cáo bài đăng có nền, viền và chữ đỏ nổi bật', async () => {
     // when
     await renderDetail(detail());
 
     // then
     const reportButton = screen.getByRole('button', { name: 'Báo cáo bài đăng' });
     expect(reportButton).toBeTruthy();
-    expect(reportButton.className).toContain('text-error/80');
-    expect(reportButton.className).not.toContain('bg-warning-soft');
+    expect(reportButton.className).toContain('!bg-report-soft');
+    expect(reportButton.className).toContain('!border-report-border');
+    expect(reportButton.className).toContain('!text-report');
+    expect(reportButton.className).toContain('h-11');
   });
 });
 

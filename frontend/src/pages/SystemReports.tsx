@@ -13,7 +13,7 @@ import { formatDateTime } from '../utils/boostMessages';
 const userPath = '/me/system-reports';
 const adminPath = '/admin/system-reports';
 const pageSize = 20;
-const linkClass = 'font-semibold text-primary hover:underline';
+const linkClass = 'standalone-nav-action';
 
 function reportError(error: unknown, fallback: string) {
   return userFacingErrorMessage((error as ApiError | null)?.message, fallback);

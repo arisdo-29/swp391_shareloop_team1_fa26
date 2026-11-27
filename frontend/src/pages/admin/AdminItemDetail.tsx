@@ -277,7 +277,7 @@ export function AdminItemDetail() {
               </ul>
             )}
             {detail.reports.length > 0 ? (
-              <Link className="mt-2 inline-block text-sm font-semibold text-primary hover:underline" to="/admin/complaints">
+              <Link className="standalone-nav-action mt-2" to="/admin/complaints">
                 Mở trang Khiếu nại và báo cáo
               </Link>
             ) : null}
