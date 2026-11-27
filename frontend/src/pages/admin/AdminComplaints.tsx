@@ -171,10 +171,12 @@ function consequences(detail: AdminReportDetail) {
   ];
   if (detail.report.targetType === 'ITEM') parts.push(upheld ? 'Ẩn bài đăng' : 'Không ẩn bài');
   if (detail.report.targetType === 'REQUEST') {
+    // Bác khiếu nại thì giao dịch tranh chấp chạy tiếp hoặc được công nhận hoàn tất tuỳ từng
+    // trường hợp ở backend (RequestService.resolveDisputedRequest), nên không ghi cứng "Hoàn tất".
     parts.push(
       upheld
         ? 'Giao dịch đang tranh chấp (nếu có) bị huỷ'
-        : 'Giao dịch đang tranh chấp (nếu có) trở về Hoàn tất',
+        : 'Giao dịch đang tranh chấp (nếu có) được xử lý tiếp, không bị huỷ',
     );
   }
   return parts.join(' · ');
