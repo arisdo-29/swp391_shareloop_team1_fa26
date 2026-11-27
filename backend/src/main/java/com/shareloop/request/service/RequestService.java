@@ -1577,6 +1577,13 @@ public class RequestService {
         ItemSnapshot item = loadItemSnapshot(request);
         requireParty(request, item, currentUserId);
         long proposerId = request.getRescheduleProposedBy() == null ? 0 : request.getRescheduleProposedBy();
+        if (request.hasPendingReschedule() && proposerId != currentUserId) {
+            Instant now = Instant.now();
+            Instant dueAt = deadlineCalculator.rescheduleExpiresAt(request);
+            if (!dueAt.isAfter(now) || !request.getRescheduleMeetingTime().isAfter(now)) {
+                throw new BusinessException(RequestErrorCode.REQUEST_RESCHEDULE_EXPIRED);
+            }
+        }
         request.acceptReschedule(currentUserId);
         Request saved = requestRepository.save(request);
 
