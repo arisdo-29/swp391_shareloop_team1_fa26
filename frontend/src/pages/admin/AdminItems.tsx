@@ -5,6 +5,7 @@ import {
   Alert,
   Button,
   Field,
+  Icon,
   ItemImage,
   PageHeader,
   SearchField,
@@ -105,6 +106,8 @@ export function AdminItems() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [boostedOnly, setBoostedOnly] = useState(false);
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const moreFiltersId = useId();
   const [page, setPage] = useState(0);
   const [reloadKey, setReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -123,6 +126,7 @@ export function AdminItems() {
   );
   const dateRangeError =
     fromDate && toDate && fromDate > toDate ? '"Từ ngày" không được sau "Đến ngày".' : '';
+  const activeExtraFilters = Number(Boolean(offerType)) + Number(Boolean(fromDate || toDate)) + Number(boostedOnly);
   function clearFilters() {
     setKeywordInput('');
     setStatus('');
@@ -213,13 +217,10 @@ export function AdminItems() {
   return (
     <section className="admin-items-page">
       <div className="admin-items-header">
-        <PageHeader
-          title="Quản lý bài đăng"
-          description="Xem mọi bài đăng ở mọi trạng thái, ẩn bài vi phạm hoặc hiện lại bài đã ẩn."
-        />
+        <PageHeader title="Quản lý bài đăng" />
       </div>
 
-      <div className="admin-dash-vars" aria-label="Thống kê bài đăng">
+      <div className="admin-dash-vars admin-items-stats" aria-label="Thống kê bài đăng">
         <DashboardGrid columns={6}>
           {ITEM_STATS.map((stat) => (
             <ItemStat
@@ -243,7 +244,6 @@ export function AdminItems() {
           />
         </div>
         <Select
-          className="admin-items-filter-status"
           label="Trạng thái"
           value={status}
           onChange={(event) => setStatus(event.target.value as ItemStatus | '')}
@@ -256,7 +256,6 @@ export function AdminItems() {
           ))}
         </Select>
         <Select
-          className="admin-items-filter-visibility"
           label="Hiển thị"
           value={visibility}
           onChange={(event) => setVisibility(event.target.value as VisibilityFilter)}
@@ -267,20 +266,6 @@ export function AdminItems() {
           <option value="hidden">Đang ẩn</option>
         </Select>
         <Select
-          className="admin-items-filter-offer"
-          label="Hình thức"
-          value={offerType}
-          onChange={(event) => setOfferType(event.target.value as OfferType | '')}
-        >
-          <option value="">Tất cả</option>
-          {Object.entries(offerTypeLabels).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </Select>
-        <Select
-          className="admin-items-filter-category"
           label="Danh mục"
           value={categoryId}
           onChange={(event) => setCategoryId(event.target.value)}
@@ -292,44 +277,66 @@ export function AdminItems() {
             </option>
           ))}
         </Select>
-        <div className="admin-items-filter-from">
+        <div className="admin-items-filter-actions">
+          <Button
+            variant="outline"
+            size="sm"
+            aria-expanded={showMoreFilters}
+            aria-controls={moreFiltersId}
+            onClick={() => setShowMoreFilters((open) => !open)}
+          >
+            Bộ lọc khác{activeExtraFilters ? ` (${activeExtraFilters})` : ''}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-11 !px-0"
+            aria-label="Xóa bộ lọc"
+            title="Xóa bộ lọc"
+            disabled={!hasFilters}
+            onClick={clearFilters}
+          >
+            <Icon name="close" className="size-4" />
+          </Button>
+        </div>
+        <div id={moreFiltersId} hidden={!showMoreFilters} className="admin-items-more-filters">
+          <Select
+            label="Hình thức"
+            value={offerType}
+            onChange={(event) => setOfferType(event.target.value as OfferType | '')}
+          >
+            <option value="">Tất cả</option>
+            {Object.entries(offerTypeLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </Select>
           <Field
-            className="admin-items-date-input"
             label="Từ ngày"
             type="date"
             value={fromDate}
             error={dateRangeError || undefined}
             onChange={(event) => setFromDate(event.target.value)}
           />
-        </div>
-        <div className="admin-items-filter-to">
           <Field
-            className="admin-items-date-input"
             label="Đến ngày"
             type="date"
             value={toDate}
             onChange={(event) => setToDate(event.target.value)}
           />
+          <label className="admin-items-filter-boosted">
+            <input
+              type="checkbox"
+              checked={boostedOnly}
+              onChange={(event) => setBoostedOnly(event.target.checked)}
+            />
+            Chỉ bài đang đẩy
+          </label>
         </div>
-        <label className="admin-items-filter-boosted">
-          <input
-            type="checkbox"
-            className="size-4"
-            checked={boostedOnly}
-            onChange={(event) => setBoostedOnly(event.target.checked)}
-          />
-          Chỉ bài đang đẩy
-        </label>
-        <div className="admin-items-filter-clear">
-          <Button
-            variant="outline"
-            className="admin-items-clear-button"
-            disabled={!hasFilters}
-            onClick={clearFilters}
-          >
-            Xóa bộ lọc
-          </Button>
-        </div>
+        {!showMoreFilters && dateRangeError ? (
+          <p role="alert" className="col-span-full text-xs text-error">{dateRangeError}</p>
+        ) : null}
       </div>
 
       {error ? (
@@ -439,7 +446,7 @@ function ItemStat({
       accent={appearances[modifier].accent}
       label={label}
       value={value === null ? '...' : value === 'error' ? '—' : value.toLocaleString('vi-VN')}
-      note={value === 'error' ? 'Chưa tải được số liệu' : 'Toàn hệ thống'}
+      note={value === 'error' ? 'Chưa tải được số liệu' : ''}
       loading={value === null}
     />
   );
@@ -464,7 +471,7 @@ function ItemRow({
           <ItemImage
             src={row.imageUrl ?? undefined}
             alt={row.title}
-            className="size-12 shrink-0 rounded-sm object-cover"
+            className="size-10 shrink-0 rounded-sm object-cover"
           />
           <div className="min-w-0">
             <Link
@@ -522,8 +529,8 @@ function ItemRow({
       </td>
       <td className="text-center tabular-nums">{row.pendingRequestCount}</td>
       <td className="admin-items-time">
-        <p>Tạo lúc: {formatDateTime(row.createdAt)}</p>
-        <p>Duyệt lúc: {formatDateTime(row.approvedAt)}</p>
+        <p>Tạo: {formatDateTime(row.createdAt)}</p>
+        <p>Duyệt: {formatDateTime(row.approvedAt)}</p>
         <p>Hết hạn: {formatDateTime(row.expireAt)}</p>
       </td>
       <td>
