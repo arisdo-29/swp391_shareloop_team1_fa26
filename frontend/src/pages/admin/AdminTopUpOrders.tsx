@@ -26,6 +26,7 @@ import type { PaymentOrderStatus } from '../../services/paymentApi';
 import { formatVnd } from '../../utils/formatting';
 import { adminErrorMessage } from './adminErrors';
 import type { AdminLedgerRouteState, AdminLedgerViewState } from './adminLedgerNavigation';
+import { DashboardGrid, DashboardStatCard, type DashboardAccent } from './AdminDashboardCards';
 import './admin-topup-orders.css';
 
 const PAGE_SIZE = 10;
@@ -99,7 +100,10 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
   const [keyword, setKeyword] = useState(keywordInput);
   const [fromDate, setFromDate] = useState(() => query.get('from') ?? '');
   const [toDate, setToDate] = useState(() => query.get('to') ?? '');
-  const [needsReconcile, setNeedsReconcile] = useState(false);
+  // Trang Tổng quan mở danh sách đơn cần xử lý bằng tham số này.
+  const [needsReconcile, setNeedsReconcile] = useState(
+    () => query.get('needsReconcile') === 'true',
+  );
   const [page, setPage] = useState(0);
   const [reloadKey, setReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -209,7 +213,6 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
       <div className="admin-topup-header">
         <PageHeader
           title="Giao dịch nạp tiền"
-          description="Đối soát từng đơn nạp Credit qua cổng thanh toán. Đơn đã đóng mà VNPay vẫn thu tiền được đánh dấu cần đối soát."
           action={
             <div className="flex gap-2">
               {ledgerReturn ? (
@@ -236,17 +239,7 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
         />
       </div>
 
-      <SummaryCards
-        summary={summary}
-        activeStatus={status}
-        reconcileOnly={needsReconcile}
-        onStatus={chooseStatus}
-        onReconcile={() => {
-          setNeedsReconcile((current) => !current);
-          setStatus('');
-          setPage(0);
-        }}
-      />
+      <SummaryCards summary={summary} activeStatus={status} onStatus={chooseStatus} />
 
       <div className="admin-topup-filters">
         <div className="admin-topup-filter-search">
@@ -294,18 +287,6 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
             }}
           />
         </div>
-        <label className="admin-topup-filter-reconcile">
-          <input
-            type="checkbox"
-            className="size-4"
-            checked={needsReconcile}
-            onChange={(event) => {
-              setNeedsReconcile(event.target.checked);
-              setPage(0);
-            }}
-          />
-          Chỉ đơn cần đối soát
-        </label>
       </div>
 
       {error ? (
@@ -373,59 +354,52 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
 function SummaryCards({
   summary,
   activeStatus,
-  reconcileOnly,
   onStatus,
-  onReconcile,
 }: {
   summary: AdminTopUpSummary | null;
   activeStatus: PaymentOrderStatus | '';
-  reconcileOnly: boolean;
   onStatus: (status: PaymentOrderStatus) => void;
-  onReconcile: () => void;
 }) {
   if (!summary) return null;
-  const cardClass = (active: boolean, modifier: string) =>
-    `admin-topup-stat ${modifier} ${active ? 'admin-topup-stat--active' : ''}`;
+  const appearances: Record<
+    PaymentOrderStatus,
+    { icon: 'completed' | 'expiring' | 'banned'; accent: DashboardAccent }
+  > = {
+    SUCCESS: { icon: 'completed', accent: 'green' },
+    PENDING: { icon: 'expiring', accent: 'gold' },
+    FAILED: { icon: 'banned', accent: 'red' },
+    EXPIRED: { icon: 'expiring', accent: 'red' },
+    CANCELLED: { icon: 'banned', accent: 'red' },
+  };
   return (
-    <div className="admin-topup-stats">
-      <button
-        type="button"
-        className={cardClass(reconcileOnly, 'admin-topup-stat--reconcile')}
-        onClick={onReconcile}
-      >
-        <p className="admin-topup-stat-label">Cần đối soát</p>
-        <p className="admin-topup-stat-value">{summary.needsReconcileCount} đơn</p>
-        <p className="admin-topup-stat-context">Cần kiểm tra thủ công</p>
-      </button>
-      {summary.byStatus.map((total) => {
-        const context =
-          total.status === 'SUCCESS'
-            ? 'Tiền thực thu'
-            : total.status === 'PENDING'
-              ? 'Giá trị chưa thanh toán'
-              : total.status === 'FAILED'
-                ? 'Giá trị thanh toán thất bại'
-                : total.status === 'EXPIRED'
-                  ? 'Giá trị đơn hết hạn'
-                  : 'Giá trị đơn đã hủy';
-        return (
-          <button
-            key={total.status}
-            type="button"
-            className={cardClass(
-              activeStatus === total.status,
-              `admin-topup-stat--${total.status.toLowerCase()}`,
-            )}
-            onClick={() => onStatus(total.status)}
-          >
-            <p className="admin-topup-stat-label">{statusLabels[total.status]}</p>
-            <p className="admin-topup-stat-value">{formatVnd(total.amountVnd)}</p>
-            <p className="admin-topup-stat-context">
-              {context} · {total.orderCount} đơn
-            </p>
-          </button>
-        );
-      })}
+    <div className="admin-dash-vars" aria-label="Thống kê đơn nạp">
+      <DashboardGrid columns={5}>
+        {summary.byStatus.map((total) => {
+          const context =
+            total.status === 'SUCCESS'
+              ? 'Tiền thực thu'
+              : total.status === 'PENDING'
+                ? 'Giá trị chưa thanh toán'
+                : total.status === 'FAILED'
+                  ? 'Giá trị thanh toán thất bại'
+                  : total.status === 'EXPIRED'
+                    ? 'Giá trị đơn hết hạn'
+                    : 'Giá trị đơn đã hủy';
+          return (
+            <DashboardStatCard
+              key={total.status}
+              variant="finance"
+              icon={appearances[total.status].icon}
+              accent={appearances[total.status].accent}
+              label={statusLabels[total.status]}
+              value={formatVnd(total.amountVnd)}
+              note={`${context} · ${total.orderCount} đơn`}
+              active={activeStatus === total.status}
+              onClick={() => onStatus(total.status)}
+            />
+          );
+        })}
+      </DashboardGrid>
     </div>
   );
 }
@@ -456,20 +430,13 @@ function CopyCodeButton({ orderCode }: { orderCode: string }) {
   );
 }
 
-function StatusPill({ order }: { order: AdminTopUpOrder }) {
+function StatusPill({ status }: { status: PaymentOrderStatus }) {
   return (
-    <div className="admin-topup-status-stack">
-      <span
-        className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-2xs font-semibold ${statusClass(order.status)}`}
-      >
-        {statusLabels[order.status]}
-      </span>
-      {order.needsReconcile ? (
-        <span className="inline-flex whitespace-nowrap rounded-sm bg-error px-2 py-1 text-2xs font-semibold text-white">
-          Cần đối soát
-        </span>
-      ) : null}
-    </div>
+    <span
+      className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-2xs font-semibold ${statusClass(status)}`}
+    >
+      {statusLabels[status]}
+    </span>
   );
 }
 
@@ -507,7 +474,7 @@ function TopUpRow({
       </td>
       <td className="admin-topup-provider-code">{displayProviderTxnId(order.providerTxnId)}</td>
       <td>
-        <StatusPill order={order} />
+        <StatusPill status={order.status} />
       </td>
       <td className="admin-topup-time-cell">
         <p>
@@ -691,29 +658,22 @@ function OrderDialog({
               </span>
             </DetailRow>
             <DetailRow label="Trạng thái thanh toán">
-              <StatusPill order={order} />
+              <StatusPill status={order.status} />
             </DetailRow>
             <DetailRow label="Thời gian tạo đơn">{formatDateTime(order.createdAt)}</DetailRow>
             {order.paidAt ? (
               <DetailRow label="Thời gian thanh toán">{formatDateTime(order.paidAt)}</DetailRow>
             ) : null}
-            {order.needsReconcile || order.reviewedAt ? (
-              <DetailRow label="Trạng thái đối soát">
-                {order.needsReconcile ? (
-                  <span className="font-semibold text-error">Cần đối soát</span>
-                ) : (
-                  <>
-                    <p className="font-semibold text-success">Đã xử lý đối soát</p>
-                    {order.reviewedAt ? <p>{formatDateTime(order.reviewedAt)}</p> : null}
-                    {order.reviewedByName ? (
-                      <p className="text-xs text-text-muted">Bởi {order.reviewedByName}</p>
-                    ) : null}
-                  </>
-                )}
+            {order.reviewedAt ? (
+              <DetailRow label="Thông tin xử lý">
+                <p>{formatDateTime(order.reviewedAt)}</p>
+                {order.reviewedByName ? (
+                  <p className="text-xs text-text-muted">Bởi {order.reviewedByName}</p>
+                ) : null}
               </DetailRow>
             ) : null}
             {order.reviewNote ? (
-              <DetailRow label="Ghi chú đối soát">{order.reviewNote}</DetailRow>
+              <DetailRow label="Ghi chú">{order.reviewNote}</DetailRow>
             ) : null}
           </dl>
 

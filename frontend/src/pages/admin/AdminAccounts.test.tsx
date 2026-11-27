@@ -113,6 +113,10 @@ describe('AdminAccounts', () => {
     expect(within(rowOf('Lan An')).getByRole('button', { name: 'Khóa' })).toBeTruthy();
     expect(within(rowOf('Bình Trần')).getByRole('button', { name: 'Mở khóa' })).toBeTruthy();
     expect(within(rowOf('Quản trị Minh')).queryByRole('button', { name: /khóa/i })).toBeNull();
+    const adminActionCell = within(rowOf('Quản trị Minh'))
+      .getByRole('button', { name: 'Xem chi tiết' })
+      .closest('td')!;
+    expect(within(adminActionCell).queryByText('—')).toBeNull();
     expect(within(rowOf('Chi Bị Cấm')).queryByRole('button', { name: /khóa/i })).toBeNull();
   });
 
@@ -223,12 +227,11 @@ describe('AdminAccounts', () => {
     await screen.findByText('Lan An');
     expect(screen.getByText('Tổng tài khoản').parentElement?.textContent).toContain('4');
     expect(
-      screen.getByText('Đang hoạt động', { selector: '.admin-accounts-stat p' }).parentElement
+      screen.getByText('Đang hoạt động', { selector: '.admin-dash-label' }).parentElement
         ?.textContent,
     ).toContain('2');
     expect(
-      screen.getByText('Đã khóa', { selector: '.admin-accounts-stat p' }).parentElement
-        ?.textContent,
+      screen.getByText('Đã khóa', { selector: '.admin-dash-label' }).parentElement?.textContent,
     ).toContain('1');
     expect(adminUserApi.list).toHaveBeenCalledWith({ page: 0, size: 1 });
     expect(adminUserApi.list).toHaveBeenCalledWith({ status: 'ACTIVE', page: 0, size: 1 });
@@ -254,5 +257,8 @@ describe('AdminAccounts', () => {
     expect(
       within(dialog).getByRole('link', { name: 'Xem lịch sử Credit' }).getAttribute('href'),
     ).toBe('/admin/finance/users/1');
+    expect(
+      within(dialog).getByRole('link', { name: 'Xem hồ sơ người dùng' }).getAttribute('href'),
+    ).toBe('/admin/users/1/profile');
   });
 });

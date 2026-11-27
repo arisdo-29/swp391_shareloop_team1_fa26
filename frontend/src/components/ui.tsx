@@ -42,10 +42,18 @@ import { Scroll } from '@phosphor-icons/react/dist/csr/Scroll';
 import { Warning } from '@phosphor-icons/react/dist/csr/Warning';
 import { CaretLeft } from '@phosphor-icons/react/dist/csr/CaretLeft';
 import { CaretRight } from '@phosphor-icons/react/dist/csr/CaretRight';
+import { CalendarCheck } from '@phosphor-icons/react/dist/csr/CalendarCheck';
 import { Trash } from '@phosphor-icons/react/dist/csr/Trash';
 import { RocketLaunch } from '@phosphor-icons/react/dist/csr/RocketLaunch';
 import { HourglassMedium } from '@phosphor-icons/react/dist/csr/HourglassMedium';
 import { Copy } from '@phosphor-icons/react/dist/csr/Copy';
+import { Money } from '@phosphor-icons/react/dist/csr/Money';
+import { ArrowCircleUp } from '@phosphor-icons/react/dist/csr/ArrowCircleUp';
+import { ArrowCircleDown } from '@phosphor-icons/react/dist/csr/ArrowCircleDown';
+import { CheckCircle } from '@phosphor-icons/react/dist/csr/CheckCircle';
+import { Scales } from '@phosphor-icons/react/dist/csr/Scales';
+import { ArrowUp } from '@phosphor-icons/react/dist/csr/ArrowUp';
+import { ArrowDown } from '@phosphor-icons/react/dist/csr/ArrowDown';
 import { Link } from 'react-router-dom';
 import type {
   Item,
@@ -96,12 +104,22 @@ const iconMap = {
   alert: Warning,
   caretLeft: CaretLeft,
   caretRight: CaretRight,
+  calendarCheck: CalendarCheck,
   // Nút xoá (ẩn) thông báo.
   trash: Trash,
   // Thông báo đẩy bài (BOOST_*) và nhắc bài sắp hết hạn (ITEM_EXPIRING_*).
   boost: RocketLaunch,
   expiring: HourglassMedium,
   copy: Copy,
+  // Thẻ số liệu ở trang Tổng quan Admin.
+  money: Money,
+  creditIn: ArrowCircleUp,
+  creditOut: ArrowCircleDown,
+  completed: CheckCircle,
+  reconcile: Scales,
+  // Nút chỉ có icon để đổi thứ tự (luôn kèm aria-label và tooltip).
+  arrowUp: ArrowUp,
+  arrowDown: ArrowDown,
 } as const;
 
 export type IconName = keyof typeof iconMap;
@@ -517,12 +535,16 @@ function lastEnabledOption(options: SelectOption[]): number {
   }
   return 0;
 }
-export function SearchField(props: InputHTMLAttributes<HTMLInputElement>) {
+export function SearchField({
+  showIcon = false,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & { showIcon?: boolean }) {
   // Ô tìm kiếm không có viền riêng; wrapper đổi sang một viền xanh khi focus.
   return (
     <div className="flex min-h-11 items-center rounded-md border border-border bg-white px-1 transition hover:border-text-muted focus-within:border-primary">
+      {showIcon ? <Icon name="lookup" className="ml-2 size-4 shrink-0 text-text-muted" /> : null}
       <input
-        className="w-full border-0 bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-text-muted"
+        className="w-full min-w-0 border-0 bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-text-muted"
         {...props}
       />
     </div>
@@ -755,6 +777,7 @@ export function ProductCard({
   item,
   tradeFor,
   from,
+  detailPath,
   imageLabel,
   footer,
   showReferencePrice,
@@ -762,6 +785,7 @@ export function ProductCard({
   item: Item;
   tradeFor?: string;
   from?: 'ai';
+  detailPath?: string;
   imageLabel?: string;
   footer?: ReactNode;
   showReferencePrice?: boolean;
@@ -770,7 +794,7 @@ export function ProductCard({
 
   return (
     <Link
-      to={`/items/${item.id}${from === 'ai' ? '?from=ai' : ''}`}
+      to={detailPath ?? `/items/${item.id}${from === 'ai' ? '?from=ai' : ''}`}
       className="group flex h-full min-w-0 cursor-pointer flex-col overflow-hidden rounded-[16px] border border-[#E5E7EB] bg-white shadow-[0_4px_14px_rgba(15,23,42,0.10)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_12px_28px_rgba(15,23,42,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-hover focus-visible:ring-offset-2"
     >
       <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden rounded-t-[15px] bg-[#F3F4F6] xl:min-h-[200px]">
