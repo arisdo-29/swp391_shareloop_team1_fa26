@@ -952,6 +952,9 @@ public class ItemService {
                         + ", bạn nhớ gia hạn nếu muốn giữ bài."
                 : "Bài «" + item.getTitle() + "» đã được mở lại và được cộng bù thời gian đã nằm trong giao dịch. "
                         + "Hạn hiển thị mới là " + expireText + ".";
+        if (item.isHiddenByAdmin()) {
+            body = "Bài «" + item.getTitle() + "» vẫn đang ẩn. Hạn hiển thị đã được cập nhật đến " + expireText + ".";
+        }
         notificationService.notify(
                 item.getDonorId(),
                 "ITEM_DISPLAY_EXTENDED",

@@ -15,7 +15,7 @@ import {
   BEFORE_MEETING_REASONS,
   cancelRequestConsequence,
   handoverFailedConsequence,
-  REFUSE_HANDOVER_CONSEQUENCE,
+  refuseHandoverConsequence,
   REFUSE_HANDOVER_REASON_LABEL,
 } from '../../utils/handoverOutcome';
 
@@ -413,6 +413,7 @@ export function RefuseHandoverDialog({
   currentUserId,
   itemTitle,
   partnerName,
+  viewerIsDonor,
   onClose,
   onDone,
   onStale,
@@ -451,7 +452,9 @@ export function RefuseHandoverDialog({
         Báo cáo vi phạm
       </h2>
       <p className="mt-1 text-sm text-text-muted">{itemTitle}</p>
-      <p className="mt-3 text-sm leading-6 text-text-secondary">{REFUSE_HANDOVER_CONSEQUENCE}</p>
+      <p className="mt-3 text-sm leading-6 text-text-secondary">
+        {refuseHandoverConsequence(request, viewerIsDonor)}
+      </p>
       <dl className="mt-4 text-sm">
         <dt className="font-semibold">Lý do</dt>
         <dd className="mt-1 text-text-secondary">{REFUSE_HANDOVER_REASON_LABEL}</dd>

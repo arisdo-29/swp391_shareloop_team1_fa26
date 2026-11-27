@@ -7,7 +7,7 @@ import { requestApi, type RequestResponse } from '../../services/requestApi';
 import type { ApiError } from '../../services/http';
 import { canConfirmHandover, canRefuseHandover, formatDateTime, formatDeadline } from '../../utils/request';
 import { usePublicConfig } from '../../utils/usePublicConfig';
-import { cancelRequestConsequence, REFUSE_HANDOVER_CONSEQUENCE } from '../../utils/handoverOutcome';
+import { cancelRequestConsequence, refuseHandoverConsequence } from '../../utils/handoverOutcome';
 import {
   anyLegShipped,
   shippingFailedConsequence,
@@ -265,7 +265,9 @@ function LegBlock({
               <Button variant="warning" disabled={submitting} onClick={onOpenRefuse}>
                 Từ chối giao nhận
               </Button>
-              <p className="text-xs leading-5 text-text-secondary">{REFUSE_HANDOVER_CONSEQUENCE}</p>
+              <p className="text-xs leading-5 text-text-secondary">
+                {refuseHandoverConsequence(request, viewerIsDonor)}
+              </p>
             </li>
           ) : null}
         </ul>

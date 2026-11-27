@@ -111,6 +111,17 @@ describe('ShipmentCard Cho tặng', () => {
 });
 
 describe('ShipmentCard Trao đổi', () => {
+  it('cho biết món của mình đã gửi sẽ được giữ ẩn nếu từ chối món nhận', () => {
+    renderCard({
+      ...swapBase,
+      status: 'AWAITING_HANDOVER',
+      donorShippedAt: hoursFromNow(-3),
+      receiverShippedAt: hoursFromNow(-2),
+    }, true);
+
+    expect(screen.getByText(/Món bạn đã gửi được giữ ẩn/i)).toBeTruthy();
+  });
+
   it('hiện hạn xác nhận đã nhận từ máy chủ theo từng chiều', () => {
     const leg1AutoReceiveAt = hoursFromNow(30);
     const leg2AutoReceiveAt = hoursFromNow(54);
