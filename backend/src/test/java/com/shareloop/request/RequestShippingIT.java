@@ -255,6 +255,56 @@ class RequestShippingIT extends IntegrationTest {
                 .isTrue();
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void dismissMissingShipmentReport_whenOneLegNotReceived_resumesWithoutCompleting(boolean swap) throws Exception {
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId, swap ? "SWAP" : "GIVE");
+        long requestId;
+        if (swap) {
+            long offeredId = insertItem(receiverId, "SWAP");
+            requestId = createSwapRequest(itemId, offeredId, donorId, receiverId);
+            propose(requestId, receiverId, "12 Lê Lợi");
+            mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
+                            .header("Authorization", token(donorId))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"agreeToWaiver\":true,\"shippingAddress\":\"34 Trần Phú\"}"))
+                    .andExpect(status().isOk());
+            ship(requestId, receiverId, "VTP2222");
+            mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
+                            .header("Authorization", token(donorId)))
+                    .andExpect(status().isOk());
+        } else {
+            requestId = createGiveShippingRequest(itemId, donorId, receiverId);
+        }
+        ship(requestId, donorId, "GHN1111");
+        mockMvc.perform(post("/api/v1/requests/{id}/handover-failed", requestId)
+                        .header("Authorization", token(receiverId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"OTHER\",\"reason\":\"Tôi chưa nhận được kiện hàng\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DISPUTED"));
+        long reportId = jdbc.queryForObject("SELECT id FROM reports WHERE request_id = ?", Long.class, requestId);
+        jdbc.update("UPDATE reports SET response_due_at = now() - interval '1 hour' WHERE id = ?", reportId);
+        long adminId = insertUser("Admin");
+
+        mockMvc.perform(post("/api/v1/admin/reports/{id}/conclude", reportId)
+                        .header("Authorization", "Bearer " + jwtService.issue(adminId, true))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"DISMISS\"}"))
+                .andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT status FROM requests WHERE id = ?", String.class, requestId))
+                .isEqualTo("AWAITING_HANDOVER");
+        assertThat(jdbc.queryForObject("SELECT status FROM items WHERE id = ?", String.class, itemId))
+                .isEqualTo("RESERVED");
+
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
+                        .header("Authorization", token(receiverId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+    }
+
     @Test
     void shippingReminderIncludesDeadlineHourInVietnam() throws Exception {
         long donorId = insertUser("Donor");

@@ -2197,7 +2197,8 @@ public class RequestService {
      *
      * <p>Chấp nhận: CANCELLED, bắt buộc có cách xử lý cho từng món (Mở lại, Ẩn, Đã đổi chủ) áp cùng một luật cho chủ bài
      * và người nhận (GN-14). Bác bỏ: COMPLETED như một lần hoàn tất bình thường (các món sang TRADED, cộng điểm tích
-     * luỹ), không cần chọn. Cả hai bên đều được thông báo kết quả.
+     * luỹ), không cần chọn. Với Giao hàng còn chiều chưa nhận, bác bỏ chỉ cho giao dịch tiếp tục. Cả hai bên đều
+     * được thông báo kết quả.
      *
      * @param requestId giao dịch của khiếu nại
      * @param upheld true nếu Admin chấp nhận khiếu nại, false nếu bác bỏ
@@ -2217,6 +2218,14 @@ public class RequestService {
         String message;
         if (upheld) {
             message = cancelUpheldDispute(request, adminId, itemOutcomes);
+        } else if (request.isShipping() && !request.isAllLegsReceived()) {
+            request.resumeAfterRejectedShippingDispute(Instant.now());
+            requestRepository.save(request);
+            notifyBothParties(
+                    request,
+                    "TRANSACTION_RESUMED",
+                    "Admin đã bác khiếu nại. Giao dịch tiếp tục vì vẫn còn chiều giao hàng chưa được ghi nhận đã nhận.");
+            return true;
         } else if (isCancelDisputeWithoutAccusation(request)) {
             // Đề nghị huỷ không tố ai mà Admin bác: giao dịch tiếp tục, không coi là đã giao nhận xong (GN-06)
             request.resumeAfterRejectedCancel(Instant.now());
