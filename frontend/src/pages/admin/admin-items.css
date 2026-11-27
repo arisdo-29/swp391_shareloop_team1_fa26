@@ -1,6 +1,12 @@
 .admin-items-page {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
+}
+
+.admin-items-page > :not(.admin-items-table-section),
+.admin-items-table-section > nav {
+  flex-shrink: 0;
 }
 
 .admin-items-header > div {
@@ -78,6 +84,9 @@
 }
 
 .admin-items-table-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   min-width: 0;
 }
 
@@ -87,6 +96,7 @@
   border-radius: 8px;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   box-shadow: none;
 }
 
@@ -323,5 +333,12 @@
 
   .admin-items-table {
     min-width: 1000px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .admin-items-page {
+    /* Trừ thanh điều hướng và khoảng đệm trang, chừa đủ chỗ cho bảng trên màn hình thấp. */
+    max-height: max(45rem, calc(100dvh - 7.5rem));
   }
 }

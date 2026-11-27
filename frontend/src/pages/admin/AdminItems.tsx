@@ -344,7 +344,13 @@ export function AdminItems() {
         <SkeletonRows label="Đang tải danh sách bài đăng" />
       ) : result ? (
         <div className="admin-items-table-section">
-          <div className="table-wrap admin-items-table-wrap">
+          <div
+            key={result.page}
+            role="region"
+            aria-label="Danh sách bài đăng"
+            tabIndex={0}
+            className="table-wrap admin-items-table-wrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          >
             <table className="data-table admin-items-table">
               <thead>
                 <tr>
