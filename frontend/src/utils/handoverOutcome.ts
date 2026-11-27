@@ -16,7 +16,13 @@ export const BEFORE_MEETING_REASONS: CancelReasonOption[] = [
 
 // Lý do "Giao nhận không thành công" từ giờ hẹn trở đi. "Không đến điểm hẹn" chỉ có ở Gặp trực tiếp, "chưa gửi hàng"
 // chỉ có ở Giao hàng.
-export function afterMeetingReasons(isShipping: boolean): CancelReasonOption[] {
+export function afterMeetingReasons(isShipping: boolean, incomingShipped = false): CancelReasonOption[] {
+  if (isShipping && incomingShipped) {
+    return [
+      { code: 'OTHER', label: 'Chưa nhận được hàng' },
+      { code: 'CANNOT_CONTACT', label: 'Không liên hệ được với bên kia' },
+    ];
+  }
   return [
     isShipping
       ? { code: 'COUNTERPART_NOT_SHIPPED', label: 'Bên kia chưa gửi hàng' }
