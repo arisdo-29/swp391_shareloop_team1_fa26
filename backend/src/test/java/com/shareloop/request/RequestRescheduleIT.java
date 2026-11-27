@@ -117,6 +117,48 @@ class RequestRescheduleIT extends IntegrationTest {
     }
 
     @Test
+    void reschedule_whenReplyDeadlinePassed_keepsOriginalSchedule() throws Exception {
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long requestId = createConfirmedRequest(insertItem(donorId), donorId, receiverId);
+        proposeLaterMeeting(requestId, donorId);
+        jdbc.update("UPDATE requests SET reschedule_proposed_at = now() - interval '25 hours' WHERE id = ?", requestId);
+
+        assertRescheduleUnavailable(requestId, receiverId);
+    }
+
+    @Test
+    void reschedule_whenProposedTimePassed_keepsOriginalSchedule() throws Exception {
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long requestId = createConfirmedRequest(insertItem(donorId), donorId, receiverId);
+        proposeLaterMeeting(requestId, donorId);
+        jdbc.update("UPDATE requests SET reschedule_meeting_time = now() - interval '1 hour' WHERE id = ?", requestId);
+
+        assertRescheduleUnavailable(requestId, receiverId);
+    }
+
+    private void proposeLaterMeeting(long requestId, long donorId) throws Exception {
+        Instant newTime = Instant.now().plus(3, ChronoUnit.DAYS);
+        mockMvc.perform(post("/api/v1/requests/{id}/reschedule", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"meetingTime\":\"" + newTime + "\",\"meetingPlace\":\"Thư viện\"}"))
+                .andExpect(status().isOk());
+    }
+
+    private void assertRescheduleUnavailable(long requestId, long receiverId) throws Exception {
+        mockMvc.perform(post("/api/v1/requests/{id}/reschedule/accept", requestId)
+                        .header("Authorization", token(receiverId)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REQUEST_RESCHEDULE_EXPIRED"));
+        assertThat(jdbc.queryForObject("SELECT meeting_place FROM requests WHERE id = ?", String.class, requestId))
+                .isEqualTo("FPT Park");
+        assertThat(jdbc.queryForObject("SELECT reschedule_count FROM requests WHERE id = ?", Integer.class, requestId))
+                .isZero();
+    }
+
+    @Test
     void expireReschedules_whenResponseHoursPassed_keepsOldSchedule() throws Exception {
         // given
         long donorId = insertUser("Donor");

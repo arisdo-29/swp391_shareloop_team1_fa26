@@ -52,6 +52,7 @@ public enum RequestErrorCode implements ErrorCode {
             HttpStatus.CONFLICT, "Chỉ dời lịch được trước giờ hẹn và khi chưa bên nào bấm hoàn tất hoặc gửi hàng."),
     REQUEST_RESCHEDULE_PENDING(HttpStatus.CONFLICT, "Đã có một đề nghị dời lịch đang chờ phản hồi."),
     REQUEST_RESCHEDULE_NOT_FOUND(HttpStatus.CONFLICT, "Không có đề nghị dời lịch nào đang chờ phản hồi."),
+    REQUEST_RESCHEDULE_EXPIRED(HttpStatus.CONFLICT, "Đề nghị dời lịch đã hết hạn. Lịch cũ được giữ nguyên."),
     REQUEST_SHIPPING_ADDRESS_REQUIRED(
             HttpStatus.BAD_REQUEST, "Cần đủ địa chỉ nhận hàng của các bên trước khi chốt lịch giao hàng."),
     REQUEST_LEG_NOT_SHIPPED(HttpStatus.CONFLICT, "Bên kia chưa gửi hàng nên chưa thể xác nhận đã nhận."),
