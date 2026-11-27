@@ -99,6 +99,7 @@ class RequestShippingTest {
         lenient().when(itemQueryService.getSummary(ITEM_ID)).thenReturn(new ItemSummary(ITEM_ID, DONOR_ID, null, null));
         lenient().when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(configService.getInt(ConfigKey.MEETING_MAX_DAYS_AHEAD)).thenReturn(7);
+        lenient().when(configService.getInt(ConfigKey.CHAT_OPEN_DAYS)).thenReturn(10);
         lenient()
                 .when(configService.getInt(ConfigKey.SHIPPING_SEND_DEADLINE_DAYS))
                 .thenReturn(3);

@@ -284,6 +284,8 @@ Xem chi tiết thông tin của một yêu cầu giao dịch (F10, UC-26).
 
 ## 8. POST /api/v1/requests/{id}/confirm-logistics
 
+Máy chủ chỉ ghi nhận xác nhận khi thời điểm hẹn hoặc gửi dự kiến còn ở tương lai (`400 REQUEST_SCHEDULE_PAST_TIME`) và giao dịch còn thời gian chốt lịch (`409 REQUEST_SCHEDULE_WINDOW_EXPIRED`). Hạn chốt tính từ lúc chọn người nhận theo `chat_open_days`.
+
 Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (GN-02, GN-03, UC-26).
 
 - **Xác thực:** Bắt buộc JWT (chủ bài đăng hoặc người nhận).

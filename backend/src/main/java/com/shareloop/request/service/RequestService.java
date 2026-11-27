@@ -2713,7 +2713,17 @@ public class RequestService {
         boolean agreeToWaiver = requestDto != null && Boolean.TRUE.equals(requestDto.agreeToWaiver());
 
         String shippingAddress = requestDto == null ? null : requestDto.shippingAddress();
-        request.confirmLogistics(isDonor, agreeToWaiver, Instant.now(), shippingAddress);
+        Instant now = Instant.now();
+        if (request.getStatus() == RequestStatus.AWAITING_LOGISTICS && request.getMeetingTime() != null) {
+            Instant deadline = deadlineCalculator.autoCancelAt(request);
+            if (deadline != null && !deadline.isAfter(now)) {
+                throw new BusinessException(RequestErrorCode.REQUEST_SCHEDULE_WINDOW_EXPIRED);
+            }
+            if (!request.getMeetingTime().isAfter(now)) {
+                throw new BusinessException(RequestErrorCode.REQUEST_SCHEDULE_PAST_TIME);
+            }
+        }
+        request.confirmLogistics(isDonor, agreeToWaiver, now, shippingAddress);
         Request saved = requestRepository.save(request);
 
         // Nếu cả hai đã xác nhận và sang LOGISTICS_CONFIRMED, thông báo cho bên còn lại

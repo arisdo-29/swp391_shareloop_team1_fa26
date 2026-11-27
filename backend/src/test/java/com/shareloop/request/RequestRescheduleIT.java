@@ -1,6 +1,7 @@
 package com.shareloop.request;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -16,6 +17,8 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
@@ -114,6 +117,51 @@ class RequestRescheduleIT extends IntegrationTest {
         // then
         assertThat(jdbc.queryForObject("SELECT reschedule_count FROM requests WHERE id = ?", Integer.class, requestId))
                 .isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"IN_PERSON, false", "IN_PERSON, true", "SHIPPING, false", "SHIPPING, true"})
+    void confirmLogistics_afterEitherDeadline_rejectsBeforeBackgroundJobRuns(
+            String deliveryMethod, boolean reservationExpired) throws Exception {
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long requestId = createReservedRequest(insertItem(donorId), donorId, receiverId);
+        Instant now = Instant.now();
+        mockMvc.perform(post("/api/v1/requests/{id}/schedule", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ScheduleRequest(
+                                deliveryMethod, "Cổng trường", now.plus(1, ChronoUnit.DAYS), true))))
+                .andExpect(status().isOk());
+        if (reservationExpired) {
+            jdbc.update("UPDATE requests SET reserved_at = now() - interval '40 days' WHERE id = ?", requestId);
+        } else {
+            jdbc.update("UPDATE requests SET meeting_time = now() - interval '1 hour' WHERE id = ?", requestId);
+        }
+
+        MvcResult response = mockMvc.perform(
+                        get("/api/v1/requests/{id}", requestId).header("Authorization", token(receiverId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("AWAITING_LOGISTICS"))
+                .andReturn();
+        String elapsedField = reservationExpired ? "autoCancelAt" : "meetingTime";
+        String elapsedAt = objectMapper
+                .readTree(response.getResponse().getContentAsString())
+                .get(elapsedField)
+                .asText();
+        assertThat(Instant.parse(elapsedAt)).isBefore(now);
+
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
+                        .header("Authorization", token(receiverId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"agreeToWaiver\":true,\"shippingAddress\":\"12 Lê Lợi\"}"))
+                .andExpect(reservationExpired ? status().isConflict() : status().isBadRequest())
+                .andExpect(jsonPath("$.code")
+                        .value(reservationExpired ? "REQUEST_SCHEDULE_WINDOW_EXPIRED" : "REQUEST_SCHEDULE_PAST_TIME"));
+        assertThat(statusOf(requestId)).isEqualTo("AWAITING_LOGISTICS");
+        assertThat(jdbc.queryForObject(
+                        "SELECT contact_revealed_at IS NULL FROM requests WHERE id = ?", Boolean.class, requestId))
+                .isTrue();
     }
 
     @Test
