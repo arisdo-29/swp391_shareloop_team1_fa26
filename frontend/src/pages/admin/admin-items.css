@@ -293,6 +293,8 @@ table.admin-items-table {
 }
 
 .admin-items-action-wrap {
+  /* Giữ mô tả ẩn của nút trong ô, để nó không kéo dài vùng cuộn của cả trang. */
+  position: relative;
   display: inline-flex;
 }
 
