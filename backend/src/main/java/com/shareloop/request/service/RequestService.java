@@ -1150,8 +1150,8 @@ public class RequestService {
         notificationService.notify(
                 receiverOfLeg,
                 "SHIPMENT_SENT",
-                "Hàng đã được gửi",
-                "Hàng đã được gửi, mã vận đơn " + trackingCode
+                "Người gửi báo đã gửi hàng",
+                "Người gửi báo đã gửi hàng và cung cấp mã vận đơn " + trackingCode
                         + ". Khi nhận được hàng, hãy bấm Tôi đã nhận được hàng. Nếu bạn không phản hồi, hệ thống sẽ tự"
                         + " ghi nhận bạn đã nhận lúc "
                         + VietnamTime.format(deadlineCalculator.legAutoReceiveAt(saved, isDonor ? 1 : 2))
@@ -1162,7 +1162,8 @@ public class RequestService {
                     cancelRequester,
                     "CANCEL_REQUEST_WITHDRAWN",
                     "Đề nghị huỷ đã được rút",
-                    nameOrDefault(currentUserId) + " đã gửi hàng nên đề nghị huỷ của bạn tự rút. Giao dịch tiếp tục.",
+                    nameOrDefault(currentUserId)
+                            + " đã báo gửi hàng nên đề nghị huỷ của bạn tự rút. Giao dịch tiếp tục.",
                     link);
         }
         return toResponse(saved, currentUserId);
