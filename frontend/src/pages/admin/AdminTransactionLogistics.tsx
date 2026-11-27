@@ -134,6 +134,13 @@ export function AdminTransactionLogistics({ detail }: { detail: AdminRequestDeta
   const donorSchedule = findEvent(timeline, 'Chủ bài đồng ý lịch hẹn');
   const receiverSchedule = findEvent(timeline, 'Người nhận đồng ý lịch hẹn');
   const isScheduling = detail.status === 'RESERVED' || detail.status === 'AWAITING_LOGISTICS';
+  const wasRescheduled = (detail.reschedule?.count ?? 0) > 0;
+  const confirmationLabel = wasRescheduled ? 'xác nhận lịch ban đầu' : 'xác nhận lịch';
+  const meetingTimeLabel = isShipping
+    ? 'Ngày gửi hàng dự kiến'
+    : isScheduling
+      ? 'Giờ hẹn đề xuất'
+      : 'Giờ hẹn';
   return (
     <>
       <Section icon="calendarCheck" title={isShipping ? 'Lịch gửi hàng' : 'Lịch giao nhận'}>
@@ -141,18 +148,15 @@ export function AdminTransactionLogistics({ detail }: { detail: AdminRequestDeta
           <Row label="Hình thức giao nhận">
             {detail.deliveryMethod ? deliveryMethodLabels[detail.deliveryMethod] : 'Chưa chọn'}
           </Row>
-          <Row
-            label={
-              isShipping ? 'Ngày gửi hàng dự kiến' : isScheduling ? 'Giờ hẹn đề xuất' : 'Giờ hẹn'
-            }
-          >
+          <Row label={wasRescheduled ? `${meetingTimeLabel} hiện tại` : meetingTimeLabel}>
             {at(detail.meetingTime)}
           </Row>
           {!isShipping ? <Row label="Địa điểm hẹn">{text(detail.meetingPlace)}</Row> : null}
-          <Row label="Chủ bài xác nhận lịch">
+          {wasRescheduled ? <Row label="Thời điểm đồng ý dời lịch gần nhất">{MISSING}</Row> : null}
+          <Row label={`Chủ bài ${confirmationLabel}`}>
             <Confirmation event={donorSchedule} doneLabel="Đã đồng ý" showPending={isScheduling} />
           </Row>
-          <Row label="Người nhận xác nhận lịch">
+          <Row label={`Người nhận ${confirmationLabel}`}>
             <Confirmation
               event={receiverSchedule}
               doneLabel="Đã đồng ý"
