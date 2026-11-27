@@ -185,7 +185,7 @@ class RequestJobServiceTest {
 
             when(requestRepository.findSilentReservedRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(request), List.of());
-            when(requestRepository.findById(201L)).thenReturn(Optional.of(request));
+            when(requestRepository.findByIdForUpdate(201L)).thenReturn(Optional.of(request));
             when(itemQueryService.getSummary(1L)).thenReturn(new ItemSummary(1L, 20L, null, null));
 
             int cancelledCount = requestJobService.expireSilentReservedRequests(now);
@@ -216,8 +216,8 @@ class RequestJobServiceTest {
 
             when(requestRepository.findSilentReservedRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(r1), List.of(r2), List.of());
-            when(requestRepository.findById(201L)).thenReturn(Optional.of(r1));
-            when(requestRepository.findById(202L)).thenReturn(Optional.of(r2));
+            when(requestRepository.findByIdForUpdate(201L)).thenReturn(Optional.of(r1));
+            when(requestRepository.findByIdForUpdate(202L)).thenReturn(Optional.of(r2));
             when(itemQueryService.getSummary(anyLong())).thenReturn(new ItemSummary(1L, 99L, null, null));
 
             int cancelledCount = requestJobService.expireSilentReservedRequests(now);
@@ -240,7 +240,7 @@ class RequestJobServiceTest {
 
             when(requestRepository.findSilentReservedRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(request), List.of());
-            when(requestRepository.findById(202L)).thenReturn(Optional.of(request));
+            when(requestRepository.findByIdForUpdate(202L)).thenReturn(Optional.of(request));
             when(itemQueryService.getSummary(1L)).thenReturn(new ItemSummary(1L, 20L, null, null));
 
             int cancelledCount = requestJobService.expireSilentReservedRequests(now);
@@ -261,7 +261,7 @@ class RequestJobServiceTest {
             request.select(cutoff.minus(1, ChronoUnit.HOURS));
             when(requestRepository.findSilentReservedRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(request), List.of());
-            when(requestRepository.findById(203L)).thenReturn(Optional.of(request));
+            when(requestRepository.findByIdForUpdate(203L)).thenReturn(Optional.of(request));
             when(itemQueryService.getSummary(1L)).thenReturn(new ItemSummary(1L, 20L, null, null));
 
             // when

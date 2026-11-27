@@ -643,9 +643,7 @@ public class RequestService {
     /** Người gửi yêu cầu thay món đem đổi trước khi hai bên chốt lịch. */
     @Transactional
     public RequestResponse changeOfferedItem(long requestId, long currentUserId, long offeredItemId) {
-        Request request = requestRepository
-                .findById(requestId)
-                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+        Request request = loadRequestForUpdate(requestId);
         if (request.getReceiverId() != currentUserId) {
             throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
         }
@@ -692,9 +690,7 @@ public class RequestService {
      */
     @Transactional
     public RequestResponse acceptOfferedItemInChat(long requestId, long donorId, long offeredItemId) {
-        Request request = requestRepository
-                .findById(requestId)
-                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+        Request request = loadRequestForUpdate(requestId);
         ItemSnapshot item = findItemSnapshot(request.getItemId())
                 .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
         if (item.donorId() != donorId) {
@@ -3072,13 +3068,17 @@ public class RequestService {
      */
     @Transactional(readOnly = true)
     public RequestChatContext getChatContext(long requestId) {
-        Request request = requestRepository
-                .findById(requestId)
-                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+        return chatContextOf(loadRequest(requestId));
+    }
 
-        ItemSnapshot item = findItemSnapshot(request.getItemId())
-                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+    /** Các thao tác với đề nghị đổi món giữ khóa giao dịch trước khi khóa hoặc cập nhật tin nhắn. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public RequestChatContext getChatContextForUpdate(long requestId) {
+        return chatContextOf(loadRequestForUpdate(requestId));
+    }
 
+    private RequestChatContext chatContextOf(Request request) {
+        ItemSnapshot item = loadItemSnapshot(request);
         return new RequestChatContext(
                 request.getId(),
                 request.getStatus(),
