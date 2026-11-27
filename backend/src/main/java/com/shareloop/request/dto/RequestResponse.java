@@ -74,7 +74,8 @@ public record RequestResponse(
         @JsonUnwrapped ShippingInfo shipping,
         @JsonUnwrapped RequestDeadlines deadlines,
         Long offeredItemReferencePrice,
-        Long offeredItemAreaId) {
+        Long offeredItemAreaId,
+        Long scheduleRevision) {
 
     // Thay nhóm null bằng nhóm rỗng để JSON luôn có đủ tên trường (giá trị null) và code gọi không phải kiểm null.
     public RequestResponse {
@@ -145,7 +146,8 @@ public record RequestResponse(
                 newShipping,
                 newDeadlines,
                 offeredItemReferencePrice,
-                offeredItemAreaId);
+                offeredItemAreaId,
+                scheduleRevision);
     }
 
     // Dạng 39 tham số (chưa có bốn nhóm trường mới) để code và test đang gọi vẫn compile.
@@ -229,6 +231,7 @@ public record RequestResponse(
                 disputes,
                 refusalReport,
                 flags,
+                null,
                 null,
                 null,
                 null,
@@ -447,7 +450,8 @@ public record RequestResponse(
                 shipping,
                 deadlines,
                 offeredItemReferencePrice,
-                offeredItemAreaId);
+                offeredItemAreaId,
+                scheduleRevision);
     }
 
     /** Gắn danh sách khiếu nại theo vai của người xem (D-04); các trường khác giữ nguyên. */
@@ -505,7 +509,8 @@ public record RequestResponse(
                 shipping,
                 deadlines,
                 offeredItemReferencePrice,
-                offeredItemAreaId);
+                offeredItemAreaId,
+                scheduleRevision);
     }
 
     /** Gắn cờ cảnh báo; các trường khác giữ nguyên. */
@@ -555,7 +560,8 @@ public record RequestResponse(
                 shipping,
                 deadlines,
                 offeredItemReferencePrice,
-                offeredItemAreaId);
+                offeredItemAreaId,
+                scheduleRevision);
     }
 
     // Dạng 28 tham số (chưa có disputeResponseDueAt) để code và test đang gọi vẫn compile.

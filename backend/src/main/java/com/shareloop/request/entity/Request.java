@@ -53,6 +53,9 @@ public class Request extends BaseEntity {
     @Column(name = "meeting_time")
     private Instant meetingTime;
 
+    @Column(name = "schedule_revision", nullable = false)
+    private long scheduleRevision;
+
     @Column(name = "donor_waiver_at")
     private Instant donorWaiverAt;
 
@@ -246,6 +249,7 @@ public class Request extends BaseEntity {
             throw new BusinessException(RequestErrorCode.REQUEST_OFFER_CHANGE_NOT_ALLOWED);
         }
         this.offeredItemId = newOfferedItemId;
+        invalidateScheduleApprovals();
     }
 
     /** Thay món đề nghị trước khi chốt lịch; hai bên cần xác nhận lại lịch đã đề xuất. */
@@ -260,6 +264,11 @@ public class Request extends BaseEntity {
             throw new BusinessException(RequestErrorCode.REQUEST_OFFERED_ITEM_CHANGE_LOCKED);
         }
         this.offeredItemId = newOfferedItemId;
+        invalidateScheduleApprovals();
+    }
+
+    private void invalidateScheduleApprovals() {
+        this.scheduleRevision++;
         this.donorScheduleOkAt = null;
         this.receiverScheduleOkAt = null;
     }
@@ -303,6 +312,7 @@ public class Request extends BaseEntity {
 
         this.deliveryMethod = deliveryMethod;
         this.meetingTime = meetingTime;
+        this.scheduleRevision++;
         if ("SHIPPING".equals(deliveryMethod)) {
             // GN-12: Giao hàng không có điểm hẹn, mỗi bên tự nhập địa chỉ nhận hàng của mình
             this.meetingPlace = null;
@@ -360,8 +370,11 @@ public class Request extends BaseEntity {
             storeOwnShippingAddress(isDonor, ownShippingAddress);
             requireOwnShippingAddress(isDonor);
             String after = isDonor ? this.donorAddress : this.receiverAddress;
-            if (before != null && !before.equals(after)) {
-                clearScheduleConfirmation(!isDonor);
+            if (after != null && !after.equals(before)) {
+                this.scheduleRevision++;
+                if (before != null) {
+                    clearScheduleConfirmation(!isDonor);
+                }
             }
         }
 
@@ -931,6 +944,10 @@ public class Request extends BaseEntity {
 
     public Instant getMeetingTime() {
         return meetingTime;
+    }
+
+    public long getScheduleRevision() {
+        return scheduleRevision;
     }
 
     public Instant getDonorWaiverAt() {

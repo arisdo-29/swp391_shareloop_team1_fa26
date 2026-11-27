@@ -542,7 +542,7 @@ class RequestCancelRequestIT extends IntegrationTest {
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
                         .header("Authorization", token(receiverId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"agreeToWaiver\":true}"))
+                        .content("{\"scheduleRevision\":1,\"agreeToWaiver\":true}"))
                 .andExpect(status().isOk());
         return requestId;
     }

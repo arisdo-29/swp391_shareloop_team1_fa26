@@ -54,6 +54,7 @@ describe('ScheduleCard waiver', () => {
     status: 'AWAITING_LOGISTICS',
     deliveryMethod: 'IN_PERSON',
     meetingTime: new Date(Date.now() + 86_400_000).toISOString(),
+    scheduleRevision: 1,
     meetingPlace: 'Cổng trường',
     createdAt: '2026-11-17T08:00:00Z',
     donorScheduleOkAt: '2026-11-17T09:00:00Z',
@@ -75,6 +76,36 @@ describe('ScheduleCard waiver', () => {
     return screen.getByRole<HTMLInputElement>('checkbox', { name: /cam kết trách nhiệm/ });
   }
 
+  it('gửi phiên bản của lịch đang xem khi bấm đồng ý', async () => {
+    const request = { ...savedRequest, scheduleRevision: 3 };
+    const confirm = vi.spyOn(requestApi, 'confirmLogistics').mockResolvedValue(request);
+    render(scheduleCard(request));
+
+    fireEvent.click(waiverCheckbox());
+    fireEvent.click(screen.getByRole('button', { name: /^Đồng ý/ }));
+    await waitFor(() =>
+      expect(confirm).toHaveBeenCalledWith(101, 9, expect.objectContaining({ scheduleRevision: 3 })),
+    );
+  });
+
+  it('tải lịch mới và yêu cầu xem lại khi phiên bản đã thay đổi', async () => {
+    const revised = { ...savedRequest, scheduleRevision: 2, meetingPlace: 'Thư viện' };
+    const onUpdated = vi.fn();
+    const confirm = vi.spyOn(requestApi, 'confirmLogistics')
+      .mockRejectedValue({ code: 'REQUEST_SCHEDULE_CHANGED' });
+    const reload = vi.spyOn(requestApi, 'get').mockResolvedValue(revised);
+    render(
+      <ScheduleCard request={savedRequest} currentUserId={9} viewerIsDonor partnerName="Đối tác" onUpdated={onUpdated} />,
+    );
+    fireEvent.click(waiverCheckbox());
+    fireEvent.click(screen.getByRole('button', { name: /^Đồng ý/ }));
+
+    expect(await screen.findByText(/Hãy xem lại thông tin mới trước khi xác nhận/)).toBeTruthy();
+    expect(reload).toHaveBeenCalledWith(101, 9);
+    expect(onUpdated).toHaveBeenCalledWith(revised);
+    expect(confirm).toHaveBeenCalledTimes(1);
+  });
+
   it.each(['IN_PERSON', 'SHIPPING'] as const)(
     'chỉ hiện nút đồng ý cho %s khi lịch đã có nhưng bên này chưa cam kết',
     async (deliveryMethod) => {
@@ -90,7 +121,7 @@ describe('ScheduleCard waiver', () => {
       fireEvent.click(waiverCheckbox());
       expect(confirmButton.disabled).toBe(false);
       fireEvent.click(confirmButton);
-      await waitFor(() => expect(confirm).toHaveBeenCalledWith(101, 9, { agreeToWaiver: true }));
+      await waitFor(() => expect(confirm).toHaveBeenCalledWith(101, 9, { scheduleRevision: 1, agreeToWaiver: true }));
     },
   );
 
@@ -170,6 +201,7 @@ describe('ScheduleCard giao hàng', () => {
     status: 'AWAITING_LOGISTICS',
     deliveryMethod: 'SHIPPING',
     meetingTime: new Date(Date.now() + 86_400_000).toISOString(),
+    scheduleRevision: 1,
     createdAt: '2026-11-17T08:00:00Z',
     donorScheduleOkAt: '2026-11-17T09:00:00Z',
     donorWaiverAt: '2026-11-17T09:00:00Z',
@@ -228,7 +260,7 @@ describe('ScheduleCard giao hàng', () => {
       expect(confirm).toHaveBeenCalledWith(
         101,
         12,
-        { agreeToWaiver: true, shippingAddress: '12 Lê Lợi' },
+        { scheduleRevision: 1, agreeToWaiver: true, shippingAddress: '12 Lê Lợi' },
       ),
     );
     expect(update).not.toHaveBeenCalled();

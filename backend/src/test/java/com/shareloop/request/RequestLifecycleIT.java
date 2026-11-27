@@ -145,13 +145,13 @@ class RequestLifecycleIT extends IntegrationTest {
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", req1Id)
                         .header("Authorization", r1Token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new ConfirmLogisticsRequest(false))))
+                        .content(objectMapper.writeValueAsString(new ConfirmLogisticsRequest(false, null, 1L))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("REQUEST_WAIVER_REQUIRED"));
 
         // 7. Bản ghi cũ có đồng ý lịch nhưng thiếu cam kết của chủ bài.
         jdbc.update("UPDATE requests SET donor_waiver_at = NULL WHERE id = ?", req1Id);
-        ConfirmLogisticsRequest confirmLogistics = new ConfirmLogisticsRequest(true);
+        ConfirmLogisticsRequest confirmLogistics = new ConfirmLogisticsRequest(true, null, 1L);
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", req1Id)
                         .header("Authorization", r1Token)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -254,7 +254,7 @@ class RequestLifecycleIT extends IntegrationTest {
                         .content(objectMapper.writeValueAsString(scheduleReq)))
                 .andExpect(status().isOk());
 
-        ConfirmLogisticsRequest confirmLogistics = new ConfirmLogisticsRequest(true, "12 Lê Lợi");
+        ConfirmLogisticsRequest confirmLogistics = new ConfirmLogisticsRequest(true, "12 Lê Lợi", 1L);
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
                         .header("Authorization", receiverToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -511,7 +511,7 @@ class RequestLifecycleIT extends IntegrationTest {
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", reqId)
                         .header("Authorization", receiverToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new ConfirmLogisticsRequest(true))))
+                        .content(objectMapper.writeValueAsString(new ConfirmLogisticsRequest(true, null, 1L))))
                 .andExpect(status().isOk());
 
         // 8. Đã chốt lịch thì không còn huỷ bằng cancel-transaction -> 409 REQUEST_INVALID_STATE_TRANSITION

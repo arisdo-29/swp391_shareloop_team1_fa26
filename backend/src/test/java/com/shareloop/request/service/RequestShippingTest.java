@@ -192,6 +192,7 @@ class RequestShippingTest {
         assertThat(request.getDonorScheduleOkAt()).isNull();
         assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_LOGISTICS);
         assertThat(request.getReceiverAddress()).isEqualTo("99 Hai Bà Trưng");
+        assertThat(request.getScheduleRevision()).isEqualTo(3);
     }
 
     @Test
@@ -206,7 +207,7 @@ class RequestShippingTest {
 
         // when: chủ bài xác nhận lịch (chưa đủ cam kết của cả hai nên chưa chốt) rồi xem phản hồi
         RequestResponse asDonor =
-                requestService.confirmLogistics(REQUEST_ID, DONOR_ID, new ConfirmLogisticsRequest(true));
+                requestService.confirmLogistics(REQUEST_ID, DONOR_ID, new ConfirmLogisticsRequest(true, null, 1L));
 
         // then: lúc này đã chốt vì cả hai đồng ý, địa chỉ của người nhận hiện cho chủ bài
         assertThat(asDonor.status()).isEqualTo("LOGISTICS_CONFIRMED");

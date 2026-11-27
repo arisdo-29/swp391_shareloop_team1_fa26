@@ -292,12 +292,14 @@ Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (GN-02, GN-03,
 
 ```json
 {
-  "agreeToWaiver": true // Bắt buộc nếu bên gọi chưa cam kết cho lịch đang lưu
+  "agreeToWaiver": true,
+  "scheduleRevision": 2
 }
 ```
 
 - **Hành vi nghiệp vụ:**
   - Ghi nhận bên gọi đã đồng ý lịch hẹn.
+  - Gửi lại `scheduleRevision` đọc từ `RequestResponse` của lịch đang xem. Máy chủ tăng phiên bản khi có đề xuất lịch mới, thay đổi địa chỉ nhận hoặc thay đổi món đem đổi.
   - Cả `IN_PERSON` và `SHIPPING` đều yêu cầu cam kết trách nhiệm (GN-02). Bên chưa có thời điểm cam kết cho lịch đang lưu phải gửi `agreeToWaiver: true`.
   - Khi cả hai bên đều đã đồng ý lịch và cam kết trách nhiệm, Request tự động chuyển sang `LOGISTICS_CONFIRMED` và ghi nhận `contactRevealedAt`.
   - Gửi thông báo `LOGISTICS_CONFIRMED` cho đối phương.
@@ -308,6 +310,7 @@ Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (GN-02, GN-03,
   - `403 REQUEST_FORBIDDEN`: Không phải thành viên tham gia giao dịch.
   - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
   - `409 REQUEST_INVALID_STATE_TRANSITION`: Trạng thái yêu cầu không phải AWAITING_LOGISTICS.
+  - `409 REQUEST_SCHEDULE_CHANGED`: Thiếu phiên bản hoặc lịch đã đổi. Tải lại chi tiết và yêu cầu người dùng xem lịch mới.
 
 ---
 

@@ -126,7 +126,8 @@ public final class RequestMapper {
                 toShippingInfo(request),
                 null,
                 itemInfo.offeredItemReferencePrice(),
-                itemInfo.offeredItemAreaId());
+                itemInfo.offeredItemAreaId(),
+                request.getScheduleRevision());
     }
 
     // Tiến độ giao hàng hai chiều (GN-12). Địa chỉ đầy đủ ở đây, RequestService ẩn địa chỉ của bên kia khi chưa chốt
