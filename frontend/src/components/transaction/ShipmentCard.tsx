@@ -194,7 +194,7 @@ function LegBlock({
         ) : null}
         {leg.shippedAt ? (
           <div>
-            <dt className="label">Đã gửi lúc</dt>
+            <dt className="label">{sends ? 'Bạn báo đã gửi lúc' : 'Người gửi báo đã gửi lúc'}</dt>
             <dd>{formatDateTime(leg.shippedAt)}</dd>
           </div>
         ) : null}
@@ -208,6 +208,12 @@ function LegBlock({
           <div>
             <dt className="label">Hạn xác nhận đã nhận</dt>
             <dd>{formatDeadline(receiveDeadline)}</dd>
+            {!sends && !hasPendingCancel ? (
+              <dd className="text-xs leading-5 text-text-secondary">
+                Nếu bạn không phản hồi trước hạn, hệ thống có thể tự ghi nhận đã nhận hàng. Nếu hàng chưa tới, hãy báo
+                giao nhận không thành công.
+              </dd>
+            ) : null}
           </div>
         ) : null}
         {leg.receivedAt ? (

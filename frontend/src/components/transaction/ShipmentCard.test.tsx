@@ -124,6 +124,9 @@ describe('ShipmentCard Trao đổi', () => {
     }, true);
     const sent = within(screen.getByTestId('shipment-leg-1'));
     const received = within(screen.getByTestId('shipment-leg-2'));
+    expect(sent.getByText('Bạn báo đã gửi lúc')).toBeTruthy();
+    expect(received.getByText('Người gửi báo đã gửi lúc')).toBeTruthy();
+    expect(received.getByText(/Nếu bạn không phản hồi trước hạn/)).toBeTruthy();
     expect(sent.getByText('Hạn xác nhận đã nhận')).toBeTruthy();
     expect(sent.getByText(formatDeadline(leg1AutoReceiveAt))).toBeTruthy();
     expect(received.getByText('Hạn xác nhận đã nhận')).toBeTruthy();
