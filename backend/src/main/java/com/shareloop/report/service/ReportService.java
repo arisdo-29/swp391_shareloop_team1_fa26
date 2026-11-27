@@ -624,9 +624,11 @@ public class ReportService {
             List<Long> evidenceMediaIds,
             CancelNotice notice,
             ReportReason reason) {
-        if (reportRepository.existsByReporterIdAndTargetTypeAndRequestIdAndStatusIn(
-                reporterId, TargetType.REQUEST, requestId, PENDING_STATUSES)) {
-            return;
+        if (reportRepository.existsByReporterIdAndTargetTypeAndRequestId(reporterId, TargetType.REQUEST, requestId)) {
+            if (reportRepository.existsByReporterIdAndTargetTypeAndRequestIdAndStatusIn(
+                    reporterId, TargetType.REQUEST, requestId, PENDING_STATUSES)) {
+                return;
+            }
         }
 
         RequestSnapshot requestSnapshot = findRequest(requestId);
