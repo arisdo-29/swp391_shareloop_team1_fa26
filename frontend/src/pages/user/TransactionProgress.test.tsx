@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Provider } from 'react-redux';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { actions, store } from '../../app/store';
 import { itemApi } from '../../services/itemApi';
 import { mediaApi } from '../../services/mediaApi';
+import { subscribeRealtime, type RealtimeUpdate } from '../../services/realtime';
 import { requestApi, type RequestDispute, type RequestResponse } from '../../services/requestApi';
 import type { ItemRequestStatus, User } from '../../types/domain';
 import { respondDispute } from '../../services/reportApi';
@@ -29,6 +30,7 @@ vi.mock('../../services/requestApi', async (importOriginal) => ({
     handoverFailed: vi.fn(),
     refuseHandover: vi.fn(),
     getContact: vi.fn(),
+    updateSchedule: vi.fn(),
     confirmHandover: vi.fn(),
     attachMedia: vi.fn(),
   },
@@ -38,6 +40,7 @@ vi.mock('../../services/itemApi', async (importOriginal) => ({
   itemApi: { detail: vi.fn() },
 }));
 vi.mock('../../services/mediaApi', () => ({ mediaApi: { upload: vi.fn() } }));
+vi.mock('../../services/realtime', () => ({ subscribeRealtime: vi.fn(() => () => undefined) }));
 vi.mock('../../services/reportApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../services/reportApi')>()),
   respondDispute: vi.fn(),
@@ -124,6 +127,85 @@ afterEach(() => {
   store.dispatch(actions.logout());
   vi.clearAllMocks();
   vi.unstubAllGlobals();
+});
+
+describe('Cảnh báo lịch giao nhận theo thời gian thực', () => {
+  const notice = 'Thông tin lịch giao nhận vừa được cập nhật. Vui lòng kiểm tra lại.';
+  const pendingSchedule = () => request({
+    status: 'AWAITING_LOGISTICS',
+    contactRevealedAt: undefined,
+    deliveryMethod: 'IN_PERSON',
+    meetingTime: new Date(Date.now() + 86_400_000).toISOString(),
+    scheduleRevision: 1,
+  });
+  const emitUpdate = (kind: 'READY' | 'REQUEST' = 'REQUEST') => {
+    const listener = vi.mocked(subscribeRealtime).mock.lastCall?.[0];
+    const update: RealtimeUpdate = { kind, resourceId: kind === 'READY' ? null : 101, userId: RECEIVER_ID };
+    act(() => listener?.(update));
+  };
+
+  it('đổi địa điểm và báo ngay trong khung lịch đang mở', async () => {
+    const current = pendingSchedule();
+    await renderProgress(RECEIVER_ID, current);
+    const schedule = within(screen.getByRole('region', { name: 'Lịch giao nhận' }));
+    expect(schedule.queryByText(notice)).toBeNull();
+
+    vi.mocked(requestApi.get).mockResolvedValue({
+      ...current, scheduleRevision: 2, meetingTime: new Date(Date.now() + 90_000_000).toISOString(),
+      meetingPlace: 'Cổng thư viện',
+    });
+    emitUpdate();
+
+    expect((await schedule.findByRole('alert')).textContent).toBe(notice);
+    expect(schedule.getByDisplayValue('Cổng thư viện')).toBeTruthy();
+    expect(schedule.queryByDisplayValue('Cổng số 2 chợ Bà Chiểu')).toBeNull();
+  });
+
+  it('báo khi địa chỉ được sửa trong lúc mất kết nối, kể cả khi địa chỉ vẫn được ẩn', async () => {
+    const current: RequestResponse = {
+      ...pendingSchedule(),
+      deliveryMethod: 'SHIPPING',
+      meetingPlace: undefined,
+      donorAddressProvided: true,
+    };
+    await renderProgress(RECEIVER_ID, current);
+    const schedule = within(screen.getByRole('region', { name: 'Lịch giao nhận' }));
+    expect(schedule.queryByText(notice)).toBeNull();
+
+    vi.mocked(requestApi.get).mockResolvedValue({ ...current, scheduleRevision: 2 });
+    emitUpdate('READY');
+
+    expect((await schedule.findByRole('alert')).textContent).toBe(notice);
+  });
+
+  it('bỏ qua cập nhật giao dịch không làm đổi lịch', async () => {
+    const current = request({ scheduleRevision: 1 });
+    await renderProgress(RECEIVER_ID, current);
+    vi.mocked(requestApi.get).mockResolvedValue({ ...current, itemTitle: 'Xe đạp đã đổi tên' });
+    emitUpdate();
+    await screen.findAllByText('Xe đạp đã đổi tên');
+    expect(within(screen.getByRole('region', { name: 'Lịch giao nhận' })).queryByText(notice)).toBeNull();
+  });
+
+  it('cập nhật lịch do chính mình gửi lại mà không tự cảnh báo', async () => {
+    const current = pendingSchedule();
+    const updated = { ...current, meetingPlace: 'Sảnh thư viện', scheduleRevision: 2 };
+    vi.mocked(requestApi.updateSchedule).mockResolvedValue(updated);
+    await renderProgress(RECEIVER_ID, current);
+    const schedule = within(screen.getByRole('region', { name: 'Lịch giao nhận' }));
+
+    fireEvent.change(schedule.getByRole('textbox', { name: 'Địa điểm gặp' }), {
+      target: { value: updated.meetingPlace },
+    });
+    fireEvent.click(schedule.getByRole('checkbox', { name: /cam kết trách nhiệm/ }));
+    fireEvent.click(schedule.getByRole('button', { name: 'Gửi lại lịch hẹn' }));
+    await waitFor(() => expect(requestApi.updateSchedule).toHaveBeenCalledTimes(1));
+    vi.mocked(requestApi.get).mockResolvedValue({ ...updated, itemTitle: 'Xe đạp vừa cập nhật' });
+    emitUpdate();
+    await screen.findAllByText('Xe đạp vừa cập nhật');
+
+    expect(schedule.queryByText(notice)).toBeNull();
+  });
 });
 
 describe('Bảo vệ trang Tiến trình', () => {
