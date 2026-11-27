@@ -152,6 +152,7 @@ export function AdminTransactionLogistics({ detail }: { detail: AdminRequestDeta
             {at(detail.meetingTime)}
           </Row>
           {!isShipping ? <Row label="Địa điểm hẹn">{text(detail.meetingPlace)}</Row> : null}
+          {wasRescheduled ? <Row label="Thời điểm đồng ý dời lịch gần nhất">{MISSING}</Row> : null}
           <Row label={`Chủ bài ${confirmationLabel}`}>
             <Confirmation event={donorSchedule} doneLabel="Đã đồng ý" showPending={isScheduling} />
           </Row>

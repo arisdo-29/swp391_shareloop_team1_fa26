@@ -232,6 +232,8 @@ describe('AdminTransactionDetail luật huỷ có xác nhận, dời lịch và 
     expect(screen.getByText('Giờ hẹn hiện tại')).toBeTruthy();
     expect(screen.getByText('Chủ bài xác nhận lịch ban đầu')).toBeTruthy();
     expect(screen.getByText('Người nhận xác nhận lịch ban đầu')).toBeTruthy();
+    const acceptedAtRow = screen.getByText('Thời điểm đồng ý dời lịch gần nhất').closest('div');
+    expect(acceptedAtRow?.textContent).toContain('Chưa có thông tin');
     expect(document.body.textContent).not.toContain('PENDING');
   });
 
