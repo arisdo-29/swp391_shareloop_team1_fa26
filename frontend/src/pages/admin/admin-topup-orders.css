@@ -12,11 +12,6 @@
   font-size: clamp(1.35rem, 2vw, 1.65rem);
 }
 
-.admin-topup-header .page-intro {
-  margin-top: 4px;
-  line-height: 1.45;
-}
-
 .admin-topup-header button,
 .admin-topup-header a {
   min-height: 38px;
@@ -83,23 +78,6 @@
 
 .admin-topup-filters .input {
   padding-block: 6px;
-}
-
-.admin-topup-filter-reconcile {
-  display: flex;
-  min-height: 38px;
-  align-items: center;
-  gap: 8px;
-  align-self: end;
-  color: var(--color-text-primary);
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-
-.admin-topup-filter-reconcile input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--color-primary);
 }
 
 .admin-topup-table-section {
@@ -234,13 +212,6 @@
   text-overflow: ellipsis;
 }
 
-.admin-topup-status-stack {
-  display: flex;
-  align-items: flex-start;
-  flex-direction: column;
-  gap: 4px;
-}
-
 .admin-topup-status--cancelled,
 .admin-topup-row:hover .admin-topup-status--cancelled {
   background: #fde8e8;
@@ -319,15 +290,12 @@
   }
 
   .admin-topup-filter-search {
-    grid-column: span 4;
+    grid-column: span 6;
   }
   .admin-topup-filter-status {
     grid-column: span 2;
   }
   .admin-topup-filter-date {
-    grid-column: span 2;
-  }
-  .admin-topup-filter-reconcile {
     grid-column: span 2;
   }
 }

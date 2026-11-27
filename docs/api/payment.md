@@ -56,6 +56,7 @@ Cùng bộ lọc với danh sách (`provider`, `status`, `q`, `from`, `to`, `pai
 Cùng bộ lọc, thứ tự và giới hạn với CSV. Đây là endpoint của nút **Xuất Excel** trên trang Giao dịch nạp tiền.
 Trả `giao-dich-nap-tien.xlsx` với kiểu `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
 Sheet **Giao dịch nạp tiền** có khoảng ngày lọc, số đơn, bộ lọc cột, hàng tiêu đề và cột mã đơn được cố định. Tiền VND và Credit là ô số, thời gian là ô ngày giờ Việt Nam, mã giao dịch là ô văn bản.
+Các cột gồm mã đơn, người nạp, email, số tiền, số Credit, cổng thanh toán, trạng thái, mã giao dịch VNPay, thời gian tạo và thời gian thanh toán.
 
 ### POST /api/v1/admin/finance/topup-orders/{orderCode}/reconcile
 
