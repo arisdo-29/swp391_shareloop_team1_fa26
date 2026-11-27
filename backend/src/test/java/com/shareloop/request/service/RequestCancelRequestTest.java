@@ -294,7 +294,7 @@ class RequestCancelRequestTest {
     @Test
     void confirmHandover_whenOtherPartyHasPendingCancelRequest_movesToDisputed() {
         // given
-        Request request = withPendingCancelRequest(DONOR_ID, CancelRequestCode.NO_LONGER_NEEDED, 5);
+        Request request = withPendingCancelRequest(DONOR_ID, CancelRequestCode.NO_LONGER_NEEDED, -1);
 
         // when
         requestService.confirmHandover(REQUEST_ID, RECEIVER_ID, new HandoverConfirmRequest(null));

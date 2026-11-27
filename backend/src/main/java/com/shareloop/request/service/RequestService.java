@@ -2789,22 +2789,29 @@ public class RequestService {
         ItemSnapshot item = loadItemSnapshot(request);
         boolean isDonor = requireParty(request, item, currentUserId);
 
-        // Đính kèm ảnh hoặc video minh chứng khi giao nhận nếu có (GN-10)
-        if (requestDto != null) {
-            attachHandoverEvidence(request, currentUserId, requestDto.mediaIds());
-        }
-
         boolean answersCancelRequest = request.hasPendingCancelRequest();
         if (answersCancelRequest && Long.valueOf(currentUserId).equals(request.getCancelRequestedBy())) {
             // Người đề nghị huỷ không thể vừa chờ huỷ vừa báo đã giao nhận xong: phải rút đề nghị trước
             throw new BusinessException(RequestErrorCode.REQUEST_CANCEL_REQUEST_PENDING);
         }
 
+        Instant now = Instant.now();
+        if (!request.isShipping()
+                && request.isHandoverOpen()
+                && !request.hasConfirmedHandover(isDonor)
+                && request.isBeforeMeetingTime(now)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_BEFORE_MEETING_TIME);
+        }
+        // Đính kèm ảnh hoặc video minh chứng khi giao nhận nếu có (GN-10)
+        if (requestDto != null) {
+            attachHandoverEvidence(request, currentUserId, requestDto.mediaIds());
+        }
+
         if (request.isShipping()) {
             // GN-12: giao hàng thì nút này là "Tôi đã nhận được hàng" cho chiều mình nhận
-            request.markReceived(isDonor, Instant.now());
+            request.markReceived(isDonor, now);
         } else {
-            request.confirmHandover(isDonor, Instant.now());
+            request.confirmHandover(isDonor, now);
         }
         if (answersCancelRequest) {
             // GN-06: bên kia bấm "Đã giao nhận xong" khi có đề nghị huỷ đang chờ thì coi như không đồng ý

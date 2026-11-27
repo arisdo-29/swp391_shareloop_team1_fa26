@@ -321,6 +321,7 @@ class OfferChangeIT extends IntegrationTest {
         long offerId = proposeAndReadId();
         acceptViaApi(donorId, offerId).andExpect(status().isOk());
         scheduleAndConfirmLogistics();
+        jdbc.update("UPDATE requests SET meeting_time = now() - interval '1 hour' WHERE id = ?", requestId);
 
         // when
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
