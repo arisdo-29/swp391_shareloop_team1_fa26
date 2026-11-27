@@ -70,6 +70,9 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     /** Giao dịch đã có report nào chưa; dùng để job tự hoàn tất bỏ qua giao dịch đang bị báo cáo (GN-09). */
     boolean existsByRequestId(Long requestId);
 
+    boolean existsByRequestIdAndTargetTypeAndStatusIn(
+            Long requestId, TargetType targetType, Collection<ReportStatus> statuses);
+
     Optional<Report> findFirstByTargetTypeAndRequestIdAndStatusInOrderByCreatedAtDesc(
             TargetType targetType, Long requestId, Collection<ReportStatus> statuses);
 

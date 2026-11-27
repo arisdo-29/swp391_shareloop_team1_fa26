@@ -87,6 +87,7 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
         AND r.deliveryMethod = 'SHIPPING'
         AND ((r.donorShippedAt < :cutoff AND r.receiverHandoverAt IS NULL)
              OR (r.receiverShippedAt < :cutoff AND r.donorHandoverAt IS NULL))
+        AND (r.resumedAt IS NULL OR r.resumedAt < :cutoff)
         AND r.id > :afterId
         ORDER BY r.id ASC
     """)

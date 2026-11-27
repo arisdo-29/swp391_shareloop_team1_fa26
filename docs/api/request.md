@@ -795,6 +795,7 @@ Bốn nhóm gộp bằng `@JsonUnwrapped`, tên trường nằm cùng cấp vớ
 - Dời lịch: `rescheduleProposedBy`, `rescheduleProposedAt`, `rescheduleMeetingTime`, `rescheduleMeetingPlace`, `rescheduleCount`.
 - Giao hàng: `receiverAddress`, `donorAddress`, `receiverAddressProvided`, `donorAddressProvided`, `donorShippedAt`, `donorTrackingCode`, `receiverShippedAt`, `receiverTrackingCode`.
 - Mốc hạn do backend tính (GN-13): `autoCancelAt`, `autoConfirmAt`, `cancelRequestExpiresAt`, `rescheduleExpiresAt`, `sendDeadlineAt` (chỉ Giao hàng), `leg1AutoReceiveAt`, `leg2AutoReceiveAt`. Giữ `complaintDeadline`. FE không tự cộng ngày.
+- Tác vụ giao hàng tạm dừng khi giao dịch có khiếu nại `OPEN` hoặc `AWAITING_RESPONSE`. Sau khi giao dịch tiếp tục, hạn tự ghi nhận đã nhận tính từ mốc muộn hơn giữa khai báo gửi và lúc giao dịch tiếp tục.
 
 `GET /api/v1/admin/requests/{id}` thêm `cancelRequest` (`state`: `PENDING`, `ACCEPTED`, `REJECTED`), `reschedule`, `shippingLegs` (mỗi chiều có địa chỉ, ngày gửi, mã vận đơn, ngày nhận, bước), `deadlines` (cùng bảy mốc ở trên) và `autoConfirmed`. Dòng thời gian thêm các mốc đề nghị huỷ, dời lịch, gửi và nhận. `GET /api/v1/admin/requests` thêm `labels` ("Đang chờ phản hồi đề nghị huỷ", "Chờ gửi hàng", "Một bên đã nhận", "Quá hạn gửi hàng") và hai bộ lọc `pendingCancel`, `sendOverdue`.
 
