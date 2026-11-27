@@ -378,16 +378,21 @@ class OfferChangeIT extends IntegrationTest {
 
     private void scheduleAndConfirmLogistics() throws Exception {
         Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
-        mockMvc.perform(post("/api/v1/requests/{id}/schedule", requestId)
+        var proposed = mockMvc.perform(post("/api/v1/requests/{id}/schedule", requestId)
                         .header("Authorization", token(donorId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 new ScheduleRequest("IN_PERSON", "Cổng trường", meetingTime, true))))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andReturn();
+        long revision = objectMapper
+                .readTree(proposed.getResponse().getContentAsString())
+                .get("scheduleRevision")
+                .asLong();
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
                         .header("Authorization", token(receiverId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new ConfirmLogisticsRequest(true))))
+                        .content(objectMapper.writeValueAsString(new ConfirmLogisticsRequest(true, null, revision))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("LOGISTICS_CONFIRMED"));
     }

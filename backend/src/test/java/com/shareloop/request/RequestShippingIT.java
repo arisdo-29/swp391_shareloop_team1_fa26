@@ -98,14 +98,14 @@ class RequestShippingIT extends IntegrationTest {
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
                         .header("Authorization", token(donorId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"agreeToWaiver\":true}"))
+                        .content("{\"scheduleRevision\":1,\"agreeToWaiver\":true}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("REQUEST_SHIPPING_ADDRESS_REQUIRED"));
         // chủ bài nhập địa chỉ rồi xác nhận: người nhận đã đồng ý từ lúc đề xuất nên lịch được chốt
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
                         .header("Authorization", token(donorId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"agreeToWaiver\":true,\"shippingAddress\":\"34 Trần Phú\"}"))
+                        .content("{\"scheduleRevision\":1,\"agreeToWaiver\":true,\"shippingAddress\":\"34 Trần Phú\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("LOGISTICS_CONFIRMED"))
                 .andExpect(jsonPath("$.donorAddress").value("34 Trần Phú"))
@@ -185,7 +185,7 @@ class RequestShippingIT extends IntegrationTest {
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
                         .header("Authorization", token(donorId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"agreeToWaiver\":true,\"shippingAddress\":\"34 Trần Phú\"}"))
+                        .content("{\"scheduleRevision\":1,\"agreeToWaiver\":true,\"shippingAddress\":\"34 Trần Phú\"}"))
                 .andExpect(status().isOk());
         ship(requestId, donorId, "GHN1111");
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
@@ -455,7 +455,7 @@ class RequestShippingIT extends IntegrationTest {
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
                         .header("Authorization", token(donorId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"agreeToWaiver\":true}"))
+                        .content("{\"scheduleRevision\":1,\"agreeToWaiver\":true}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("LOGISTICS_CONFIRMED"));
         return requestId;

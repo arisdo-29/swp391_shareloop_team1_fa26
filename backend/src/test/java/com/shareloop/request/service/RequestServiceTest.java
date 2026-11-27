@@ -703,6 +703,7 @@ class RequestServiceTest {
 
         assertThat(request.getDonorScheduleOkAt()).isNull();
         assertThat(request.getReceiverScheduleOkAt()).isNull();
+        assertThat(request.getScheduleRevision()).isEqualTo(2);
     }
 
     @Test
@@ -1468,7 +1469,8 @@ class RequestServiceTest {
                 .findItemSnapshot(1L);
 
         // Receiver gọi xác nhận lịch
-        RequestResponse response = requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true));
+        RequestResponse response =
+                requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true, null, 1L));
 
         assertThat(response.status()).isEqualTo("LOGISTICS_CONFIRMED");
         assertThat(response.receiverScheduleOkAt()).isNotNull();
@@ -1493,7 +1495,7 @@ class RequestServiceTest {
                 .findItemSnapshot(1L);
 
         // when
-        requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true));
+        requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true, null, 1L));
 
         // then
         verify(eventPublisher).publishEvent(new RequestNegotiationEndedEvent(101L));
@@ -1579,7 +1581,8 @@ class RequestServiceTest {
                 .findItemSnapshot(1L);
 
         // Receiver gọi xác nhận lịch (chỉ receiver ok, donor chưa ok)
-        RequestResponse response = requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(null));
+        RequestResponse response =
+                requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(null, null, 1L));
 
         assertThat(response.status()).isEqualTo("AWAITING_LOGISTICS");
         verify(notificationService, never()).notify(anyLong(), eq("LOGISTICS_CONFIRMED"), any(), any(), any());
@@ -1599,7 +1602,8 @@ class RequestServiceTest {
                 .findItemSnapshot(1L);
 
         // Receiver không đồng ý waiver
-        assertThatThrownBy(() -> requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(false)))
+        assertThatThrownBy(
+                        () -> requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(false, null, 1L)))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_WAIVER_REQUIRED);
                 });
@@ -1623,7 +1627,7 @@ class RequestServiceTest {
         // Receiver gọi confirm kèm agreeToWaiver = true
         // Luật mới (GN-12): người nhận phải có địa chỉ nhận hàng mới chốt được lịch giao hàng
         RequestResponse response =
-                requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true, "12 Lê Lợi"));
+                requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true, "12 Lê Lợi", 1L));
 
         assertThat(response.status()).isEqualTo("LOGISTICS_CONFIRMED");
         assertThat(response.donorWaiverAt()).isNotNull();

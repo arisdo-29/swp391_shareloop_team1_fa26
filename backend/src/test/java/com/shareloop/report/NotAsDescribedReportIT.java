@@ -365,7 +365,7 @@ class NotAsDescribedReportIT extends IntegrationTest {
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
                         .header("Authorization", token(receiverId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"agreeToWaiver\":true}"))
+                        .content("{\"scheduleRevision\":1,\"agreeToWaiver\":true}"))
                 .andExpect(status().isOk());
         // Luật mới (GN-07): chỉ từ chối nhận được từ giờ hẹn trở đi, nên lùi giờ hẹn về quá khứ sau khi đã chốt lịch
         jdbc.update("UPDATE requests SET meeting_time = now() - interval '1 hour' WHERE id = ?", requestId);
