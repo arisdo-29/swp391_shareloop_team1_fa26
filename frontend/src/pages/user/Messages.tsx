@@ -61,7 +61,6 @@ import { productDetailFromRequestPath } from '../../utils/productDetailNavigatio
 import {
   conversationTitle,
   donorIdOf,
-  messageSideForSender,
   requestParticipantName,
   type ApiConversation,
 } from '../../components/messages/conversation';
@@ -822,12 +821,10 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     <ChatMessage
                       key={entry.id}
                       entry={entry}
-                      side={messageSideForSender(selected, entry.senderId)}
+                      side={entry.senderId === currentUserId ? 'right' : 'left'}
                       progressPath={transactionProgressPath(selected.request.id)}
                       requestId={selected.request.id}
-                      scheduleActor={entry.kind === 'SCHEDULE_SET'
-                        ? { name: selectedParticipantName, isViewer: entry.senderId === currentUserId }
-                        : undefined}
+                      scheduleActorName={selectedParticipantName}
                       onOpenItem={(itemId) => navigate(`/items/${itemId}`)}
                       offerActions={
                         offerChangeOpen && selectedAsDonor && entry.id === pendingOfferChange?.id

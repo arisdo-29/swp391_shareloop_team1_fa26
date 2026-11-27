@@ -6,7 +6,7 @@ import { Provider } from 'react-redux';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { actions, store } from '../../app/store';
-import { chatApi } from '../../services/chatApi';
+import { chatApi, type MessageResponse } from '../../services/chatApi';
 import { itemApi, type ItemResponse } from '../../services/itemApi';
 import {
   requestApi,
@@ -150,7 +150,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   store.dispatch(actions.logout());
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -163,6 +163,46 @@ describe('Trang Tin nhắn sau khi tách trang Tiến trình', () => {
     expect(screen.queryByLabelText('Tiến trình giao dịch')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Huỷ giao dịch' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Xem giao dịch' })).toBeTruthy();
+  });
+
+  it.each([
+    { viewerId: RECEIVER_ID, partnerId: DONOR_ID },
+    { viewerId: DONOR_ID, partnerId: RECEIVER_ID },
+  ])('căn tin đã gửi sang phải và tin nhận sang trái cho người xem $viewerId', async ({ viewerId, partnerId }) => {
+    const received: MessageResponse = {
+      id: 1,
+      requestId: 101,
+      senderId: partnerId,
+      kind: 'TEXT',
+      content: 'Chào bạn',
+      mediaId: null,
+      refItemId: null,
+      itemCard: null,
+      offerStatus: null,
+      moderation: 'PASS',
+      blockedReason: null,
+      createdAt: '2026-10-20T10:00:00Z',
+    };
+    vi.mocked(chatApi.list).mockResolvedValueOnce([
+      received,
+      { ...received, id: 2, senderId: viewerId, content: 'Tin đã gửi trước đó' },
+    ]);
+    vi.mocked(chatApi.send).mockResolvedValueOnce({
+      ...received, id: 3, senderId: viewerId, content: 'Tin mới gửi',
+    });
+    await renderMessages(viewerId, request());
+
+    expect((await screen.findByText('Chào bạn')).closest('[data-message-align]')?.className)
+      .toContain('justify-start');
+    expect(screen.getByText('Tin đã gửi trước đó').closest('[data-message-align]')?.className)
+      .toContain('justify-end');
+
+    const userEvents = userEvent.setup();
+    await userEvents.type(screen.getByPlaceholderText('Nhập tin nhắn...'), 'Tin mới gửi');
+    await userEvents.click(screen.getByRole('button', { name: 'Gửi tin nhắn' }));
+
+    expect((await screen.findByText('Tin mới gửi')).closest('[data-message-align]')?.className)
+      .toContain('justify-end');
   });
 
   it.each([
