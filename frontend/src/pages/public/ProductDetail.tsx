@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser, selectData } from '../../app/store';
@@ -8,6 +8,8 @@ import {
   Skeleton,
   Button,
   ConditionBadge,
+  Icon,
+  type IconName,
   ItemImage,
   StatusBadge,
   TypeBadge,
@@ -336,7 +338,7 @@ export function ProductDetail() {
         {backLink.label}
       </Link>
       <div className="mt-2 grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <article className="min-w-0 space-y-6">
+        <article className="min-w-0 space-y-4">
           <div className="grid gap-3 md:grid-cols-[88px_minmax(0,1fr)]">
             {images.length > 1 ? (
               <div className="order-2 flex gap-2 overflow-x-auto md:order-1 md:flex-col md:overflow-visible">
@@ -363,7 +365,7 @@ export function ProductDetail() {
             </div>
           </div>
 
-          <div className="space-y-2.5">
+          <section className="space-y-4 rounded-detail border border-detail-border bg-white p-5">
             <div className="flex flex-wrap items-center gap-2.5">
               <span className="inline-flex w-fit rounded-sm border border-primary bg-primary-soft [&>span]:bg-transparent [&>span]:px-3 [&>span]:py-1.5 [&>span]:text-sm [&>span]:font-semibold [&>span]:text-primary">
                 <TypeBadge type={item.type} />
@@ -379,50 +381,88 @@ export function ProductDetail() {
                 <StatusBadge status={item.status} />
               ) : null}
             </div>
-            <h1 className="text-2xl font-bold leading-tight sm:text-3xl">{item.title}</h1>
-            <p className="inline-flex w-fit rounded-sm border border-warning bg-warning-soft px-3 py-1.5 text-lg font-bold tabular-nums text-warning">
-              {formatReferencePrice(item.referencePrice)}
-            </p>
+            <h1 className="break-words text-[26px] font-bold leading-tight sm:text-[28px]">
+              {item.title}
+            </h1>
+            {item.referencePrice != null ? (
+              <p className="inline-flex w-fit rounded-sm border border-warning bg-warning-soft px-3 py-1.5 text-lg font-bold tabular-nums text-warning">
+                {formatReferencePrice(item.referencePrice)}
+              </p>
+            ) : (
+              <p className="text-sm font-medium text-text-muted">
+                {formatReferencePrice(item.referencePrice)}
+              </p>
+            )}
             {own && item.hidden && item.hiddenReason ? (
               <Alert tone="warning">{item.hiddenReason}</Alert>
             ) : null}
             {own && item.status === 'REJECTED' && item.rejectionReason ? (
               <Alert tone="warning">Bài bị từ chối. Lý do: {item.rejectionReason}. Sửa bài để gửi duyệt lại.</Alert>
             ) : null}
-            <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-text-muted">
-              <span>{item.district}</span>
-              <span>{item.category}</span>
-              {item.brand ? <span>Thương hiệu {item.brand}</span> : null}
-              <span>
-                Đăng {new Date(item.postedAt).toLocaleDateString('vi-VN')}
-                {item.expiresAt ? `, hiển thị đến ${new Date(item.expiresAt).toLocaleDateString('vi-VN')}` : ''}
-              </span>
-            </p>
-          </div>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-4 border-t border-detail-border pt-4 sm:grid-cols-2">
+              <ItemFact icon="district" label="Khu vực">
+                {item.district}
+              </ItemFact>
+              <ItemFact icon="category" label="Danh mục">
+                <span className="break-words">{item.category}</span>
+                {item.brand ? (
+                  <span className="mt-0.5 block text-xs text-text-muted">
+                    Thương hiệu {item.brand}
+                  </span>
+                ) : null}
+              </ItemFact>
+              <ItemFact icon="calendarCheck" label="Ngày đăng">
+                {new Date(item.postedAt).toLocaleDateString('vi-VN')}
+              </ItemFact>
+              <ItemFact icon="expiring" label="Hiển thị đến">
+                {item.expiresAt
+                  ? new Date(item.expiresAt).toLocaleDateString('vi-VN')
+                  : '—'}
+              </ItemFact>
+            </div>
+          </section>
 
           {item.tradeFor ? (
-            <div className="rounded-lg border border-secondary-fixed bg-secondary-soft px-4 py-4">
-              <p className="text-xs font-bold uppercase tracking-wide text-secondary-hover">Chủ bài muốn đổi lấy</p>
-              <p className="mt-1 text-base font-bold">{item.tradeFor}</p>
-              <p className="mt-1 text-sm text-text-secondary">Gợi ý: nếu bạn có món khác, hãy ghi vào đề nghị để chủ bài cân nhắc.</p>
-            </div>
+            <section className="rounded-detail border border-detail-exchange-border bg-detail-exchange p-5">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-primary">
+                <Icon name="transactions" className="size-5 shrink-0" weight="bold" />
+                Chủ bài muốn đổi lấy
+              </h2>
+              <p className="mt-3 break-words text-base font-bold text-text-primary">
+                {item.tradeFor}
+              </p>
+              <p className="mt-3 border-t border-detail-exchange-border pt-3 text-sm leading-6 text-text-secondary">
+                Gợi ý: nếu bạn có món khác, hãy ghi vào đề nghị để chủ bài cân nhắc.
+              </p>
+            </section>
           ) : null}
 
-          <section aria-labelledby="item-description" className="space-y-3">
-            <h2 id="item-description" className="section-title">Mô tả</h2>
-            <p className="max-w-3xl whitespace-pre-line text-[15px] leading-7">{item.description}</p>
+          <section
+            aria-labelledby="item-description"
+            className="rounded-detail border border-detail-border bg-white p-5"
+          >
+            <h2
+              id="item-description"
+              className="flex items-center gap-2 text-lg font-bold text-text-primary"
+            >
+              <Icon name="manageItems" className="size-5 shrink-0 text-primary" weight="bold" />
+              Mô tả
+            </h2>
+            <div className="mt-3 border-t border-detail-border pt-3">
+              <SafeMarkdownDescription text={item.description} />
+            </div>
             {item.defectNote ? (
-              <p className="text-sm text-text-secondary">
+              <p className="mt-3 border-t border-detail-border pt-3 text-sm leading-6 text-text-secondary">
                 <strong className="text-text-primary">Lưu ý tình trạng:</strong> {item.defectNote}
               </p>
             ) : null}
             {operatingLabel ? (
-              <p className="text-sm text-text-secondary">
+              <p className="mt-2 text-sm leading-6 text-text-secondary">
                 <strong className="text-text-primary">Trạng thái hoạt động:</strong> {operatingLabel}
               </p>
             ) : null}
             {item.defectImages?.length ? (
-              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+              <div className="mt-3 grid grid-cols-3 gap-3 border-t border-detail-border pt-3 sm:grid-cols-4">
                 {item.defectImages.map((image, index) => (
                   <ItemImage key={`${image}-${index}`} src={image} alt={`Ảnh lỗi ${index + 1}`} className="aspect-square rounded-md object-cover" />
                 ))}
@@ -430,26 +470,42 @@ export function ProductDetail() {
             ) : null}
           </section>
 
-          <section aria-labelledby="item-owner" className="flex flex-wrap items-center gap-4 rounded-lg bg-white px-4 py-4 ring-1 ring-border/80">
-            <Avatar
-              size="lg"
-              user={{ name: item.donorName || 'Người đăng', avatarInitials: initialsOf(item.donorName || '') }}
-            />
-            <div className="min-w-0 flex-1 space-y-1">
-              <h2 id="item-owner" className="text-base font-bold">{item.donorName || 'Người đăng'}</h2>
-              <ReputationBadge trustStars={item.donorTrustStars} rank={item.donorRank} />
+          <section
+            aria-labelledby="item-owner"
+            className="rounded-detail border border-detail-border bg-white p-5"
+          >
+            <h2 id="item-owner" className="text-lg font-bold text-text-primary">
+              Thông tin chủ bài
+            </h2>
+            <div className="mt-3 flex flex-col gap-4 border-t border-detail-border pt-4 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <Avatar
+                  size="lg"
+                  user={{ name: item.donorName || 'Người đăng', avatarInitials: initialsOf(item.donorName || '') }}
+                />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className="break-words text-base font-bold text-text-primary">
+                    {item.donorName || 'Người đăng'}
+                  </p>
+                  <ReputationBadge trustStars={item.donorTrustStars} rank={item.donorRank} />
+                </div>
+              </div>
+              {ownerProfileId ? (
+                <Button
+                  variant="outline"
+                  className="w-full !border-exchange !text-primary sm:w-auto"
+                  onClick={() => navigate(userProfilePath(ownerProfileId))}
+                >
+                  Xem hồ sơ
+                </Button>
+              ) : null}
             </div>
-            {ownerProfileId ? (
-              <Button variant="outline" onClick={() => navigate(userProfilePath(ownerProfileId))}>
-                Xem hồ sơ
-              </Button>
-            ) : null}
           </section>
         </article>
 
         <aside
           aria-label={item.type === 'gift' ? 'Xin món này' : 'Đề nghị trao đổi'}
-          className="space-y-4 rounded-xl bg-white p-5 ring-1 ring-border/80 lg:sticky lg:top-24"
+          className="space-y-3 rounded-panel border border-detail-border bg-white p-4 sm:p-5 lg:sticky lg:top-24"
         >
           {own ? (
             <>
@@ -525,15 +581,30 @@ export function ProductDetail() {
             </>
           ) : (
             <>
-              <h2 className="text-lg font-bold">{item.type === 'gift' ? 'Xin món này' : 'Đề nghị trao đổi'}</h2>
+              <h2 className="flex items-center gap-2 text-lg font-bold text-primary">
+                <Icon
+                  name={item.type === 'gift' ? 'manageItems' : 'transactions'}
+                  className="size-5 shrink-0"
+                  weight="bold"
+                />
+                {item.type === 'gift' ? 'Xin món này' : 'Đề nghị trao đổi'}
+              </h2>
               {item.type === 'gift' && user && eligibleOfferedItems.length ? (
-                <fieldset className="min-w-0 w-full max-w-full space-y-2">
-                  <legend className="label">Kèm món của bạn để đề nghị trao đổi</legend>
+                <fieldset className="min-w-0 w-full max-w-full space-y-2.5">
+                  <legend className="w-full text-sm font-semibold text-text-primary">
+                    <span className="flex items-center justify-between gap-2">
+                      <span>Kèm món của bạn để đề nghị trao đổi</span>
+                      <span className="shrink-0 text-xs font-medium text-text-muted">
+                        {eligibleOfferedItems.length} món
+                      </span>
+                    </span>
+                  </legend>
                   <p className="text-xs leading-5 text-text-secondary">
                     Không bắt buộc. Nếu chủ bài chọn bạn, món đồ sẽ được trao đổi thay vì cho tặng.
                   </p>
                   <OfferedItemOptions
                     items={eligibleOfferedItems}
+                    compactScrollable
                     selectedItemId={offeredItemId}
                     onSelect={chooseOfferedItem}
                   />
@@ -549,12 +620,19 @@ export function ProductDetail() {
                 </fieldset>
               ) : null}
               {item.type === 'trade' && user ? (
-                <fieldset className="min-w-0 w-full max-w-full space-y-2">
-                  <legend className="label">Chọn món bạn mang đổi</legend>
+                <fieldset className="min-w-0 w-full max-w-full space-y-2.5">
+                  <legend className="w-full text-sm font-semibold text-text-primary">
+                    <span className="flex items-center justify-between gap-2">
+                      <span>Chọn món bạn mang đổi</span>
+                      <span className="shrink-0 text-xs font-medium text-text-muted">
+                        {swapOffers.items.length} món
+                      </span>
+                    </span>
+                  </legend>
                   <OfferedItemOptions
                     items={swapOffers.items}
                     similarPriceIds={swapOffers.similarIds}
-                    pageSize={5}
+                    compactScrollable
                     selectedItemId={offeredItemId}
                     onSelect={chooseOfferedItem}
                   />
@@ -562,7 +640,7 @@ export function ProductDetail() {
                     type="button"
                     aria-pressed={receiveOnlyChosen}
                     onClick={chooseReceiveOnly}
-                    className={`box-border flex min-h-11 w-full items-center rounded-md border p-2.5 text-left text-sm font-semibold transition ${receiveOnlyChosen ? 'border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
+                    className={`box-border flex min-h-11 w-full items-center rounded-action border px-3 py-2 text-left text-sm font-semibold transition ${receiveOnlyChosen ? 'border-exchange bg-detail-selected text-primary' : 'border-detail-border bg-white hover:border-exchange/50 hover:bg-detail-note'}`}
                   >
                     Chỉ xin nhận, không kèm món
                   </button>
@@ -574,15 +652,16 @@ export function ProductDetail() {
                   ) : null}
                   <Link
                     to="/post"
-                    className="flex h-[42px] w-full items-center justify-center rounded-action border border-exchange bg-white text-sm font-semibold text-primary transition-colors hover:bg-primary-soft"
+                    className="flex h-11 w-full items-center justify-center gap-2 rounded-action border border-exchange bg-white text-sm font-semibold text-primary transition-colors hover:bg-detail-selected"
                   >
+                    <Icon name="plus" className="size-4" weight="bold" />
                     Đăng món mới để đổi
                   </Link>
                 </fieldset>
               ) : null}
               <Button
-                size="lg"
-                className="!mt-3 w-full"
+                size="md"
+                className="!mt-2.5 h-11 w-full !border-primary !bg-primary hover:!bg-primary-hover"
                 disabled={requestSubmitting}
                 onClick={() => void submitRequest()}
               >
@@ -592,7 +671,7 @@ export function ProductDetail() {
                     ? 'Đăng nhập để gửi yêu cầu'
                     : submitButtonLabel}
               </Button>
-              <ul className="list-disc space-y-1 pl-5 text-xs leading-5 text-text-secondary">
+              <ul className="list-disc space-y-1 rounded-action bg-detail-note py-3 pl-8 pr-3 text-xs leading-5 text-text-secondary">
                 <li>Chat mở khi chủ bài chọn bạn. Bạn có thể hủy yêu cầu tới lúc đó.</li>
                 <li>Số điện thoại chỉ hiện khi hai bên đã chốt lịch hẹn.</li>
               </ul>
@@ -611,13 +690,15 @@ export function ProductDetail() {
           {currentUserId && !own ? (
             <Button
               type="button"
-              variant="warning"
-              className="w-full"
+              variant="ghost"
+              size="sm"
+              className="w-full !text-error/80 hover:!bg-error-soft hover:!text-error"
               onClick={() => {
                 setReportNotice('');
                 setReportOpen(true);
               }}
             >
+              <Icon name="complaints" className="size-4" />
               Báo cáo bài đăng
             </Button>
           ) : null}
@@ -637,6 +718,106 @@ export function ProductDetail() {
       ) : null}
     </div>
   );
+}
+
+function ItemFact({
+  icon,
+  label,
+  children,
+}: {
+  icon: IconName;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 items-start gap-2.5">
+      <Icon name={icon} className="mt-0.5 size-4 shrink-0 text-primary" weight="bold" />
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-text-muted">{label}</p>
+        <div className="mt-0.5 text-sm font-medium leading-5 text-text-primary">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function SafeMarkdownDescription({ text }: { text: string }) {
+  const lines = text.split(/\r?\n/);
+  const blocks: ReactNode[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    if (!lines[index]?.trim()) {
+      index += 1;
+      continue;
+    }
+
+    const unorderedMatch = lines[index]?.match(/^\s*[-*+]\s+(.+)$/);
+    if (unorderedMatch) {
+      const items: string[] = [];
+      const blockIndex = index;
+      while (index < lines.length) {
+        const match = lines[index]?.match(/^\s*[-*+]\s+(.+)$/);
+        if (!match) break;
+        items.push(match[1]);
+        index += 1;
+      }
+      blocks.push(
+        <ul key={`unordered-${blockIndex}`} className="list-disc space-y-1 pl-5">
+          {items.map((item, itemIndex) => (
+            <li key={`${blockIndex}-${itemIndex}`}>{renderInlineMarkdown(item)}</li>
+          ))}
+        </ul>,
+      );
+      continue;
+    }
+
+    const orderedMatch = lines[index]?.match(/^\s*\d+[.)]\s+(.+)$/);
+    if (orderedMatch) {
+      const items: string[] = [];
+      const blockIndex = index;
+      while (index < lines.length) {
+        const match = lines[index]?.match(/^\s*\d+[.)]\s+(.+)$/);
+        if (!match) break;
+        items.push(match[1]);
+        index += 1;
+      }
+      blocks.push(
+        <ol key={`ordered-${blockIndex}`} className="list-decimal space-y-1 pl-5">
+          {items.map((item, itemIndex) => (
+            <li key={`${blockIndex}-${itemIndex}`}>{renderInlineMarkdown(item)}</li>
+          ))}
+        </ol>,
+      );
+      continue;
+    }
+
+    const paragraphLines: string[] = [];
+    const blockIndex = index;
+    while (
+      index < lines.length &&
+      lines[index]?.trim() &&
+      !lines[index]?.match(/^\s*[-*+]\s+(.+)$/) &&
+      !lines[index]?.match(/^\s*\d+[.)]\s+(.+)$/)
+    ) {
+      paragraphLines.push(lines[index]);
+      index += 1;
+    }
+    blocks.push(
+      <p key={`paragraph-${blockIndex}`} className="whitespace-pre-line">
+        {renderInlineMarkdown(paragraphLines.join('\n'))}
+      </p>,
+    );
+  }
+
+  return <div className="space-y-2 text-[15px] leading-[1.7] text-text-primary">{blocks}</div>;
+}
+
+function renderInlineMarkdown(text: string) {
+  return text.split(/(\*\*[^*]+?\*\*)/g).map((segment, index) => {
+    const isBold = segment.startsWith('**') && segment.endsWith('**');
+    const content = (isBold ? segment.slice(2, -2) : segment).replace(/\*\*/g, '');
+    return isBold ? <strong key={index}>{content}</strong> : <span key={index}>{content}</span>;
+  });
 }
 
 function initialsOf(name: string) {
