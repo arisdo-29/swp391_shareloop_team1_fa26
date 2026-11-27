@@ -229,6 +229,9 @@ describe('AdminTransactionDetail luật huỷ có xác nhận, dời lịch và 
     expect(screen.getByText('Tôi bận đột xuất. Đi công tác')).toBeTruthy();
     expect(screen.getByText('Dời lịch', { selector: 'h2' })).toBeTruthy();
     expect(screen.getAllByText('Số lần đã dời được đồng ý').length).toBeGreaterThan(0);
+    expect(screen.getByText('Giờ hẹn hiện tại')).toBeTruthy();
+    expect(screen.getByText('Chủ bài xác nhận lịch ban đầu')).toBeTruthy();
+    expect(screen.getByText('Người nhận xác nhận lịch ban đầu')).toBeTruthy();
     expect(document.body.textContent).not.toContain('PENDING');
   });
 
