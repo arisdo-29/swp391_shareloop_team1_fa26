@@ -13,20 +13,6 @@ export function donorIdOf(conversation: ApiConversation) {
   return conversation.request.donorId ?? conversation.item?.donorId;
 }
 
-export type ChatMessageSide = 'left' | 'right';
-
-/**
- * Vị trí tin nhắn bám theo hai chủ sở hữu trong khung trao đổi, không bám theo người đang đăng nhập:
- * món chính/chủ bài ở trái, món đề xuất/người trao đổi ở phải.
- */
-export function messageSideForSender(conversation: ApiConversation, senderId: number): ChatMessageSide {
-  const leftOwnerId = conversation.item?.donorId ?? donorIdOf(conversation);
-  const rightOwnerId = conversation.offeredItem?.donorId ?? conversation.request.receiverId;
-  if (senderId === rightOwnerId) return 'right';
-  if (senderId === leftOwnerId) return 'left';
-  return 'left';
-}
-
 export function isDonorView(conversation: ApiConversation, currentUserId: number) {
   return donorIdOf(conversation) === currentUserId;
 }
