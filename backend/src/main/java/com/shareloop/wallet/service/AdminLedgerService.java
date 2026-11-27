@@ -10,6 +10,7 @@ import com.shareloop.wallet.dto.AdminLedgerRow;
 import com.shareloop.wallet.entity.CreditLedgerEntry;
 import com.shareloop.wallet.entity.CreditTxType;
 import com.shareloop.wallet.mapper.LedgerCsvWriter;
+import com.shareloop.wallet.mapper.LedgerExcelWriter;
 import com.shareloop.wallet.repository.CreditLedgerRepository;
 import com.shareloop.wallet.repository.OrderCodeView;
 import com.shareloop.wallet.repository.PaymentOrderRepository;
@@ -40,25 +41,28 @@ public class AdminLedgerService {
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final Instant EARLIEST = Instant.EPOCH;
     private static final Instant LATEST = Instant.parse("9999-12-31T00:00:00Z");
-    private static final int CSV_MAX_ROWS = 10_000;
+    private static final int EXPORT_MAX_ROWS = 10_000;
 
     private final CreditLedgerRepository creditLedgerRepository;
     private final PaymentOrderRepository paymentOrderRepository;
     private final UserService userService;
     private final ItemQueryService itemQueryService;
     private final LedgerCsvWriter csvWriter;
+    private final LedgerExcelWriter excelWriter;
 
     public AdminLedgerService(
             CreditLedgerRepository creditLedgerRepository,
             PaymentOrderRepository paymentOrderRepository,
             UserService userService,
             ItemQueryService itemQueryService,
-            LedgerCsvWriter csvWriter) {
+            LedgerCsvWriter csvWriter,
+            LedgerExcelWriter excelWriter) {
         this.creditLedgerRepository = creditLedgerRepository;
         this.paymentOrderRepository = paymentOrderRepository;
         this.userService = userService;
         this.itemQueryService = itemQueryService;
         this.csvWriter = csvWriter;
+        this.excelWriter = excelWriter;
     }
 
     /**
@@ -85,9 +89,19 @@ public class AdminLedgerService {
 
     /** File CSV theo đúng bộ lọc đang chọn, tối đa 10000 dòng mới nhất. */
     public byte[] exportCsv(CreditTxType type, Long userId, String keyword, LocalDate from, LocalDate to) {
+        return csvWriter.write(findExportRows(type, userId, keyword, from, to));
+    }
+
+    /** File Excel (.xlsx) theo đúng bộ lọc đang chọn, tối đa 10000 dòng mới nhất. */
+    public byte[] exportExcel(CreditTxType type, Long userId, String keyword, LocalDate from, LocalDate to) {
+        return excelWriter.write(findExportRows(type, userId, keyword, from, to), type, from, to);
+    }
+
+    private List<AdminLedgerRow> findExportRows(
+            CreditTxType type, Long userId, String keyword, LocalDate from, LocalDate to) {
         Filter filter = buildFilter(type, userId, keyword, from, to);
-        Page<CreditLedgerEntry> entries = find(filter, PageRequest.of(0, CSV_MAX_ROWS, newestFirst()));
-        return csvWriter.write(toRows(entries.getContent()));
+        Page<CreditLedgerEntry> entries = find(filter, PageRequest.of(0, EXPORT_MAX_ROWS, newestFirst()));
+        return toRows(entries.getContent());
     }
 
     // Gom các giá trị lọc đã chuẩn hoá một lần để ba truy vấn (trang, tổng vào, tổng ra) dùng chung đúng một bộ.

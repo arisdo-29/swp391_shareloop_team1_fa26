@@ -358,14 +358,14 @@ export function AdminLedger() {
     };
   }, [buildFilters, dateRangeError, page, reloadKey]);
 
-  const exportCsv = async () => {
+  const exportExcel = async () => {
     setExporting(true);
     setError('');
     try {
-      const download = await adminFinanceApi.ledgerCsv(buildFilters());
+      const download = await adminFinanceApi.ledgerExcel(buildFilters());
       downloadBlob(download.blob, download.fileName);
     } catch (caught) {
-      setError(adminErrorMessage(caught, 'Không xuất được file. Vui lòng thử lại.'));
+      setError(adminErrorMessage(caught, 'Không xuất được tệp Excel. Vui lòng thử lại.'));
     } finally {
       setExporting(false);
     }
@@ -379,8 +379,12 @@ export function AdminLedger() {
           description="Mọi biến động Credit của toàn hệ thống, dùng để đối soát."
           action={
             <div className="flex gap-2">
-              <Button variant="outline" disabled={exporting} onClick={() => void exportCsv()}>
-                {exporting ? 'Đang xuất...' : 'Xuất CSV'}
+              <Button
+                variant="outline"
+                disabled={exporting || Boolean(dateRangeError)}
+                onClick={() => void exportExcel()}
+              >
+                {exporting ? 'Đang xuất...' : 'Xuất Excel'}
               </Button>
               <Button
                 variant="outline"

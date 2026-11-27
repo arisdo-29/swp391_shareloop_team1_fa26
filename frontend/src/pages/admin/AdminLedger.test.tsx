@@ -8,7 +8,7 @@ import { adminFinanceApi, type AdminLedgerPage, type AdminLedgerRow } from '../.
 import { AdminLedger } from './AdminLedger';
 
 vi.mock('../../services/adminFinanceApi', () => ({
-  adminFinanceApi: { ledger: vi.fn(), ledgerCsv: vi.fn() },
+  adminFinanceApi: { ledger: vi.fn(), ledgerExcel: vi.fn() },
 }));
 
 // Bộ chọn người dùng có API riêng, ở đây chỉ cần biết trang gọi nó đúng cách.
@@ -333,21 +333,25 @@ describe('AdminLedger', () => {
     expect(await screen.findByText('"Từ ngày" không được sau "Đến ngày".')).toBeTruthy();
   });
 
-  it('xuất CSV theo bộ lọc đang chọn', async () => {
+  it('xuất Excel theo bộ lọc đang chọn', async () => {
     const user = userEvent.setup();
-    Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:csv'), revokeObjectURL: vi.fn() });
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    vi.mocked(adminFinanceApi.ledgerCsv).mockResolvedValue({
+    const createObjectURL = vi.fn(() => 'blob:xlsx');
+    const revokeObjectURL = vi.fn();
+    Object.assign(URL, { createObjectURL, revokeObjectURL });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    vi.mocked(adminFinanceApi.ledgerExcel).mockResolvedValue({
       blob: new Blob(['a']),
-      fileName: 'lich-su-giao-dich-credit.csv',
+      fileName: 'lich-su-giao-dich-credit.xlsx',
     });
     renderPage();
     await screen.findByText('Xe đạp cũ');
     await user.selectOptions(screen.getByLabelText('Loại giao dịch'), 'TOP_UP');
 
-    await user.click(screen.getByRole('button', { name: 'Xuất CSV' }));
+    await user.click(screen.getByRole('button', { name: 'Xuất Excel' }));
 
-    await waitFor(() => expect(adminFinanceApi.ledgerCsv).toHaveBeenCalledWith({ type: 'TOP_UP' }));
+    await waitFor(() => expect(adminFinanceApi.ledgerExcel).toHaveBeenCalledWith({ type: 'TOP_UP' }));
+    expect(createObjectURL).toHaveBeenCalled();
+    expect((click.mock.contexts[0] as HTMLAnchorElement).download).toBe('lich-su-giao-dich-credit.xlsx');
   });
 
   it('báo lỗi khi tải thất bại và cho thử lại', async () => {

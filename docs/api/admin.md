@@ -336,6 +336,12 @@ Hai tổng tính trên cả khoảng lọc, không chỉ trang hiện tại. M�
 Cùng bộ lọc (`type`, `userId`, `q`, `from`, `to`), tối đa 10000 dòng mới nhất, UTF-8 có BOM. Cột: Thời gian, Người dùng, Email, Loại (nhãn tiếng Việt),
 Số Credit, Số dư sau, Bài liên quan, Mã đơn nạp, Ghi chú, Người thực hiện.
 
+## 2.6. GET /api/v1/admin/finance/ledger.xlsx
+
+Cùng bộ lọc, thứ tự và giới hạn 10000 dòng như CSV. Đây là endpoint của nút **Xuất Excel** trên trang Lịch sử giao dịch Credit.
+Trả `lich-su-giao-dich-credit.xlsx` với kiểu `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
+Sheet **Lịch sử giao dịch Credit** gồm khoảng ngày lọc, loại giao dịch lọc, số dòng trong tệp, bộ lọc cột, hàng tiêu đề và cột thời gian được cố định. Số Credit và Số dư sau là ô số, thời gian là ô ngày giờ Việt Nam, mã đơn nạp là ô văn bản.
+
 ---
 
 ## 3. GET /api/v1/admin/finance/users/{userId}/history

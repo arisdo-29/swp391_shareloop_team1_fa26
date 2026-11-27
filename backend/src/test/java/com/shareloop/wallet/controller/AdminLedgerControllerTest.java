@@ -20,7 +20,9 @@ import com.shareloop.config.WebConfig;
 import com.shareloop.wallet.dto.AdminLedgerPage;
 import com.shareloop.wallet.entity.CreditTxType;
 import com.shareloop.wallet.service.AdminLedgerService;
+import java.time.LocalDate;
 import java.util.List;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -28,6 +30,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
 @WebMvcTest(AdminLedgerController.class)
 @Import({SecurityConfig.class, JwtConfig.class, JwtService.class, ClockConfig.class, WebConfig.class})
@@ -51,6 +54,7 @@ class AdminLedgerControllerTest {
         mvc.perform(get(LEDGER)).andExpect(status().isUnauthorized());
         mvc.perform(get(LEDGER).header("Authorization", userToken)).andExpect(status().isForbidden());
         mvc.perform(get(LEDGER + ".csv").header("Authorization", userToken)).andExpect(status().isForbidden());
+        mvc.perform(get(LEDGER + ".xlsx").header("Authorization", userToken)).andExpect(status().isForbidden());
         verifyNoInteractions(adminLedgerService);
     }
 
@@ -78,5 +82,29 @@ class AdminLedgerControllerTest {
                 .andExpect(header().string("Content-Type", "text/csv;charset=UTF-8"));
 
         verify(adminLedgerService).exportCsv(eq(CreditTxType.TOP_UP), isNull(), isNull(), isNull(), isNull());
+    }
+
+    @Test
+    void adminCanExportExcelWithFilters() throws Exception {
+        String token = "Bearer " + jwt.issue(1L, true);
+        LocalDate from = LocalDate.parse("2026-11-01");
+        LocalDate to = LocalDate.parse("2026-11-28");
+        byte[] workbook = {1, 2, 3};
+        when(adminLedgerService.exportExcel(CreditTxType.TOP_UP, 5L, "ORD", from, to))
+                .thenReturn(workbook);
+
+        mvc.perform(get(LEDGER + ".xlsx")
+                        .param("type", "TOP_UP")
+                        .param("userId", "5")
+                        .param("q", "ORD")
+                        .param("from", from.toString())
+                        .param("to", to.toString())
+                        .header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(MockMvcResultMatchers.content()
+                        .contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .andExpect(header().string(
+                                "Content-Disposition", Matchers.containsString("lich-su-giao-dich-credit.xlsx")))
+                .andExpect(MockMvcResultMatchers.content().bytes(workbook));
     }
 }

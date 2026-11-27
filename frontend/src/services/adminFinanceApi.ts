@@ -192,8 +192,8 @@ export const adminFinanceApi = {
     const { data } = await http.get<AdminLedgerPage>('/api/v1/admin/finance/ledger', { params });
     return data;
   },
-  async ledgerCsv(params: AdminLedgerFilters): Promise<FinanceCsvDownload> {
-    const response = await http.get<Blob>('/api/v1/admin/finance/ledger.csv', {
+  async ledgerExcel(params: AdminLedgerFilters): Promise<FinanceCsvDownload> {
+    const response = await http.get<Blob>('/api/v1/admin/finance/ledger.xlsx', {
       params,
       responseType: 'blob',
     });
@@ -201,7 +201,7 @@ export const adminFinanceApi = {
       blob: response.data,
       fileName: financeFileName(
         response.headers['content-disposition'],
-        'lich-su-giao-dich-credit.csv',
+        'lich-su-giao-dich-credit.xlsx',
       ),
     };
   },
