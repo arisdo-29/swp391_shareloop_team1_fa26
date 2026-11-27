@@ -2283,14 +2283,11 @@ public class RequestService {
 
         StringBuilder message = new StringBuilder("Admin đã xác minh sự cố giao nhận: giao dịch bị huỷ.");
         ItemSnapshot snapshot = loadItemSnapshot(request);
-        // Gặp trực tiếp: món chính ở chỗ người nhận, món đổi ở chỗ chủ bài. Giao hàng: theo từng chiều, chiều chưa nhận
-        // thì món vẫn ở chỗ người gửi.
-        boolean shipping = request.isShipping();
-        long mainHolder = shipping && !request.isLegReceived(1) ? snapshot.donorId() : request.getReceiverId();
+        Long mainHolder = recordedItemHolder(request, 1, snapshot.donorId(), request.getReceiverId());
         message.append(
                 applyItemOutcome(request, request.getItemId(), choices.get(request.getItemId()), adminId, mainHolder));
         if (request.getOfferedItemId() != null) {
-            long offeredHolder = shipping && !request.isLegReceived(2) ? request.getReceiverId() : snapshot.donorId();
+            Long offeredHolder = recordedItemHolder(request, 2, request.getReceiverId(), snapshot.donorId());
             message.append(applyItemOutcome(
                     request,
                     request.getOfferedItemId(),
@@ -2299,6 +2296,13 @@ public class RequestService {
                     offeredHolder));
         }
         return message.toString();
+    }
+
+    private Long recordedItemHolder(Request request, int leg, long senderId, long receiverId) {
+        if (!request.isShipping() || request.isLegReceived(leg)) {
+            return receiverId;
+        }
+        return request.isLegShipped(leg) ? null : senderId;
     }
 
     // Bắt buộc đủ mọi món của giao dịch, mỗi món đúng một lựa chọn, không món lạ (GN-14).
@@ -2329,7 +2333,7 @@ public class RequestService {
 
     // Xử lý một món, ghi nhật ký và trả câu nói về món đó cho hai bên (GN-14).
     private String applyItemOutcome(
-            Request request, long itemId, ItemDisputeOutcome.Choice choice, Long adminId, long holderUserId) {
+            Request request, long itemId, ItemDisputeOutcome.Choice choice, Long adminId, Long holderUserId) {
         String title = findItemTitle(itemId);
         String name = title == null || title.isBlank() ? "đã chọn" : title;
         // Bài về APPROVED trước, rồi mới ẩn nếu Admin chọn Ẩn hoặc Đã đổi chủ
@@ -2345,8 +2349,14 @@ public class RequestService {
             case TRANSFERRED -> {
                 itemService.hideByAdmin(itemId);
                 logNote = "Món đã được trao trong một giao dịch bị huỷ";
-                sentence = " Món " + name + " đã nằm ở chỗ " + nameOrDefault(holderUserId)
-                        + ". Hai bên liên hệ để hoàn trả nếu cần.";
+                String location;
+                if (holderUserId == null) {
+                    location = "đã được báo gửi và chưa xác định ai đang giữ";
+                    logNote = "Món đã được báo gửi và chưa xác định ai đang giữ";
+                } else {
+                    location = "đã nằm ở chỗ " + nameOrDefault(holderUserId);
+                }
+                sentence = " Món " + name + " " + location + ". Hai bên liên hệ để hoàn trả nếu cần.";
             }
             default -> {
                 logNote = "Món được mở lại theo kết luận khiếu nại giao dịch";
