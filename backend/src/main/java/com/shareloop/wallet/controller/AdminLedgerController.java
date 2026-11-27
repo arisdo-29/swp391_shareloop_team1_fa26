@@ -24,6 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 public class AdminLedgerController {
     private static final MediaType TEXT_CSV_UTF8 = new MediaType("text", "csv", StandardCharsets.UTF_8);
+    private static final MediaType XLSX =
+            MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
     private final AdminLedgerService service;
 
@@ -60,6 +62,25 @@ public class AdminLedgerController {
                                 .build()
                                 .toString())
                 .contentType(TEXT_CSV_UTF8)
+                .body(body);
+    }
+
+    @GetMapping("/ledger.xlsx")
+    public ResponseEntity<byte[]> exportExcel(
+            @RequestParam(required = false) CreditTxType type,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        byte[] body = service.exportExcel(type, userId, q, from, to);
+        return ResponseEntity.ok()
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename("lich-su-giao-dich-credit.xlsx", StandardCharsets.UTF_8)
+                                .build()
+                                .toString())
+                .contentType(XLSX)
                 .body(body);
     }
 }
