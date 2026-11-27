@@ -645,7 +645,7 @@ class RequestServiceTest {
     void changeOfferedItem_pending_updatesChoiceWithoutReserving() {
         Request request = new Request(1L, 10L, 50L, "SWAP");
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(60L);
@@ -666,7 +666,7 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, 50L, "SWAP");
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now());
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(60L);
@@ -689,7 +689,7 @@ class RequestServiceTest {
         request.proposeSchedule(
                 "IN_PERSON", "Điểm hẹn", Instant.now().plus(2, ChronoUnit.DAYS), true, true, Instant.now());
         assertThat(request.getDonorScheduleOkAt()).isNotNull();
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(60L);
@@ -707,7 +707,7 @@ class RequestServiceTest {
     @Test
     void changeOfferedItem_rejectsOtherUser() {
         Request request = new Request(1L, 10L, 50L, "SWAP");
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         assertThatThrownBy(() -> requestService.changeOfferedItem(101L, 20L, 60L))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
@@ -993,7 +993,7 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, null, "GIVE");
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now());
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "RESERVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);

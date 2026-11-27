@@ -462,7 +462,7 @@ public class ChatService {
         if (currentUserId == null) {
             throw new BusinessException(ChatErrorCode.CHAT_FORBIDDEN);
         }
-        return validateAndGetChatContext(requestId, currentUserId);
+        return validateAndGetChatContext(requestId, currentUserId, true);
     }
 
     // Tên món để ghép vào tin hệ thống; không tra được thì dùng chữ chung để tin nhắn vẫn đọc được.
@@ -532,9 +532,15 @@ public class ChatService {
      * Xác thực quyền truy cập và trạng thái hợp lệ của cuộc trò chuyện.
      */
     private RequestChatContext validateAndGetChatContext(long requestId, long currentUserId) {
+        return validateAndGetChatContext(requestId, currentUserId, false);
+    }
+
+    private RequestChatContext validateAndGetChatContext(long requestId, long currentUserId, boolean lockRequest) {
         RequestChatContext context;
         try {
-            context = requestService.getChatContext(requestId);
+            context = lockRequest
+                    ? requestService.getChatContextForUpdate(requestId)
+                    : requestService.getChatContext(requestId);
         } catch (BusinessException e) {
             if (e.getErrorCode() == RequestErrorCode.REQUEST_NOT_FOUND
                     || e.getErrorCode() == RequestErrorCode.REQUEST_ITEM_NOT_FOUND) {

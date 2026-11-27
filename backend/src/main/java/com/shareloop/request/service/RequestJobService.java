@@ -216,7 +216,7 @@ public class RequestJobService {
     }
 
     private boolean expireSilentReservedInTransaction(long requestId, Instant cutoff) {
-        Request request = requestRepository.findById(requestId).orElse(null);
+        Request request = requestRepository.findByIdForUpdate(requestId).orElse(null);
         if (request == null) {
             return false;
         }

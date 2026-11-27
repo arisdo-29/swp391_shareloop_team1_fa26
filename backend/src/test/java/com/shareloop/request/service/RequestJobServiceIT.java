@@ -1,6 +1,7 @@
 package com.shareloop.request.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.shareloop.support.IntegrationTest;
 import java.sql.Timestamp;
@@ -8,7 +9,11 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,6 +32,9 @@ class RequestJobServiceIT extends IntegrationTest {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @Autowired
+    DataSource dataSource;
 
     private final List<Long> createdRequestIds = new ArrayList<>();
     private final List<Long> createdItemIds = new ArrayList<>();
@@ -95,6 +103,41 @@ class RequestJobServiceIT extends IntegrationTest {
         assertThat(count).isGreaterThanOrEqualTo(1);
         assertThat(requestStatusOf(requestId)).isEqualTo("CANCELLED");
         assertThat(itemStatusOf(itemId)).isEqualTo("APPROVED");
+    }
+
+    @Test
+    void expireSilentReservedRequests_rechecksStateAfterConcurrentScheduleCommit() throws Exception {
+        Instant now = Instant.now();
+        long donorId = insertUser();
+        long receiverId = insertUser();
+        long itemId = insertItem(donorId, "RESERVED");
+        long requestId = insertRequest(
+                itemId,
+                receiverId,
+                "AWAITING_LOGISTICS",
+                now.minus(12, ChronoUnit.DAYS),
+                now.minus(11, ChronoUnit.DAYS),
+                null,
+                null);
+
+        try (var executor = Executors.newSingleThreadExecutor();
+                var confirmation = dataSource.getConnection()) {
+            confirmation.setAutoCommit(false);
+            try (var update = confirmation.prepareStatement(
+                    "UPDATE requests SET status = 'LOGISTICS_CONFIRMED', delivery_method = 'IN_PERSON',"
+                            + " meeting_time = now() + interval '1 day', contact_revealed_at = now() WHERE id = ?")) {
+                update.setLong(1, requestId);
+                update.executeUpdate();
+            }
+
+            var expiry = executor.submit(() -> requestJobService.expireSilentReservedRequests(now));
+            assertThatThrownBy(() -> expiry.get(300, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
+            confirmation.commit();
+            expiry.get(10, TimeUnit.SECONDS);
+        }
+
+        assertThat(requestStatusOf(requestId)).isEqualTo("LOGISTICS_CONFIRMED");
+        assertThat(itemStatusOf(itemId)).isEqualTo("RESERVED");
     }
 
     @Test

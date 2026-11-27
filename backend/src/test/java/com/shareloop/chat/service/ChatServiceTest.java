@@ -754,7 +754,7 @@ class ChatServiceTest {
         @DisplayName("Người nhận đề nghị: đề nghị cũ chuyển DECLINED, lưu tin OFFER_CHANGE PENDING và báo chủ bài")
         void proposeOfferChange_byReceiver_declinesOldOfferAndNotifiesDonor() {
             // given
-            when(requestService.getChatContext(REQUEST_ID)).thenReturn(reservedGiveContext());
+            when(requestService.getChatContextForUpdate(REQUEST_ID)).thenReturn(reservedGiveContext());
             Message oldOffer = Message.offerChange(REQUEST_ID, RECEIVER_ID, 49L, null);
             when(messageRepository.findByRequestIdAndKindAndOfferStatus(
                             REQUEST_ID, MessageKind.OFFER_CHANGE, Message.OFFER_PENDING))
@@ -779,7 +779,7 @@ class ChatServiceTest {
         @DisplayName("Chủ bài gửi đề nghị thì ném CHAT_FORBIDDEN")
         void proposeOfferChange_byDonor_throwsForbidden() {
             // given
-            when(requestService.getChatContext(REQUEST_ID)).thenReturn(reservedGiveContext());
+            when(requestService.getChatContextForUpdate(REQUEST_ID)).thenReturn(reservedGiveContext());
 
             // when & then
             assertThatThrownBy(() -> chatService.proposeOfferChange(
@@ -794,7 +794,7 @@ class ChatServiceTest {
         @DisplayName("Chủ bài đồng ý: gọi RequestService chuyển Trao đổi, đề nghị ACCEPTED và có tin SYSTEM")
         void acceptOfferChange_byDonor_convertsRequestAndAddsSystemMessage() {
             // given
-            when(requestService.getChatContext(REQUEST_ID)).thenReturn(reservedGiveContext());
+            when(requestService.getChatContextForUpdate(REQUEST_ID)).thenReturn(reservedGiveContext());
             Message offer = Message.offerChange(REQUEST_ID, RECEIVER_ID, OFFERED_ITEM_ID, null);
             when(messageRepository.findByIdForUpdate(MESSAGE_ID)).thenReturn(Optional.of(offer));
             when(itemQueryService.getItemCard(OFFERED_ITEM_ID))
@@ -816,7 +816,7 @@ class ChatServiceTest {
         @DisplayName("Đồng ý thất bại ở RequestService (vd thiếu Credit) thì đề nghị vẫn PENDING")
         void acceptOfferChange_whenRequestServiceFails_keepsOfferPending() {
             // given
-            when(requestService.getChatContext(REQUEST_ID)).thenReturn(reservedGiveContext());
+            when(requestService.getChatContextForUpdate(REQUEST_ID)).thenReturn(reservedGiveContext());
             Message offer = Message.offerChange(REQUEST_ID, RECEIVER_ID, OFFERED_ITEM_ID, null);
             when(messageRepository.findByIdForUpdate(MESSAGE_ID)).thenReturn(Optional.of(offer));
             when(requestService.acceptOfferedItemInChat(REQUEST_ID, DONOR_ID, OFFERED_ITEM_ID))
@@ -833,7 +833,7 @@ class ChatServiceTest {
         @DisplayName("Người nhận tự đồng ý đề nghị của mình thì ném CHAT_FORBIDDEN")
         void acceptOfferChange_byReceiver_throwsForbidden() {
             // given
-            when(requestService.getChatContext(REQUEST_ID)).thenReturn(reservedGiveContext());
+            when(requestService.getChatContextForUpdate(REQUEST_ID)).thenReturn(reservedGiveContext());
 
             // when & then
             assertThatThrownBy(() -> chatService.acceptOfferChange(REQUEST_ID, MESSAGE_ID, RECEIVER_ID))
@@ -847,7 +847,7 @@ class ChatServiceTest {
         @DisplayName("Tin thuộc giao dịch khác thì ném CHAT_OFFER_CHANGE_NOT_FOUND")
         void acceptOfferChange_whenMessageOfOtherRequest_throwsNotFound() {
             // given
-            when(requestService.getChatContext(REQUEST_ID)).thenReturn(reservedGiveContext());
+            when(requestService.getChatContextForUpdate(REQUEST_ID)).thenReturn(reservedGiveContext());
             Message offerOfOtherRequest = Message.offerChange(999L, RECEIVER_ID, OFFERED_ITEM_ID, null);
             when(messageRepository.findByIdForUpdate(MESSAGE_ID)).thenReturn(Optional.of(offerOfOtherRequest));
 
@@ -862,7 +862,7 @@ class ChatServiceTest {
         @DisplayName("Đề nghị đã DECLINED thì ném CHAT_OFFER_CHANGE_NOT_PENDING")
         void acceptOfferChange_whenOfferAlreadyDeclined_throwsNotPending() {
             // given
-            when(requestService.getChatContext(REQUEST_ID)).thenReturn(reservedGiveContext());
+            when(requestService.getChatContextForUpdate(REQUEST_ID)).thenReturn(reservedGiveContext());
             Message offer = Message.offerChange(REQUEST_ID, RECEIVER_ID, OFFERED_ITEM_ID, null);
             offer.decline();
             when(messageRepository.findByIdForUpdate(MESSAGE_ID)).thenReturn(Optional.of(offer));
@@ -912,7 +912,7 @@ class ChatServiceTest {
         @DisplayName("Chủ bài từ chối: đề nghị DECLINED, có tin SYSTEM, báo người nhận và không chuyển giao dịch")
         void declineOfferChange_byDonor_declinesAndNotifiesReceiver() {
             // given
-            when(requestService.getChatContext(REQUEST_ID)).thenReturn(reservedGiveContext());
+            when(requestService.getChatContextForUpdate(REQUEST_ID)).thenReturn(reservedGiveContext());
             Message offer = Message.offerChange(REQUEST_ID, RECEIVER_ID, OFFERED_ITEM_ID, null);
             when(messageRepository.findByIdForUpdate(MESSAGE_ID)).thenReturn(Optional.of(offer));
             when(messageRepository.save(any(Message.class))).thenAnswer(i -> i.getArgument(0));
