@@ -144,15 +144,19 @@ describe('AdminTopUpOrders', () => {
     await screen.findByText('Lan An');
     expect(adminFinanceApi.topUpOrders).toHaveBeenCalledWith({ page: 0, size: 10 });
     expect((screen.getByLabelText('Trạng thái') as HTMLSelectElement).value).toBe('');
-    expect(await screen.findByText('Cần đối soát', { selector: 'p' })).toBeTruthy();
+    const summary = screen.getByLabelText('Thống kê đơn nạp');
+    expect(within(summary).getAllByRole('button')).toHaveLength(5);
+    expect(within(summary).queryByText('Cần đối soát')).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: 'Chỉ đơn cần đối soát' })).toBeNull();
   });
 
-  it('đánh dấu đơn cần đối soát, rút gọn mã đơn và không lộ chữ kỹ thuật', async () => {
+  it('chỉ hiển thị trạng thái thanh toán và rút gọn mã đơn', async () => {
     render(<AdminTopUpOrders />);
     await screen.findByText('Chi Lê');
 
     const row = screen.getByText('Chi Lê').closest('tr') as HTMLElement;
-    expect(within(row).getByText('Cần đối soát')).toBeTruthy();
+    expect(within(row).queryByText('Cần đối soát')).toBeNull();
+    expect(within(row).getByText('Hết hạn')).toBeTruthy();
     expect(within(row).getByText('#ABCD...3456')).toBeTruthy();
     expect(within(row).getByText('14999888')).toBeTruthy();
     const page = document.body.textContent ?? '';
@@ -177,12 +181,9 @@ describe('AdminTopUpOrders', () => {
     );
   });
 
-  it('bật công tắc chỉ đơn cần đối soát gửi needsReconcile', async () => {
-    const user = userEvent.setup();
-    render(<AdminTopUpOrders />);
+  it('giữ bộ lọc từ liên kết ở trang Tổng quan', async () => {
+    render(<AdminTopUpOrders path="/admin/finance/topup-orders?needsReconcile=true" />);
     await screen.findByText('Lan An');
-
-    await user.click(screen.getByLabelText('Chỉ đơn cần đối soát'));
 
     await waitFor(() =>
       expect(adminFinanceApi.topUpOrders).toHaveBeenLastCalledWith({
@@ -261,16 +262,17 @@ describe('AdminTopUpOrders', () => {
     );
   });
 
-  it('bấm vào ô cần đối soát ở khối tổng hợp lọc đúng các đơn đó', async () => {
+  it('bấm vào ô thành công ở khối tổng hợp lọc theo trạng thái thanh toán', async () => {
     const user = userEvent.setup();
-    render(<AdminTopUpOrders />);
+    render(<AdminTopUpOrders path="/admin/finance/topup-orders?needsReconcile=true" />);
     await screen.findByText('Lan An');
 
-    await user.click(await screen.findByRole('button', { name: /Cần đối soát/ }));
+    const summary = screen.getByLabelText('Thống kê đơn nạp');
+    await user.click(within(summary).getByRole('button', { name: /Thành công/ }));
 
     await waitFor(() =>
       expect(adminFinanceApi.topUpOrders).toHaveBeenLastCalledWith({
-        needsReconcile: true,
+        status: 'SUCCESS',
         page: 0,
         size: 10,
       }),
@@ -288,6 +290,7 @@ describe('AdminTopUpOrders', () => {
     expect(adminFinanceApi.topUpOrderDetail).toHaveBeenCalledWith(FLAGGED_CODE);
     expect(await within(dialog).findByText('Mã giao dịch VNPay')).toBeTruthy();
     expect(within(dialog).getByText('14999888')).toBeTruthy();
+    expect(within(dialog).queryByText('Cần đối soát')).toBeNull();
     expect(within(dialog).queryByText('Phản hồi từ VNPay')).toBeNull();
     expect(within(dialog).queryByText('Mã phản hồi')).toBeNull();
     expect(within(dialog).queryByText('Ngân hàng')).toBeNull();
@@ -419,7 +422,7 @@ describe('AdminTopUpOrders', () => {
       <AdminTopUpOrders path="/admin/finance/topup-orders?from=2026-10-06&to=2026-10-06&paidDate=true" />,
     );
     await screen.findByText('Lan An');
-    await user.click(screen.getByLabelText('Chỉ đơn cần đối soát'));
+    await user.selectOptions(screen.getByLabelText('Trạng thái'), 'SUCCESS');
 
     await user.click(screen.getByRole('button', { name: 'Xuất Excel' }));
 
@@ -428,7 +431,7 @@ describe('AdminTopUpOrders', () => {
         from: '2026-10-06',
         to: '2026-10-06',
         paidDate: true,
-        needsReconcile: true,
+        status: 'SUCCESS',
       }),
     );
     expect(createObjectURL).toHaveBeenCalled();

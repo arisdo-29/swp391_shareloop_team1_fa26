@@ -25,6 +25,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
@@ -172,11 +173,24 @@ class AdminTopUpIT extends IntegrationTest {
         try (var workbook = new XSSFWorkbook(new ByteArrayInputStream(excel))) {
             var sheet = workbook.getSheet("Giao dịch nạp tiền");
             assertThat(sheet.getRow(1).getCell(1).getStringCellValue()).isEqualTo("Ngày thanh toán");
-            assertThat(sheet.getRow(4).getCell(3).getStringCellValue()).isEqualTo("Số tiền (VND)");
+            Iterable<Cell> header = sheet.getRow(4);
+            assertThat(header)
+                    .extracting(Cell::getStringCellValue)
+                    .containsExactly(
+                            "Mã đơn",
+                            "Người nạp",
+                            "Email",
+                            "Số tiền (VND)",
+                            "Số Credit",
+                            "Cổng thanh toán",
+                            "Trạng thái",
+                            "Mã giao dịch VNPay",
+                            "Tạo lúc",
+                            "Thanh toán lúc");
             assertThat(sheet.getPaneInformation().isFreezePane()).isTrue();
             assertThat(sheet.getPaneInformation().getVerticalSplitPosition()).isEqualTo((short) 1);
             assertThat(sheet.getPaneInformation().getHorizontalSplitPosition()).isEqualTo((short) 5);
-            assertThat(sheet.getCTWorksheet().getAutoFilter().getRef()).isEqualTo("A5:L6");
+            assertThat(sheet.getCTWorksheet().getAutoFilter().getRef()).isEqualTo("A5:J6");
             assertThat(sheet.getLastRowNum()).isEqualTo(5);
             var row = sheet.getRow(5);
             assertThat(row.getCell(0).getStringCellValue()).isEqualTo(paid);
@@ -185,12 +199,12 @@ class AdminTopUpIT extends IntegrationTest {
             assertThat(row.getCell(3).getCellStyle().getAlignment()).isEqualTo(HorizontalAlignment.RIGHT);
             assertThat(row.getCell(6).getCellStyle().getAlignment()).isEqualTo(HorizontalAlignment.CENTER);
             assertThat(row.getCell(0).getCellStyle().getVerticalAlignment()).isEqualTo(VerticalAlignment.CENTER);
-            assertThat(row.getCell(11).getCellStyle().getWrapText()).isTrue();
+            assertThat(row.getLastCellNum()).isEqualTo((short) 10);
             assertThat(row.getCell(4).getNumericCellValue()).isEqualTo(20.0);
             assertThat(row.getCell(6).getStringCellValue()).isEqualTo("Thành công");
-            assertThat(row.getCell(8).getStringCellValue()).isEqualTo("0000123");
-            assertThat(row.getCell(8).getCellStyle().getDataFormatString()).isEqualTo("@");
-            assertThat(row.getCell(10).getLocalDateTimeCellValue()).isEqualTo(LocalDateTime.of(2001, 1, 2, 0, 0));
+            assertThat(row.getCell(7).getStringCellValue()).isEqualTo("0000123");
+            assertThat(row.getCell(7).getCellStyle().getDataFormatString()).isEqualTo("@");
+            assertThat(row.getCell(9).getLocalDateTimeCellValue()).isEqualTo(LocalDateTime.of(2001, 1, 2, 0, 0));
         }
     }
 

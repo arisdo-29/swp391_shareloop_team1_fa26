@@ -100,6 +100,7 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
   const [keyword, setKeyword] = useState(keywordInput);
   const [fromDate, setFromDate] = useState(() => query.get('from') ?? '');
   const [toDate, setToDate] = useState(() => query.get('to') ?? '');
+  // Trang Tổng quan mở danh sách đơn cần xử lý bằng tham số này.
   const [needsReconcile, setNeedsReconcile] = useState(
     () => query.get('needsReconcile') === 'true',
   );
@@ -212,7 +213,6 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
       <div className="admin-topup-header">
         <PageHeader
           title="Giao dịch nạp tiền"
-          description="Đối soát từng đơn nạp Credit qua cổng thanh toán. Đơn đã đóng mà VNPay vẫn thu tiền được đánh dấu cần đối soát."
           action={
             <div className="flex gap-2">
               {ledgerReturn ? (
@@ -239,17 +239,7 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
         />
       </div>
 
-      <SummaryCards
-        summary={summary}
-        activeStatus={status}
-        reconcileOnly={needsReconcile}
-        onStatus={chooseStatus}
-        onReconcile={() => {
-          setNeedsReconcile((current) => !current);
-          setStatus('');
-          setPage(0);
-        }}
-      />
+      <SummaryCards summary={summary} activeStatus={status} onStatus={chooseStatus} />
 
       <div className="admin-topup-filters">
         <div className="admin-topup-filter-search">
@@ -297,18 +287,6 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
             }}
           />
         </div>
-        <label className="admin-topup-filter-reconcile">
-          <input
-            type="checkbox"
-            className="size-4"
-            checked={needsReconcile}
-            onChange={(event) => {
-              setNeedsReconcile(event.target.checked);
-              setPage(0);
-            }}
-          />
-          Chỉ đơn cần đối soát
-        </label>
       </div>
 
       {error ? (
@@ -376,15 +354,11 @@ function TopUpOrdersList({ location }: { location: ReturnType<typeof useLocation
 function SummaryCards({
   summary,
   activeStatus,
-  reconcileOnly,
   onStatus,
-  onReconcile,
 }: {
   summary: AdminTopUpSummary | null;
   activeStatus: PaymentOrderStatus | '';
-  reconcileOnly: boolean;
   onStatus: (status: PaymentOrderStatus) => void;
-  onReconcile: () => void;
 }) {
   if (!summary) return null;
   const appearances: Record<
@@ -399,17 +373,7 @@ function SummaryCards({
   };
   return (
     <div className="admin-dash-vars" aria-label="Thống kê đơn nạp">
-      <DashboardGrid columns={6}>
-        <DashboardStatCard
-          variant="finance"
-          icon="reconcile"
-          accent="red"
-          label="Cần đối soát"
-          value={`${summary.needsReconcileCount} đơn`}
-          note="Cần kiểm tra thủ công"
-          active={reconcileOnly}
-          onClick={onReconcile}
-        />
+      <DashboardGrid columns={5}>
         {summary.byStatus.map((total) => {
           const context =
             total.status === 'SUCCESS'
@@ -466,20 +430,13 @@ function CopyCodeButton({ orderCode }: { orderCode: string }) {
   );
 }
 
-function StatusPill({ order }: { order: AdminTopUpOrder }) {
+function StatusPill({ status }: { status: PaymentOrderStatus }) {
   return (
-    <div className="admin-topup-status-stack">
-      <span
-        className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-2xs font-semibold ${statusClass(order.status)}`}
-      >
-        {statusLabels[order.status]}
-      </span>
-      {order.needsReconcile ? (
-        <span className="inline-flex whitespace-nowrap rounded-sm bg-error px-2 py-1 text-2xs font-semibold text-white">
-          Cần đối soát
-        </span>
-      ) : null}
-    </div>
+    <span
+      className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-2xs font-semibold ${statusClass(status)}`}
+    >
+      {statusLabels[status]}
+    </span>
   );
 }
 
@@ -517,7 +474,7 @@ function TopUpRow({
       </td>
       <td className="admin-topup-provider-code">{displayProviderTxnId(order.providerTxnId)}</td>
       <td>
-        <StatusPill order={order} />
+        <StatusPill status={order.status} />
       </td>
       <td className="admin-topup-time-cell">
         <p>
@@ -701,29 +658,22 @@ function OrderDialog({
               </span>
             </DetailRow>
             <DetailRow label="Trạng thái thanh toán">
-              <StatusPill order={order} />
+              <StatusPill status={order.status} />
             </DetailRow>
             <DetailRow label="Thời gian tạo đơn">{formatDateTime(order.createdAt)}</DetailRow>
             {order.paidAt ? (
               <DetailRow label="Thời gian thanh toán">{formatDateTime(order.paidAt)}</DetailRow>
             ) : null}
-            {order.needsReconcile || order.reviewedAt ? (
-              <DetailRow label="Trạng thái đối soát">
-                {order.needsReconcile ? (
-                  <span className="font-semibold text-error">Cần đối soát</span>
-                ) : (
-                  <>
-                    <p className="font-semibold text-success">Đã xử lý đối soát</p>
-                    {order.reviewedAt ? <p>{formatDateTime(order.reviewedAt)}</p> : null}
-                    {order.reviewedByName ? (
-                      <p className="text-xs text-text-muted">Bởi {order.reviewedByName}</p>
-                    ) : null}
-                  </>
-                )}
+            {order.reviewedAt ? (
+              <DetailRow label="Thông tin xử lý">
+                <p>{formatDateTime(order.reviewedAt)}</p>
+                {order.reviewedByName ? (
+                  <p className="text-xs text-text-muted">Bởi {order.reviewedByName}</p>
+                ) : null}
               </DetailRow>
             ) : null}
             {order.reviewNote ? (
-              <DetailRow label="Ghi chú đối soát">{order.reviewNote}</DetailRow>
+              <DetailRow label="Ghi chú">{order.reviewNote}</DetailRow>
             ) : null}
           </dl>
 

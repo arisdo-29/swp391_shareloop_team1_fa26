@@ -28,7 +28,7 @@ import org.springframework.stereotype.Component;
 public class TopUpOrderExcelWriter {
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final int HEADER_ROW = 4;
-    private static final int[] COLUMN_WIDTHS = {36, 25, 32, 20, 15, 20, 19, 16, 24, 22, 22, 48};
+    private static final int[] COLUMN_WIDTHS = {36, 25, 32, 20, 15, 20, 19, 24, 22, 22};
     private static final XSSFColor ROW_FILL = new XSSFColor(new byte[] {(byte) 243, (byte) 248, (byte) 245}, null);
     private static final XSSFColor ROW_BORDER = new XSSFColor(new byte[] {(byte) 220, (byte) 232, (byte) 225}, null);
 
@@ -96,11 +96,9 @@ public class TopUpOrderExcelWriter {
                     "Số Credit",
                     "Cổng thanh toán",
                     "Trạng thái",
-                    "Cần đối soát",
                     "Mã giao dịch VNPay",
                     "Tạo lúc",
-                    "Thanh toán lúc",
-                    "Ghi chú đối soát");
+                    "Thanh toán lúc");
             var headerRow = sheet.getRow(HEADER_ROW);
             var centeredHeader = workbook.createCellStyle();
             centeredHeader.cloneStyleFrom(header);
@@ -111,7 +109,7 @@ public class TopUpOrderExcelWriter {
             numberHeader.setAlignment(HorizontalAlignment.RIGHT);
             numberHeader.setIndention((short) 2);
             styleColumns(headerRow, numberHeader, 3, 4);
-            styleColumns(headerRow, centeredHeader, 5, 6, 7, 8, 9, 10);
+            styleColumns(headerRow, centeredHeader, 5, 6, 7, 8, 9);
             headerRow.setHeightInPoints(26);
 
             var format = workbook.createDataFormat();
@@ -135,21 +133,17 @@ public class TopUpOrderExcelWriter {
                         order.credits(),
                         FinanceReportCsvWriter.providerLabel(order.provider()),
                         TopUpOrderCsvWriter.statusLabel(order.status()),
-                        order.needsReconcile() ? "Có" : "Không",
                         order.providerTxnId(),
                         localTime(order.createdAt()),
-                        localTime(order.paidAt()),
-                        order.reviewNote());
+                        localTime(order.paidAt()));
                 var dataRow = sheet.getRow(rowIndex);
-                styleColumns(dataRow, styles.wrapped(), 1, 2, 11);
+                styleColumns(dataRow, styles.wrapped(), 1, 2);
                 styleColumns(dataRow, styles.number(), 3, 4);
-                styleColumns(dataRow, styles.centered(), 5, 6, 7, 8);
-                styleColumns(dataRow, styles.date(), 9, 10);
+                styleColumns(dataRow, styles.centered(), 5, 6, 7);
+                styleColumns(dataRow, styles.date(), 8, 9);
                 long lines = Math.max(
-                        wrappedLines(order.reviewNote(), COLUMN_WIDTHS[11]),
-                        Math.max(
-                                wrappedLines(order.userName(), COLUMN_WIDTHS[1]),
-                                wrappedLines(order.userEmail(), COLUMN_WIDTHS[2])));
+                        wrappedLines(order.userName(), COLUMN_WIDTHS[1]),
+                        wrappedLines(order.userEmail(), COLUMN_WIDTHS[2]));
                 dataRow.setHeightInPoints(Math.max(22, Math.min(lines, 25) * 15 + 5));
             }
 
