@@ -107,7 +107,7 @@ export function Login() {
         <div className="flex justify-end">
           <Link
             to="/forgot-password"
-            className="auth-entry-forgot inline-flex min-h-11 items-center text-sm font-semibold text-link hover:text-secondary"
+            className="standalone-nav-action"
           >
             Quên mật khẩu?
           </Link>

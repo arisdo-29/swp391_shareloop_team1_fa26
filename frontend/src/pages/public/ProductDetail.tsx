@@ -334,7 +334,7 @@ export function ProductDetail() {
 
   return (
     <div className="page-shell pt-6">
-      <Link to={backLink.target} className="inline-flex min-h-11 items-center text-sm font-semibold text-link hover:text-secondary">
+      <Link to={backLink.target} className="standalone-nav-action">
         {backLink.label}
       </Link>
       <div className="mt-2 grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -365,7 +365,7 @@ export function ProductDetail() {
             </div>
           </div>
 
-          <section className="space-y-4 rounded-detail border border-detail-border bg-white p-5">
+          <section className="space-y-4 rounded-detail border border-detail-content-border bg-white p-4 sm:p-5">
             <div className="flex flex-wrap items-center gap-2.5">
               <span className="inline-flex w-fit rounded-sm border border-primary bg-primary-soft [&>span]:bg-transparent [&>span]:px-3 [&>span]:py-1.5 [&>span]:text-sm [&>span]:font-semibold [&>span]:text-primary">
                 <TypeBadge type={item.type} />
@@ -381,17 +381,24 @@ export function ProductDetail() {
                 <StatusBadge status={item.status} />
               ) : null}
             </div>
-            <h1 className="break-words text-[26px] font-bold leading-tight sm:text-[28px]">
+            <h1 className="break-words text-2xl font-bold leading-tight sm:text-[26px]">
               {item.title}
             </h1>
             {item.referencePrice != null ? (
-              <p className="inline-flex w-fit rounded-sm border border-warning bg-warning-soft px-3 py-1.5 text-lg font-bold tabular-nums text-warning">
-                {formatReferencePrice(item.referencePrice)}
-              </p>
+              <div
+                aria-label="Giá tham khảo"
+                className="inline-flex w-fit flex-col rounded-action border border-warning bg-warning-soft px-3 py-2"
+              >
+                <span className="text-xs font-semibold text-warning">Giá tham khảo</span>
+                <span className="mt-0.5 text-xl font-bold tabular-nums text-warning">
+                  {formatReferencePrice(item.referencePrice).replace('Giá tham khảo ', '')}
+                </span>
+              </div>
             ) : (
-              <p className="text-sm font-medium text-text-muted">
-                {formatReferencePrice(item.referencePrice)}
-              </p>
+              <div aria-label="Giá tham khảo" className="inline-flex w-fit flex-col text-text-muted">
+                <span className="text-xs font-semibold">Giá tham khảo</span>
+                <span className="mt-0.5 text-sm font-medium text-text-muted">Chưa có giá tham khảo</span>
+              </div>
             )}
             {own && item.hidden && item.hiddenReason ? (
               <Alert tone="warning">{item.hiddenReason}</Alert>
@@ -399,7 +406,7 @@ export function ProductDetail() {
             {own && item.status === 'REJECTED' && item.rejectionReason ? (
               <Alert tone="warning">Bài bị từ chối. Lý do: {item.rejectionReason}. Sửa bài để gửi duyệt lại.</Alert>
             ) : null}
-            <div className="grid grid-cols-1 gap-x-6 gap-y-4 border-t border-detail-border pt-4 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-3 border-t border-detail-content-border pt-4">
               <ItemFact icon="district" label="Khu vực">
                 {item.district}
               </ItemFact>
@@ -439,50 +446,53 @@ export function ProductDetail() {
 
           <section
             aria-labelledby="item-description"
-            className="rounded-detail border border-detail-border bg-white p-5"
+            className="overflow-hidden rounded-detail border border-detail-content-border bg-white"
           >
             <h2
               id="item-description"
-              className="flex items-center gap-2 text-lg font-bold text-text-primary"
+              className="flex items-center gap-2 bg-detail-heading px-4 py-3 text-[17px] font-bold text-primary sm:px-5 sm:text-lg"
             >
-              <Icon name="manageItems" className="size-5 shrink-0 text-primary" weight="bold" />
+              <Icon name="manageItems" className="size-5 shrink-0" weight="bold" />
               Mô tả
             </h2>
-            <div className="mt-3 border-t border-detail-border pt-3">
+            <div className="border-t border-detail-content-border px-4 py-4 sm:px-5">
               <SafeMarkdownDescription text={item.description} />
+              {item.defectNote ? (
+                <p className="mt-3 border-t border-detail-content-border pt-3 text-sm leading-6 text-text-secondary">
+                  <strong className="text-text-primary">Lưu ý tình trạng:</strong> {item.defectNote}
+                </p>
+              ) : null}
+              {operatingLabel ? (
+                <p className="mt-2 text-sm leading-6 text-text-secondary">
+                  <strong className="text-text-primary">Trạng thái hoạt động:</strong> {operatingLabel}
+                </p>
+              ) : null}
+              {item.defectImages?.length ? (
+                <div className="mt-3 grid grid-cols-3 gap-3 border-t border-detail-content-border pt-3 sm:grid-cols-4">
+                  {item.defectImages.map((image, index) => (
+                    <ItemImage key={`${image}-${index}`} src={image} alt={`Ảnh lỗi ${index + 1}`} className="aspect-square rounded-md object-cover" />
+                  ))}
+                </div>
+              ) : null}
             </div>
-            {item.defectNote ? (
-              <p className="mt-3 border-t border-detail-border pt-3 text-sm leading-6 text-text-secondary">
-                <strong className="text-text-primary">Lưu ý tình trạng:</strong> {item.defectNote}
-              </p>
-            ) : null}
-            {operatingLabel ? (
-              <p className="mt-2 text-sm leading-6 text-text-secondary">
-                <strong className="text-text-primary">Trạng thái hoạt động:</strong> {operatingLabel}
-              </p>
-            ) : null}
-            {item.defectImages?.length ? (
-              <div className="mt-3 grid grid-cols-3 gap-3 border-t border-detail-border pt-3 sm:grid-cols-4">
-                {item.defectImages.map((image, index) => (
-                  <ItemImage key={`${image}-${index}`} src={image} alt={`Ảnh lỗi ${index + 1}`} className="aspect-square rounded-md object-cover" />
-                ))}
-              </div>
-            ) : null}
           </section>
 
           <section
             aria-labelledby="item-owner"
-            className="rounded-detail border border-detail-border bg-white p-5"
+            className="overflow-hidden rounded-detail border border-detail-content-border bg-white"
           >
-            <h2 id="item-owner" className="text-lg font-bold text-text-primary">
+            <h2 id="item-owner" className="flex items-center gap-2 bg-detail-heading px-4 py-3 text-[17px] font-bold text-primary sm:px-5 sm:text-lg">
+              <Icon name="user" className="size-5 shrink-0" weight="bold" />
               Thông tin chủ bài
             </h2>
-            <div className="mt-3 flex flex-col gap-4 border-t border-detail-border pt-4 sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-3 border-t border-detail-content-border px-4 py-4 sm:flex-row sm:items-center sm:px-5">
               <div className="flex min-w-0 flex-1 items-center gap-3">
-                <Avatar
-                  size="lg"
-                  user={{ name: item.donorName || 'Người đăng', avatarInitials: initialsOf(item.donorName || '') }}
-                />
+                <div className="size-[52px] shrink-0 overflow-hidden rounded-full [&>img]:size-[52px] [&>img]:rounded-full [&>span]:size-[52px] [&>span]:rounded-full">
+                  <Avatar
+                    size="lg"
+                    user={{ name: item.donorName || 'Người đăng', avatarInitials: initialsOf(item.donorName || '') }}
+                  />
+                </div>
                 <div className="min-w-0 flex-1 space-y-1">
                   <p className="break-words text-base font-bold text-text-primary">
                     {item.donorName || 'Người đăng'}
@@ -493,7 +503,7 @@ export function ProductDetail() {
               {ownerProfileId ? (
                 <Button
                   variant="outline"
-                  className="w-full !border-exchange !text-primary sm:w-auto"
+                  className="h-10 w-full !rounded-action !border-exchange !bg-detail-heading !text-primary hover:!bg-detail-selected sm:w-auto"
                   onClick={() => navigate(userProfilePath(ownerProfileId))}
                 >
                   Xem hồ sơ
@@ -692,13 +702,13 @@ export function ProductDetail() {
               type="button"
               variant="ghost"
               size="sm"
-              className="w-full !text-error/80 hover:!bg-error-soft hover:!text-error"
+              className="-mb-1 h-11 w-full !rounded-action !border-report-border !bg-report-soft text-[15px] !font-semibold !text-report hover:!border-report hover:!bg-report-hover hover:!text-report"
               onClick={() => {
                 setReportNotice('');
                 setReportOpen(true);
               }}
             >
-              <Icon name="complaints" className="size-4" />
+              <Icon name="complaints" className="size-4 shrink-0" />
               Báo cáo bài đăng
             </Button>
           ) : null}
@@ -730,11 +740,13 @@ function ItemFact({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 items-start gap-2.5">
-      <Icon name={icon} className="mt-0.5 size-4 shrink-0 text-primary" weight="bold" />
-      <div className="min-w-0">
-        <p className="text-xs font-semibold text-text-muted">{label}</p>
-        <div className="mt-0.5 text-sm font-medium leading-5 text-text-primary">{children}</div>
+    <div className="flex min-w-0 items-start gap-2.5 rounded-action bg-detail-fact p-3">
+      <span className="flex size-[34px] shrink-0 items-center justify-center rounded-action bg-detail-fact-icon text-primary">
+        <Icon name={icon} className="size-[18px]" weight="bold" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium text-text-muted">{label}</p>
+        <div className="mt-0.5 break-words text-sm font-semibold leading-5 text-primary">{children}</div>
       </div>
     </div>
   );

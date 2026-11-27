@@ -31,12 +31,26 @@ export default {
         accent: bottlePalette[500],
         link: bottlePalette[500],
         exchange: '#176B4B',
+        navigation: {
+          DEFAULT: '#176B4B',
+          soft: '#F0F7F3',
+        },
         detail: {
           border: '#D5E3DB',
+          'content-border': '#D0E0D6',
+          fact: '#F4F7F5',
+          'fact-icon': '#E2EDE6',
+          heading: '#EAF2ED',
           exchange: '#E6F1EA',
           'exchange-border': '#B9D5C3',
           selected: '#EAF4EE',
           note: '#F3F6F4',
+        },
+        report: {
+          DEFAULT: '#BC4B4B',
+          border: '#D97070',
+          soft: '#FDECEC',
+          hover: '#FADADA',
         },
         highlight: '#E0B25A',
         admin: {

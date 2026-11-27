@@ -2271,7 +2271,7 @@
 .home-content .home-final-primary:hover svg {
   transform: rotate(8deg);
 }
-.home-content .home-final > div:last-child a:not(.home-final-primary) {
+.home-content .home-final > div:last-child a:not(.home-final-primary):not(.standalone-nav-action) {
   color: var(--color-primary-soft);
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -3410,11 +3410,11 @@
     box-shadow 200ms;
 }
 
-.home-content .home-final > div:last-child a:not(.home-final-primary):hover {
+.home-content .home-final > div:last-child a:not(.home-final-primary):not(.standalone-nav-action):hover {
   background: rgb(255 255 255 / 24%);
 }
 
-.home-content .home-final > div:last-child a:not(.home-final-primary):focus-visible {
+.home-content .home-final > div:last-child a:not(.home-final-primary):not(.standalone-nav-action):focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgb(255 255 255 / 35%);
 }

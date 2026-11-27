@@ -287,7 +287,7 @@ export function AdminOperationsDashboard() {
         description="Tổng cộng từ trước đến nay theo sổ hệ thống."
         panel
         action={
-          <Link className="admin-dash-link" to="/admin/finance">
+          <Link className="standalone-nav-action" to="/admin/finance">
             Xem báo cáo tài chính
           </Link>
         }
@@ -319,7 +319,7 @@ export function AdminOperationsDashboard() {
         title="Hoạt động gần đây"
         description={`${RECENT_ACTIVITY_SIZE} thay đổi mới nhất được ghi nhận trong hệ thống.`}
         action={
-          <Link className="admin-dash-link" to="/admin/audit-logs">
+          <Link className="standalone-nav-action" to="/admin/audit-logs">
             Xem tất cả
           </Link>
         }

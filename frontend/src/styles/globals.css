@@ -27,6 +27,8 @@
   --color-secondary-soft: var(--color-success-200);
   --color-accent: var(--color-success-500);
   --color-link: var(--color-success-500);
+  --color-navigation: #176b4b;
+  --color-navigation-soft: #f0f7f3;
   --color-highlight: #e0b25a;
   --color-sage: var(--color-success-300);
   --color-light-sage: var(--color-success-200);
@@ -324,6 +326,24 @@ select[aria-invalid='true']:focus-visible {
 }
 
 @layer components {
+  .standalone-nav-action {
+    @apply inline-flex min-h-10 w-fit shrink-0 items-center justify-center rounded-action border px-6 py-2.5 text-center text-sm font-semibold leading-5 transition-colors;
+    border-color: #176B4B;
+    background-color: #F0F7F3;
+    color: #176B4B;
+  }
+
+  .standalone-nav-action:hover {
+    border-color: #176B4B;
+    background-color: #176B4B;
+    color: white;
+  }
+
+  .standalone-nav-action:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(23 107 75 / 30%);
+  }
+
   .page-shell {
     width: 100%;
     max-width: var(--layout-content-max);
