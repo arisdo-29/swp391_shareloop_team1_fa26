@@ -857,6 +857,16 @@ public class Request extends BaseEntity {
         this.resumedAt = now;
     }
 
+    /** Tiếp tục giao hàng chưa nhận đủ sau khi Admin bác khiếu nại, giữ các mốc đã gửi và đã nhận. */
+    public void resumeAfterRejectedShippingDispute(Instant now) {
+        if (this.status != RequestStatus.DISPUTED || !isShipping() || isAllLegsReceived()) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+        transitionTo(isAnyLegShipped() ? RequestStatus.AWAITING_HANDOVER : RequestStatus.LOGISTICS_CONFIRMED);
+        clearCancelRequest();
+        this.resumedAt = now;
+    }
+
     /** Câu mô tả lý do đề nghị để ghép vào lý do huỷ và thông báo, ví dụ "bạn không đến điểm hẹn". */
     public String cancelRequestSummary() {
         if (this.cancelRequestCode == null) {
@@ -887,6 +897,9 @@ public class Request extends BaseEntity {
      * @param now thời điểm hoàn tất
      */
     public void completeAfterDispute(Instant now) {
+        if (isShipping() && !isAllLegsReceived()) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
         transitionTo(RequestStatus.COMPLETED);
         this.completedAt = now;
     }
