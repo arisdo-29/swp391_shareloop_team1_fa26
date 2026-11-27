@@ -57,7 +57,7 @@ public record RequestResponse(
         // Số Credit chủ bài sẽ trả nếu giao dịch chuyển sang Trao đổi: POST_FEE khi bài đang GIVE, 0 khi đang SWAP
         // (CD-02). Backend tính để frontend không viết cứng phí. Null khi không biết loại bài.
         Integer conversionFee,
-        // Khiếu nại của giao dịch nhìn từ phía người xem (tối đa hai, mỗi bên một lần). Chỉ có ở GET /requests/{id},
+        // Khiếu nại của giao dịch nhìn từ phía người xem, cũ trước. Chỉ có ở GET /requests/{id},
         // danh sách cuộc trò chuyện và kết quả của hai nút mở tranh chấp; nơi khác để null.
         List<RequestDisputeSummary> disputes,
         // Báo cáo vi phạm khi một bên từ chối nhận (GN-07), nhìn từ phía người xem. Không phải khiếu nại nên tách khỏi

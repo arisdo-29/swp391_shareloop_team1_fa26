@@ -563,8 +563,8 @@ public class ReportService {
 
     /**
      * Mở khiếu nại NO_SHOW khi một bên báo chưa nhận được hoặc chưa giao được đồ lúc giao dịch đã sang DISPUTED.
-     * Bên còn lại là bên bị báo cáo và có thời hạn giải trình như khiếu nại thường (BC-08). Mỗi người chỉ có một
-     * report cho mỗi giao dịch: gọi lại thì bỏ qua, không lỗi.
+     * Bên còn lại là bên bị báo cáo và có thời hạn giải trình như khiếu nại thường (BC-08). Tái sử dụng hồ sơ đang
+     * mở của cùng người báo. Sự cố mới sau khi giao dịch tiếp tục được lưu riêng với hồ sơ đã kết luận.
      *
      * @param reporterId bên báo sự cố, phải là chủ bài hoặc người nhận của giao dịch
      * @param evidenceMediaIds id media minh chứng, có thể null hoặc rỗng
@@ -624,7 +624,8 @@ public class ReportService {
             List<Long> evidenceMediaIds,
             CancelNotice notice,
             ReportReason reason) {
-        if (reportRepository.existsByReporterIdAndTargetTypeAndRequestId(reporterId, TargetType.REQUEST, requestId)) {
+        if (reportRepository.existsByReporterIdAndTargetTypeAndRequestIdAndStatusIn(
+                reporterId, TargetType.REQUEST, requestId, PENDING_STATUSES)) {
             return;
         }
 
@@ -775,7 +776,7 @@ public class ReportService {
 
     /**
      * Khiếu nại của một giao dịch nhìn từ phía người xem (D-04, BC-08): ai mở, trạng thái, hạn và còn giải trình được
-     * không. Mỗi bên khiếu nại tối đa một lần nên danh sách có tối đa hai phần tử, cũ trước.
+     * không. Hồ sơ sắp theo thứ tự từ cũ đến mới, gồm cả các sự cố trước khi giao dịch được cho tiếp tục.
      */
     @Transactional(readOnly = true)
     public List<RequestDisputeSummary> findDisputesForRequest(Long requestId, Long viewerId) {

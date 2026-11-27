@@ -480,7 +480,8 @@ class ReportServiceTest {
     @Test
     void openHandoverIssueReport_whenCalledTwice_createsOnlyOneReport() {
         // given
-        when(reportRepository.existsByReporterIdAndTargetTypeAndRequestId(10L, TargetType.REQUEST, 100L))
+        when(reportRepository.existsByReporterIdAndTargetTypeAndRequestIdAndStatusIn(
+                        10L, TargetType.REQUEST, 100L, List.of(ReportStatus.OPEN, ReportStatus.AWAITING_RESPONSE)))
                 .thenReturn(true);
 
         // when
