@@ -68,7 +68,8 @@ class RequestResponseJsonIT extends IntegrationTest {
         assertThat(json.get("cancelRequestLabel").asText()).isEqualTo("Tôi bận đột xuất");
         assertThat(json.has("cancelRequestExpiresAt")).isTrue();
         assertThat(json.has("rescheduleCount")).isTrue();
-        assertThat(json.has("donorTrackingCode")).isTrue();
+        assertThat(json.has("donorTrackingCode")).isFalse();
+        assertThat(json.has("receiverTrackingCode")).isFalse();
         assertThat(json.has("cancelRequest")).isFalse();
         assertThat(json.has("reschedule")).isFalse();
         assertThat(json.has("shipping")).isFalse();

@@ -119,18 +119,20 @@ class RequestShippingIT extends IntegrationTest {
                 .andExpect(jsonPath("$.code").value("REQUEST_LEG_NOT_SHIPPED"));
 
         // when: hai bên gửi và nhận
-        ship(requestId, donorId, "GHN1111");
+        ship(requestId, donorId);
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
                         .header("Authorization", token(receiverId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("AWAITING_HANDOVER"));
-        ship(requestId, receiverId, "VTP2222");
+        ship(requestId, receiverId);
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
                         .header("Authorization", token(donorId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
-                .andExpect(jsonPath("$.donorTrackingCode").value("GHN1111"))
-                .andExpect(jsonPath("$.receiverTrackingCode").value("VTP2222"));
+                .andExpect(jsonPath("$.donorShippedAt").isNotEmpty())
+                .andExpect(jsonPath("$.receiverShippedAt").isNotEmpty())
+                .andExpect(jsonPath("$.donorTrackingCode").doesNotHaveJsonPath())
+                .andExpect(jsonPath("$.receiverTrackingCode").doesNotHaveJsonPath());
 
         // then
         assertThat(jdbc.queryForObject("SELECT status FROM items WHERE id = ?", String.class, itemId))
@@ -153,9 +155,9 @@ class RequestShippingIT extends IntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"agreeToWaiver\":true,\"shippingAddress\":\"34 Trần Phú\",\"scheduleRevision\":1}"))
                 .andExpect(status().isOk());
-        ship(requestId, donorId, "GHN1111");
+        ship(requestId, donorId);
         if (otherItemShipped) {
-            ship(requestId, receiverId, "VTP2222");
+            ship(requestId, receiverId);
         }
 
         mockMvc.perform(post("/api/v1/requests/{id}/refuse-handover", requestId)
@@ -187,7 +189,7 @@ class RequestShippingIT extends IntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"scheduleRevision\":1,\"agreeToWaiver\":true,\"shippingAddress\":\"34 Trần Phú\"}"))
                 .andExpect(status().isOk());
-        ship(requestId, donorId, "GHN1111");
+        ship(requestId, donorId);
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
                         .header("Authorization", token(receiverId)))
                 .andExpect(status().isOk());
@@ -225,8 +227,8 @@ class RequestShippingIT extends IntegrationTest {
         long requestId = createGiveShippingRequest(itemId, donorId, receiverId);
 
         // when
-        List<Integer> statuses = runAtTheSameTime(
-                () -> shipStatus(requestId, donorId, "GHN1111"), () -> shipStatus(requestId, donorId, "GHN2222"));
+        List<Integer> statuses =
+                runAtTheSameTime(() -> shipStatus(requestId, donorId), () -> shipStatus(requestId, donorId));
 
         // then
         assertThat(statuses).containsExactlyInAnyOrder(200, 409);
@@ -239,7 +241,7 @@ class RequestShippingIT extends IntegrationTest {
         long receiverId = insertUser("Receiver");
         long itemId = insertItem(donorId, "GIVE");
         long requestId = createGiveShippingRequest(itemId, donorId, receiverId);
-        ship(requestId, donorId, "GHN1111");
+        ship(requestId, donorId);
         jdbc.update("UPDATE requests SET donor_shipped_at = now() - interval '8 days' WHERE id = ?", requestId);
 
         // when: chạy mọi việc nền của Giao hàng, các câu truy vấn đều phải chạy được trên PostgreSQL
@@ -274,14 +276,14 @@ class RequestShippingIT extends IntegrationTest {
                                     .content(
                                             "{\"agreeToWaiver\":true,\"shippingAddress\":\"34 Trần Phú\",\"scheduleRevision\":1}"))
                     .andExpect(status().isOk());
-            ship(requestId, receiverId, "VTP2222");
+            ship(requestId, receiverId);
             mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
                             .header("Authorization", token(donorId)))
                     .andExpect(status().isOk());
         } else {
             requestId = createGiveShippingRequest(itemId, donorId, receiverId);
         }
-        ship(requestId, donorId, "GHN1111");
+        ship(requestId, donorId);
         mockMvc.perform(post("/api/v1/requests/{id}/handover-failed", requestId)
                         .header("Authorization", token(receiverId))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -326,13 +328,18 @@ class RequestShippingIT extends IntegrationTest {
     }
 
     @Test
-    void shipmentNoticeAttributesDispatchToTheSender() throws Exception {
+    void shipmentAcceptsLegacyBodyButNoticeOnlyAttributesDispatchToTheSender() throws Exception {
         long donorId = insertUser("Donor");
         long receiverId = insertUser("Receiver");
         long itemId = insertItem(donorId, "GIVE");
         long requestId = createGiveShippingRequest(itemId, donorId, receiverId);
 
-        ship(requestId, donorId, "GHN1111");
+        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trackingCode\":\"LEGACY-CODE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.donorTrackingCode").doesNotHaveJsonPath());
 
         assertThat(jdbc.queryForObject(
                         "SELECT title FROM notifications WHERE user_id = ? AND type = 'SHIPMENT_SENT'",
@@ -343,7 +350,8 @@ class RequestShippingIT extends IntegrationTest {
                         "SELECT body FROM notifications WHERE user_id = ? AND type = 'SHIPMENT_SENT'",
                         String.class,
                         receiverId))
-                .contains("Người gửi báo đã gửi hàng", "GHN1111", "tự ghi nhận");
+                .contains("Người gửi báo đã gửi hàng", "tự ghi nhận")
+                .doesNotContain("LEGACY-CODE");
     }
 
     @Test
@@ -402,19 +410,13 @@ class RequestShippingIT extends IntegrationTest {
                 .andExpect(jsonPath("$.meetingPlace").doesNotExist());
     }
 
-    private void ship(long requestId, long userId, String trackingCode) throws Exception {
-        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId)
-                        .header("Authorization", token(userId))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"trackingCode\":\"" + trackingCode + "\"}"))
+    private void ship(long requestId, long userId) throws Exception {
+        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId).header("Authorization", token(userId)))
                 .andExpect(status().isOk());
     }
 
-    private int shipStatus(long requestId, long userId, String trackingCode) throws Exception {
-        return mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId)
-                        .header("Authorization", token(userId))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"trackingCode\":\"" + trackingCode + "\"}"))
+    private int shipStatus(long requestId, long userId) throws Exception {
+        return mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId).header("Authorization", token(userId)))
                 .andReturn()
                 .getResponse()
                 .getStatus();
@@ -539,7 +541,7 @@ class RequestShippingIT extends IntegrationTest {
         long receiverId = insertUser("Receiver");
         long itemId = insertItem(donorId, "GIVE");
         long requestId = createGiveShippingRequest(itemId, donorId, receiverId);
-        ship(requestId, donorId, "GHN1111");
+        ship(requestId, donorId);
         jdbc.update("UPDATE requests SET donor_shipped_at = now() - interval '8 days' WHERE id = ?", requestId);
         insertEarlierReport(receiverId, itemId, donorId, requestId, reportStatus);
         if (resumedRecently) {

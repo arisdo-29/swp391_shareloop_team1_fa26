@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mediaApi } from '../../services/mediaApi';
 import { requestApi, type RequestResponse } from '../../services/requestApi';
 import { shippingFailedConsequence, shippingLegs, shippingProgressSummary } from '../../utils/shipping';
 import { formatDeadline } from '../../utils/request';
@@ -85,12 +86,13 @@ describe('ShipmentCard Cho tặng', () => {
     expect(handlers.onOpenFailed).toHaveBeenCalledOnce();
   });
 
-  it('chiều đã gửi: người nhận thấy mã vận đơn, ba nút nhận, không thành công và từ chối', () => {
+  it('chiều đã gửi hiển thị thời điểm gửi và các thao tác của người nhận', () => {
     renderCard(
-      { ...giveBase, status: 'AWAITING_HANDOVER', donorShippedAt: hoursFromNow(-5), donorTrackingCode: 'GHN123' },
+      { ...giveBase, status: 'AWAITING_HANDOVER', donorShippedAt: hoursFromNow(-5) },
       false,
     );
-    expect(screen.getByText('GHN123')).toBeTruthy();
+    expect(screen.getByText('Người gửi báo đã gửi lúc')).toBeTruthy();
+    expect(screen.queryByText('Mã vận đơn')).toBeNull();
     expect(screen.getByRole('button', { name: 'Tôi đã nhận được hàng' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Giao nhận không thành công' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Từ chối giao nhận' })).toBeTruthy();
@@ -101,12 +103,28 @@ describe('ShipmentCard Cho tặng', () => {
     const user = userEvent.setup();
     vi.spyOn(requestApi, 'confirmHandover').mockResolvedValue({ ...giveBase, status: 'COMPLETED' });
     const handlers = renderCard(
-      { ...giveBase, status: 'AWAITING_HANDOVER', donorShippedAt: hoursFromNow(-5), donorTrackingCode: 'GHN123' },
+      { ...giveBase, status: 'AWAITING_HANDOVER', donorShippedAt: hoursFromNow(-5) },
       false,
     );
     await user.click(screen.getByRole('button', { name: 'Tôi đã nhận được hàng' }));
     await waitFor(() => expect(requestApi.confirmHandover).toHaveBeenCalledWith(101, 12, {}));
     expect(handlers.onUpdated).toHaveBeenCalledOnce();
+  });
+
+  it('chủ bài xác nhận đã gửi hàng mà không cần nhập mã hoặc chọn ảnh', async () => {
+    const user = userEvent.setup();
+    const updated: RequestResponse = { ...giveBase, status: 'AWAITING_HANDOVER', donorShippedAt: hoursFromNow(0) };
+    const markShipped = vi.spyOn(requestApi, 'markShipped').mockResolvedValue(updated);
+    const handlers = renderCard(giveBase, true);
+
+    await user.click(screen.getByRole('button', { name: 'Tôi đã gửi hàng' }));
+    const dialog = screen.getByRole('dialog', { name: 'Tôi đã gửi hàng' });
+    expect(within(dialog).queryByLabelText('Mã vận đơn')).toBeNull();
+    expect(within(dialog).getByLabelText('Ảnh minh chứng (không bắt buộc)')).toBeTruthy();
+    await user.click(within(dialog).getByRole('button', { name: 'Xác nhận đã gửi' }));
+
+    await waitFor(() => expect(handlers.onUpdated).toHaveBeenCalledWith(updated));
+    expect(markShipped).toHaveBeenCalledExactlyOnceWith(101, 9, { mediaIds: undefined });
   });
 });
 
@@ -160,9 +178,7 @@ describe('ShipmentCard Trao đổi', () => {
         ...swapBase,
         status: 'AWAITING_HANDOVER',
         donorShippedAt: hoursFromNow(-30),
-        donorTrackingCode: 'GHN111',
         receiverShippedAt: hoursFromNow(-20),
-        receiverTrackingCode: 'VTP222',
         receiverHandoverAt: hoursFromNow(-10),
       },
       false,
@@ -170,24 +186,21 @@ describe('ShipmentCard Trao đổi', () => {
     expect(screen.getByText('Bạn đã nhận, đang chờ Bình nhận hàng của họ.')).toBeTruthy();
   });
 
-  it('gửi hàng mở hộp nhập mã vận đơn 3 đến 50 ký tự rồi gọi API', async () => {
+  it('người gửi món đổi có thể xác nhận kèm ảnh biên nhận', async () => {
     const user = userEvent.setup();
-    vi.spyOn(requestApi, 'markShipped').mockResolvedValue({ ...swapBase, status: 'AWAITING_HANDOVER' });
-    const handlers = renderCard(swapBase, true);
-
+    const updated: RequestResponse = { ...swapBase, status: 'AWAITING_HANDOVER', receiverShippedAt: hoursFromNow(0) };
+    const markShipped = vi.spyOn(requestApi, 'markShipped').mockResolvedValue(updated);
+    const upload = vi.spyOn(mediaApi, 'upload').mockResolvedValue({ mediaId: 42, url: '/api/v1/media/42' });
+    const handlers = renderCard(swapBase, false);
+    const photo = new File(['receipt'], 'bien-nhan.png', { type: 'image/png' });
     await user.click(screen.getByRole('button', { name: 'Tôi đã gửi hàng' }));
-    const submit = screen.getByRole('button', { name: 'Xác nhận đã gửi' }) as HTMLButtonElement;
-    expect(submit.disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText(/^Mã vận đơn/), { target: { value: 'ab' } });
-    expect(screen.getByText('Mã vận đơn phải từ 3 đến 50 ký tự.')).toBeTruthy();
-    expect(submit.disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText(/^Mã vận đơn/), { target: { value: 'GHN12345' } });
-    await user.click(submit);
+    const dialog = screen.getByRole('dialog', { name: 'Tôi đã gửi hàng' });
+    await user.upload(within(dialog).getByLabelText('Ảnh minh chứng (không bắt buộc)'), photo);
+    await user.click(within(dialog).getByRole('button', { name: 'Xác nhận đã gửi' }));
 
-    await waitFor(() =>
-      expect(requestApi.markShipped).toHaveBeenCalledWith(101, 9, { trackingCode: 'GHN12345', mediaIds: undefined }),
-    );
-    expect(handlers.onUpdated).toHaveBeenCalledOnce();
+    await waitFor(() => expect(handlers.onUpdated).toHaveBeenCalledWith(updated));
+    expect(upload).toHaveBeenCalledExactlyOnceWith(photo);
+    expect(markShipped).toHaveBeenCalledExactlyOnceWith(101, 12, { mediaIds: [42] });
   });
 
   it('có đề nghị huỷ đang chờ thì hiện thẻ phản hồi và ẩn nút nhận hàng', () => {

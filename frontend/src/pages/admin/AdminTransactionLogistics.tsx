@@ -120,7 +120,6 @@ function ShippingLegCard({
         <Row label="Món gửi">{text(leg.itemTitle)}</Row>
         <Row label="Địa chỉ nhận">{text(leg.address)}</Row>
         <Row label={`${leg.senderRole} xác nhận đã gửi`}>{at(leg.shippedAt)}</Row>
-        <Row label="Mã vận đơn">{text(leg.trackingCode)}</Row>
         <Row label="Thời điểm ghi nhận đã nhận">{at(leg.receivedAt)}</Row>
         {autoReceiveAt ? <Row label="Tự ghi nhận đã nhận lúc">{at(autoReceiveAt)}</Row> : null}
       </dl>

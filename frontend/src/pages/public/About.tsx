@@ -149,7 +149,7 @@ const faqs = (RULES: Rules) => [
   ],
   [
     'Giao hàng qua đơn vị vận chuyển hoạt động thế nào?',
-    `Mỗi bên tự nhập địa chỉ nhận hàng của mình, địa chỉ chỉ hiện cho bên kia sau khi chốt lịch. Cho tặng có một chiều, Trao đổi có hai chiều. Mỗi chiều đi qua ba bước Chờ gửi, Đã gửi, Đã nhận: bên gửi bấm "Tôi đã gửi hàng" kèm mã vận đơn, bên nhận bấm "Tôi đã nhận được hàng" sau khi hàng tới. Hạn gửi là ngày gửi dự kiến cộng ${RULES.shippingSendDeadlineDays} ngày. Quá hạn mà chưa gửi thì bên nhận báo được, khi đó bên gửi đồng ý huỷ, phản đối bằng cách bấm đã gửi hoặc im lặng. ShareLoop không tra mã vận đơn và không bồi thường tiền hàng hay phí gửi.`,
+    `Mỗi bên tự nhập địa chỉ nhận hàng của mình, địa chỉ chỉ hiện cho bên kia sau khi chốt lịch. Cho tặng có một chiều, Trao đổi có hai chiều. Bên gửi bấm "Tôi đã gửi hàng" và có thể đính kèm ảnh biên nhận. Bên nhận bấm "Tôi đã nhận được hàng" sau khi hàng tới. Hạn gửi là ngày gửi dự kiến cộng ${RULES.shippingSendDeadlineDays} ngày. Quá hạn mà chưa gửi thì bên nhận có thể báo sự cố. Bên gửi có thể đồng ý huỷ, phản đối bằng cách bấm đã gửi hoặc chờ hết hạn phản hồi. ShareLoop không bồi thường tiền hàng hay phí gửi.`,
   ],
   [
     'Đồ nhận được không đúng mô tả thì sao?',

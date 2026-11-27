@@ -686,7 +686,7 @@ class RequestStateMachineTest {
 
             // Luật mới (GN-12): chiều 1 do chủ bài gửi, người nhận chỉ báo nhận được sau khi chiều đó Đã gửi
             Instant t3 = meetingTime.plus(1, ChronoUnit.DAYS);
-            request.markShipped(true, "GHN12345", t3);
+            request.markShipped(true, t3);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
 
             // Cho tặng chỉ có một chiều nên người nhận nhận xong là hoàn tất

@@ -252,7 +252,7 @@ public class AdminRequestDetailService {
                 pending ? core.deadlines().rescheduleExpiresAt() : null);
     }
 
-    // Giao hàng: mỗi chiều có địa chỉ, ngày gửi, mã vận đơn, ngày nhận. Admin thấy đủ địa chỉ (GN-12).
+    // Giao hàng: mỗi chiều có địa chỉ, ngày gửi, ngày nhận. Admin thấy đủ địa chỉ (GN-12).
     static List<AdminShippingLeg> toShippingLegs(
             AdminRequestCore core, AdminRequestItemInfo mainItem, AdminRequestItemInfo offeredItem) {
         if (!"SHIPPING".equals(core.deliveryMethod())) {
@@ -267,7 +267,6 @@ public class AdminRequestDetailService {
                 "Người nhận",
                 shipping.receiverAddress(),
                 shipping.donorShippedAt(),
-                shipping.donorTrackingCode(),
                 core.receiverHandoverAt()));
         if (core.offeredItemId() != null) {
             legs.add(shippingLeg(
@@ -277,7 +276,6 @@ public class AdminRequestDetailService {
                     "Chủ bài",
                     shipping.donorAddress(),
                     shipping.receiverShippedAt(),
-                    shipping.receiverTrackingCode(),
                     core.donorHandoverAt()));
         }
         return legs;
@@ -290,11 +288,9 @@ public class AdminRequestDetailService {
             String receiverRole,
             String address,
             Instant shippedAt,
-            String trackingCode,
             Instant receivedAt) {
         String step = receivedAt != null ? "Đã nhận" : shippedAt != null ? "Đã gửi" : "Chờ gửi";
-        return new AdminShippingLeg(
-                leg, title, senderRole, receiverRole, address, shippedAt, trackingCode, receivedAt, step);
+        return new AdminShippingLeg(leg, title, senderRole, receiverRole, address, shippedAt, receivedAt, step);
     }
 
     /**
@@ -312,16 +308,8 @@ public class AdminRequestDetailService {
         add(events, "Mở thông tin liên hệ cho hai bên", core.contactRevealedAt(), null);
         boolean shipping = "SHIPPING".equals(core.deliveryMethod());
         if (shipping) {
-            add(
-                    events,
-                    "Chủ bài gửi hàng (chiều 1)",
-                    core.shipping().donorShippedAt(),
-                    core.shipping().donorTrackingCode());
-            add(
-                    events,
-                    "Người nhận gửi hàng (chiều 2)",
-                    core.shipping().receiverShippedAt(),
-                    core.shipping().receiverTrackingCode());
+            add(events, "Chủ bài gửi hàng (chiều 1)", core.shipping().donorShippedAt(), null);
+            add(events, "Người nhận gửi hàng (chiều 2)", core.shipping().receiverShippedAt(), null);
             add(events, "Chủ bài nhận được hàng (chiều 2)", core.donorHandoverAt(), null);
             add(events, "Người nhận nhận được hàng (chiều 1)", core.receiverHandoverAt(), null);
         } else {

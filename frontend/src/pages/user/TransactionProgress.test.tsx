@@ -885,7 +885,6 @@ describe('Ba nút kết quả giao nhận', () => {
         deliveryMethod: 'SHIPPING',
         status: 'AWAITING_HANDOVER',
         donorShippedAt: '2026-10-25T08:00:00Z',
-        donorTrackingCode: 'GHN123',
       }),
     );
 

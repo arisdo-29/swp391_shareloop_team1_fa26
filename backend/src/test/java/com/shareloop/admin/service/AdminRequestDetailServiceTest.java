@@ -131,7 +131,7 @@ class AdminRequestDetailServiceTest {
                 T0.plusSeconds(300),
                 cancel,
                 reschedule,
-                new ShippingInfo("12 Lê Lợi", "34 Trần Phú", donorShippedAt, "GHN111", null, null, true, true),
+                new ShippingInfo("12 Lê Lợi", "34 Trần Phú", donorShippedAt, null, true, true),
                 new RequestDeadlines(null, null, T0.plusSeconds(7200), T0.plusSeconds(8000), null, null, null));
     }
 
@@ -198,7 +198,7 @@ class AdminRequestDetailServiceTest {
     }
 
     @Test
-    @DisplayName("Giao hàng hai chiều: mỗi chiều có địa chỉ, ngày gửi, mã vận đơn, ngày nhận và bước")
+    @DisplayName("Giao hàng hai chiều: mỗi chiều có địa chỉ, ngày gửi, ngày nhận và bước")
     void toShippingLegs_whenSwapShipping_returnsTwoLegsWithSteps() {
         AdminRequestCore core = swapShippingCore(
                 "AWAITING_HANDOVER", CancelRequestInfo.EMPTY, RescheduleInfo.EMPTY, T0.plusSeconds(1000));
@@ -212,7 +212,7 @@ class AdminRequestDetailServiceTest {
         assertThat(legs.get(0).itemTitle()).isEqualTo("Máy ảnh");
         assertThat(legs.get(0).senderRole()).isEqualTo("Chủ bài");
         assertThat(legs.get(0).address()).isEqualTo("12 Lê Lợi");
-        assertThat(legs.get(0).trackingCode()).isEqualTo("GHN111");
+        assertThat(legs.get(0).shippedAt()).isNotNull();
         // Người nhận đã nhận chiều 1 (receiverHandoverAt) nên bước là Đã nhận, chiều 2 chưa gửi
         assertThat(legs.get(0).step()).isEqualTo("Đã nhận");
         assertThat(legs.get(1).address()).isEqualTo("34 Trần Phú");

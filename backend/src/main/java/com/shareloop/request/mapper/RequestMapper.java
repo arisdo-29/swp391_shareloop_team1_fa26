@@ -140,9 +140,7 @@ public final class RequestMapper {
                 request.getReceiverAddress(),
                 request.getDonorAddress(),
                 request.getDonorShippedAt(),
-                request.getDonorTrackingCode(),
                 request.getReceiverShippedAt(),
-                request.getReceiverTrackingCode(),
                 isFilled(request.getReceiverAddress()),
                 isFilled(request.getDonorAddress()));
     }

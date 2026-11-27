@@ -1090,13 +1090,11 @@ public class RequestService {
         return toResponse(saved, userId);
     }
 
-    // Mô tả một chiều cho nội dung khiếu nại: món nào, mã vận đơn của bên gửi (GN-12).
+    // Mô tả món đồ của chiều giao hàng trong nội dung khiếu nại (GN-12).
     private String describeLeg(Request request, int leg) {
         Long itemId = itemOfLeg(request, leg);
         String title = itemId == null ? null : findItemTitle(itemId);
-        String tracking = leg == 1 ? request.getDonorTrackingCode() : request.getReceiverTrackingCode();
-        return "Chiều giao hàng món " + (title == null ? (leg == 1 ? "chính" : "đổi") : title)
-                + (tracking == null ? ", bên gửi chưa có mã vận đơn" : ", mã vận đơn " + tracking);
+        return "Chiều giao hàng món " + (title == null ? (leg == 1 ? "chính" : "đổi") : title);
     }
 
     private Long itemOfLeg(Request request, int leg) {
@@ -1122,12 +1120,11 @@ public class RequestService {
     }
 
     /**
-     * Người gửi báo đã gửi hàng cho chiều của mình, kèm mã vận đơn 3 đến 50 ký tự và ảnh biên nhận không bắt buộc
-     * (GN-12). Lần gửi đầu chuyển giao dịch sang AWAITING_HANDOVER. Nếu bên nhận đang có đề nghị huỷ "chưa gửi hàng" cho
-     * đúng chiều này thì đề nghị tự rút. Không tích hợp đơn vị vận chuyển, không tra mã vận đơn.
+     * Người gửi báo đã gửi hàng cho chiều của mình và có thể kèm ảnh biên nhận (GN-12). Lần gửi đầu chuyển giao dịch
+     * sang AWAITING_HANDOVER. Nếu bên nhận đang có đề nghị huỷ "chưa gửi hàng" cho đúng chiều này thì đề nghị tự rút.
      *
      * @throws BusinessException REQUEST_NOT_SHIPPING, REQUEST_LEG_NOT_APPLICABLE, REQUEST_LEG_ALREADY_SHIPPED,
-     *     REQUEST_TRACKING_CODE_INVALID, REQUEST_CANCEL_REQUEST_PENDING khi đang có đề nghị huỷ khác chờ
+     *     REQUEST_CANCEL_REQUEST_PENDING khi đang có đề nghị huỷ khác chờ
      */
     @Transactional
     public RequestResponse markShipped(long requestId, long currentUserId, ShipmentRequest requestDto) {
@@ -1140,19 +1137,20 @@ public class RequestService {
         boolean hadPendingCancel = request.hasPendingCancelRequest();
         Long cancelRequester = request.getCancelRequestedBy();
 
-        request.markShipped(isDonor, requestDto.trackingCode(), Instant.now());
-        attachHandoverEvidence(request, currentUserId, requestDto.mediaIds());
+        request.markShipped(isDonor, Instant.now());
+        if (requestDto != null) {
+            attachHandoverEvidence(request, currentUserId, requestDto.mediaIds());
+        }
         Request saved = requestRepository.save(request);
 
         String link = "/requests/" + saved.getId();
         long receiverOfLeg = isDonor ? saved.getReceiverId() : item.donorId();
-        String trackingCode = isDonor ? saved.getDonorTrackingCode() : saved.getReceiverTrackingCode();
         notificationService.notify(
                 receiverOfLeg,
                 "SHIPMENT_SENT",
                 "Người gửi báo đã gửi hàng",
-                "Người gửi báo đã gửi hàng và cung cấp mã vận đơn " + trackingCode
-                        + ". Khi nhận được hàng, hãy bấm Tôi đã nhận được hàng. Nếu bạn không phản hồi, hệ thống sẽ tự"
+                "Người gửi báo đã gửi hàng. Khi nhận được hàng, hãy bấm Tôi đã nhận được hàng."
+                        + " Nếu bạn không phản hồi, hệ thống sẽ tự"
                         + " ghi nhận bạn đã nhận lúc "
                         + VietnamTime.format(deadlineCalculator.legAutoReceiveAt(saved, isDonor ? 1 : 2))
                         + ".",
@@ -1996,7 +1994,7 @@ public class RequestService {
                     "SHIP_DATE_REMINDER",
                     link,
                     since,
-                    "Đã tới ngày gửi hàng dự kiến. Hãy gửi hàng và nhập mã vận đơn trước "
+                    "Đã tới ngày gửi hàng dự kiến. Hãy gửi hàng và bấm Tôi đã gửi hàng trước "
                             + VietnamTime.format(sendDeadline) + ".");
             if (!sendDeadline.isAfter(now)) {
                 sent |= remindOnce(
@@ -3213,9 +3211,7 @@ public class RequestService {
                 receiverAddress,
                 donorAddress,
                 full.donorShippedAt(),
-                full.donorTrackingCode(),
                 full.receiverShippedAt(),
-                full.receiverTrackingCode(),
                 full.receiverAddressProvided(),
                 full.donorAddressProvided());
     }

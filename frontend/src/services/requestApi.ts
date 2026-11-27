@@ -99,9 +99,7 @@ export interface RequestResponse {
   receiverAddressProvided?: boolean | null;
   donorAddressProvided?: boolean | null;
   donorShippedAt?: string | null;
-  donorTrackingCode?: string | null;
   receiverShippedAt?: string | null;
-  receiverTrackingCode?: string | null;
   // Mốc hạn do backend tính, FE chỉ hiện.
   sendDeadlineAt?: string | null;
   autoCancelAt?: string | null;
@@ -134,8 +132,6 @@ export interface ConfirmLogisticsRequestBody {
 }
 
 export interface ShipmentRequestBody {
-  // Mã vận đơn 3 đến 50 ký tự, không tra tự động.
-  trackingCode: string;
   mediaIds?: number[];
 }
 
