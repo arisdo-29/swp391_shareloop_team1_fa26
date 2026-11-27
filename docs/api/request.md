@@ -356,6 +356,7 @@ Nút "Đã giao nhận xong" (Gặp trực tiếp) hoặc "Tôi đã nhận đư
 
 - **Hành vi nghiệp vụ:**
   - Chỉ áp dụng khi Request đang ở trạng thái `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER`.
+  - Gặp trực tiếp chỉ được xác nhận từ giờ hẹn. Trước giờ hẹn, trả `409 REQUEST_BEFORE_MEETING_TIME` và chưa ghi nhận giao nhận.
   - Nếu có truyền `mediaIds`: gọi `MediaService.attach(mediaIds, currentUserId)` và lưu vào `request_media_mappings` với stage `HANDOVER` (GN-10).
   - Bên cho bấm: ghi `donorHandoverAt`. Bên nhận bấm: ghi `receiverHandoverAt`. Hàm này không bao giờ chuyển sang `DISPUTED`.
   - Giao hàng (`SHIPPING`, 23/11/2026): nút này luôn là của **bên nhận** từng chiều, bấm sau khi chiều đó Đã gửi (`409 REQUEST_LEG_NOT_SHIPPED` nếu chưa). Người gửi báo đã gửi bằng `POST /shipment` (mục 18). Người nhận món chính ghi `receiverHandoverAt`, chủ bài nhận món đổi ghi `donorHandoverAt`.

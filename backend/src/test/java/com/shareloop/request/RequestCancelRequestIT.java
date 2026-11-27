@@ -405,6 +405,9 @@ class RequestCancelRequestIT extends IntegrationTest {
                         .content("{\"code\":\"BUSY\"}"))
                 .andExpect(status().isOk());
 
+        // Đến giờ hẹn, đề nghị huỷ vẫn đang trong hạn phản hồi.
+        jdbc.update("UPDATE requests SET meeting_time = now() - interval '1 hour' WHERE id = ?", requestId);
+
         // when
         List<Integer> statuses = runAtTheSameTime(
                 () -> mockMvc.perform(post("/api/v1/requests/{id}/cancel-request/accept", requestId)

@@ -1730,7 +1730,8 @@ class RequestServiceTest {
     void confirmHandover_whenDonorFirst_transitionsToAwaitingHandover() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.proposeSchedule(
+                "IN_PERSON", "FPT", Instant.now().minus(1, ChronoUnit.HOURS), true, true, Instant.now());
         request.confirmLogistics(false, true, Instant.now());
         assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
 
@@ -1754,7 +1755,8 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, null, "GIVE");
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.proposeSchedule(
+                "IN_PERSON", "FPT", Instant.now().minus(1, ChronoUnit.HOURS), true, true, Instant.now());
         request.confirmLogistics(false, true, Instant.now());
         assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
 
@@ -1777,7 +1779,8 @@ class RequestServiceTest {
     void confirmHandover_whenReceiverConfirmsAfterDonor_transitionsToCompleted() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.proposeSchedule(
+                "IN_PERSON", "FPT", Instant.now().minus(1, ChronoUnit.HOURS), true, true, Instant.now());
         request.confirmLogistics(false, true, Instant.now());
         request.confirmHandover(true, Instant.now());
         assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
@@ -1804,7 +1807,8 @@ class RequestServiceTest {
     void confirmHandover_whenCompleted_returnsComplaintDeadlineAndNotifiesItWithTime() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.proposeSchedule(
+                "IN_PERSON", "FPT", Instant.now().minus(1, ChronoUnit.HOURS), true, true, Instant.now());
         request.confirmLogistics(false, true, Instant.now());
         request.confirmHandover(true, Instant.now());
         when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
@@ -1859,7 +1863,8 @@ class RequestServiceTest {
     private void stubLogisticsConfirmedRequest() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.proposeSchedule(
+                "IN_PERSON", "FPT", Instant.now().minus(1, ChronoUnit.HOURS), true, true, Instant.now());
         request.confirmLogistics(false, true, Instant.now());
         when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -1873,7 +1878,8 @@ class RequestServiceTest {
     void confirmHandover_whenSwapCompleted_marksBothItemsTraded() {
         Request request = new Request(1L, 10L, 2L, "SWAP");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.proposeSchedule(
+                "IN_PERSON", "FPT", Instant.now().minus(1, ChronoUnit.HOURS), true, true, Instant.now());
         request.confirmLogistics(false, true, Instant.now());
         request.confirmHandover(true, Instant.now());
 
@@ -1911,7 +1917,8 @@ class RequestServiceTest {
     void confirmHandover_whenAlreadyConfirmed_throwsError() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.proposeSchedule(
+                "IN_PERSON", "FPT", Instant.now().minus(1, ChronoUnit.HOURS), true, true, Instant.now());
         request.confirmLogistics(false, true, Instant.now());
         request.confirmHandover(true, Instant.now());
 

@@ -188,7 +188,14 @@ class RequestLifecycleIT extends IntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("REQUEST_SCHEDULE_LOCKED"));
 
-        // 10. Donor bấm xác nhận đã giao đồ -> chuyển AWAITING_HANDOVER
+        // 10. Chưa tới giờ thì giữ nguyên trạng thái và chưa bắt đầu đếm hạn tự hoàn tất.
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", req1Id).header("Authorization", donorToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REQUEST_BEFORE_MEETING_TIME"));
+        assertThat(queryRequestStatus(req1Id)).isEqualTo("LOGISTICS_CONFIRMED");
+        jdbc.update("UPDATE requests SET meeting_time = now() - interval '1 hour' WHERE id = ?", req1Id);
+
+        // Đến giờ hẹn, Donor bấm xác nhận đã giao đồ -> chuyển AWAITING_HANDOVER.
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", req1Id).header("Authorization", donorToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("AWAITING_HANDOVER"))
