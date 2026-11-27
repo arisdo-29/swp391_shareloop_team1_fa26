@@ -151,7 +151,7 @@ class RequestShippingIT extends IntegrationTest {
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
                         .header("Authorization", token(donorId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"agreeToWaiver\":true,\"shippingAddress\":\"34 Trần Phú\"}"))
+                        .content("{\"agreeToWaiver\":true,\"shippingAddress\":\"34 Trần Phú\",\"scheduleRevision\":1}"))
                 .andExpect(status().isOk());
         ship(requestId, donorId, "GHN1111");
         if (otherItemShipped) {
@@ -267,10 +267,12 @@ class RequestShippingIT extends IntegrationTest {
             long offeredId = insertItem(receiverId, "SWAP");
             requestId = createSwapRequest(itemId, offeredId, donorId, receiverId);
             propose(requestId, receiverId, "12 Lê Lợi");
-            mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
-                            .header("Authorization", token(donorId))
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"agreeToWaiver\":true,\"shippingAddress\":\"34 Trần Phú\"}"))
+            mockMvc.perform(
+                            post("/api/v1/requests/{id}/confirm-logistics", requestId)
+                                    .header("Authorization", token(donorId))
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(
+                                            "{\"agreeToWaiver\":true,\"shippingAddress\":\"34 Trần Phú\",\"scheduleRevision\":1}"))
                     .andExpect(status().isOk());
             ship(requestId, receiverId, "VTP2222");
             mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)

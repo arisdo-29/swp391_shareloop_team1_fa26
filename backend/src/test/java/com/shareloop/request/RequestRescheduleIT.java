@@ -154,7 +154,7 @@ class RequestRescheduleIT extends IntegrationTest {
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
                         .header("Authorization", token(receiverId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"agreeToWaiver\":true,\"shippingAddress\":\"12 Lê Lợi\"}"))
+                        .content("{\"agreeToWaiver\":true,\"shippingAddress\":\"12 Lê Lợi\",\"scheduleRevision\":1}"))
                 .andExpect(reservationExpired ? status().isConflict() : status().isBadRequest())
                 .andExpect(jsonPath("$.code")
                         .value(reservationExpired ? "REQUEST_SCHEDULE_WINDOW_EXPIRED" : "REQUEST_SCHEDULE_PAST_TIME"));
