@@ -746,6 +746,12 @@ public class ReportService {
         return reportRepository.existsByRequestId(requestId);
     }
 
+    @Transactional(readOnly = true)
+    public boolean hasPendingDisputeForRequest(Long requestId) {
+        return reportRepository.existsByRequestIdAndTargetTypeAndStatusIn(
+                requestId, TargetType.REQUEST, PENDING_STATUSES);
+    }
+
     /**
      * Hạn giải trình của khiếu nại đang mở thuộc giao dịch (U5-BE, D-04, GN-07).
      * Chỉ có giá trị khi giao dịch có khiếu nại ở trạng thái OPEN hoặc AWAITING_RESPONSE.

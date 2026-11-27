@@ -192,6 +192,7 @@ class RequestShippingIT extends IntegrationTest {
                         .header("Authorization", token(receiverId)))
                 .andExpect(status().isOk());
         jdbc.update("UPDATE requests SET meeting_time = now() - interval '10 days' WHERE id = ?", requestId);
+        insertEarlierReport(donorId, itemId, receiverId, requestId, "DISMISSED");
         int donorStars = trustStarsOf(donorId);
         int receiverStars = trustStarsOf(receiverId);
 
@@ -492,5 +493,62 @@ class RequestShippingIT extends IntegrationTest {
                 desiredItem);
         itemIds.add(itemId);
         return itemId;
+    }
+
+    @Test
+    void autoReceiveShipping_whenDisputeIsOpen_keepsShipmentAwaitingHandover() throws Exception {
+        assertAutoReceiveShipping("AWAITING_RESPONSE", false, false);
+    }
+
+    @Test
+    void autoReceiveShipping_whenDisputeIsClosedAndDeadlinePassed_completes() throws Exception {
+        assertAutoReceiveShipping("DISMISSED", false, true);
+    }
+
+    @Test
+    void autoReceiveShipping_whenRecentlyResumed_waitsUntilTheNewDeadline() throws Exception {
+        assertAutoReceiveShipping("DISMISSED", true, false);
+    }
+
+    private void assertAutoReceiveShipping(String reportStatus, boolean resumedRecently, boolean shouldReceive)
+            throws Exception {
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId, "GIVE");
+        long requestId = createGiveShippingRequest(itemId, donorId, receiverId);
+        ship(requestId, donorId, "GHN1111");
+        jdbc.update("UPDATE requests SET donor_shipped_at = now() - interval '8 days' WHERE id = ?", requestId);
+        insertEarlierReport(receiverId, itemId, donorId, requestId, reportStatus);
+        if (resumedRecently) {
+            jdbc.update("UPDATE requests SET resumed_at = now() WHERE id = ?", requestId);
+        }
+
+        deadlineJobService.autoReceiveShippingLegs(Instant.now());
+
+        assertThat(jdbc.queryForObject("SELECT status FROM requests WHERE id = ?", String.class, requestId))
+                .isEqualTo(shouldReceive ? "COMPLETED" : "AWAITING_HANDOVER");
+        if (resumedRecently) {
+            MvcResult response = mockMvc.perform(
+                            get("/api/v1/requests/{id}", requestId).header("Authorization", token(receiverId)))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            String deadline = objectMapper
+                    .readTree(response.getResponse().getContentAsString())
+                    .get("leg1AutoReceiveAt")
+                    .asText();
+            assertThat(Instant.parse(deadline)).isAfter(Instant.now());
+        }
+    }
+
+    private void insertEarlierReport(long reporterId, long itemId, long targetId, long requestId, String status) {
+        jdbc.update(
+                "INSERT INTO reports (reporter_id, target_type, item_id, target_user_id, request_id,"
+                        + " reason, description, stage, status) VALUES (?, 'REQUEST', ?, ?, ?, 'OTHER',"
+                        + " 'Báo sự cố trước đó', 'AFTER', ?)",
+                reporterId,
+                itemId,
+                targetId,
+                requestId,
+                status);
     }
 }

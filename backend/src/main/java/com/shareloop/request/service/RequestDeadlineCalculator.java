@@ -51,8 +51,12 @@ final class RequestDeadlineCalculator {
     // Mốc tự huỷ giao dịch đã chốt lịch mà không ai làm gì (GN-12).
     Instant staleThreshold(Request request) {
         int staleDays = configService.getInt(ConfigKey.CONFIRMED_STALE_CANCEL_DAYS);
+        return staleBase(request).plus(staleDays, ChronoUnit.DAYS);
+    }
+
+    Instant staleBase(Request request) {
         Instant base = request.isShipping() ? sendDeadlineAt(request) : request.getMeetingTime();
-        return base.plus(staleDays, ChronoUnit.DAYS);
+        return afterResumption(base, request);
     }
 
     // Mốc tự hoàn tất: Gặp trực tiếp tính từ lúc một bên bấm hoàn tất, Giao hàng là mốc sớm nhất trong các chiều.
@@ -91,7 +95,12 @@ final class RequestDeadlineCalculator {
             return null;
         }
         int days = configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS_SHIPPING);
-        return shippedAt.plus(days, ChronoUnit.DAYS);
+        return afterResumption(shippedAt, request).plus(days, ChronoUnit.DAYS);
+    }
+
+    private Instant afterResumption(Instant base, Request request) {
+        Instant resumedAt = request.getResumedAt();
+        return resumedAt != null && resumedAt.isAfter(base) ? resumedAt : base;
     }
 
     // Hạn gửi của mỗi chiều giao hàng: ngày gửi dự kiến cộng shipping_send_deadline_days ngày (GN-12). Chỉ có ở Giao

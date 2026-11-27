@@ -1696,15 +1696,7 @@ public class RequestService {
 
     // GN-12: mốc tự huỷ giao dịch kẹt. Gặp trực tiếp tính từ giờ hẹn, Giao hàng tính từ hạn gửi.
     private Instant staleThreshold(Request request, int staleDays) {
-        return staleBase(request).plus(staleDays, ChronoUnit.DAYS);
-    }
-
-    // Mốc bắt đầu đếm ngày kẹt: giờ hẹn (Giao hàng: hạn gửi). Giao dịch vừa quay lại sau khi Admin bác đề nghị huỷ thì
-    // đếm từ lúc quay lại, để không bị huỷ ngay lần chạy kế.
-    private Instant staleBase(Request request) {
-        Instant base = request.isShipping() ? deadlineCalculator.sendDeadlineAt(request) : request.getMeetingTime();
-        Instant resumedAt = request.getResumedAt();
-        return resumedAt != null && resumedAt.isAfter(base) ? resumedAt : base;
+        return deadlineCalculator.staleBase(request).plus(staleDays, ChronoUnit.DAYS);
     }
 
     // ===== Nhắc hạn (GN-13) =====
@@ -1866,7 +1858,8 @@ public class RequestService {
     /**
      * Việc nền: tự ghi nhận Đã nhận cho từng chiều Giao hàng đã gửi mà bên nhận im lặng quá auto_confirm_days_shipping
      * ngày kể từ lúc gửi (GN-09, GN-12). Chiều chưa gửi không bao giờ tự hoàn tất. Mọi chiều Đã nhận thì giao dịch hoàn
-     * tất với cờ autoConfirmed. Giao dịch đã có báo cáo thì không tự hoàn tất.
+     * tất với cờ autoConfirmed. Giao dịch có khiếu nại đang mở thì tạm dừng. Nếu đã tiếp tục thì cho bên nhận thời gian
+     * phản hồi từ mốc tiếp tục hoặc mốc báo gửi, tuỳ mốc nào đến sau.
      *
      * @return true nếu có ít nhất một chiều được tự ghi nhận
      */
@@ -1876,16 +1869,15 @@ public class RequestService {
         if (request == null || !request.isShipping() || request.getStatus() != RequestStatus.AWAITING_HANDOVER) {
             return false;
         }
-        if (reportService != null && reportService.hasReportForRequest(requestId)) {
+        if (reportService != null && reportService.hasPendingDisputeForRequest(requestId)) {
             return false;
         }
         int days = configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS_SHIPPING);
-        Instant cutoff = now.minus(days, ChronoUnit.DAYS);
         ItemSnapshot item = loadItemSnapshot(request);
         List<Integer> receivedLegs = new ArrayList<>();
         for (int leg = 1; leg <= request.requiredLegs(); leg++) {
-            Instant shippedAt = leg == 1 ? request.getDonorShippedAt() : request.getReceiverShippedAt();
-            if (shippedAt != null && !request.isLegReceived(leg) && shippedAt.isBefore(cutoff)) {
+            Instant dueAt = deadlineCalculator.legAutoReceiveAt(request, leg);
+            if (dueAt != null && dueAt.isBefore(now)) {
                 request.autoReceive(leg, now);
                 receivedLegs.add(leg);
             }
@@ -2037,7 +2029,7 @@ public class RequestService {
                 || request.getStatus() != RequestStatus.AWAITING_HANDOVER
                 || request.getMeetingTime() == null
                 || staleThreshold(request, staleDays).isAfter(now)
-                || (reportService != null && reportService.hasReportForRequest(requestId))) {
+                || (reportService != null && reportService.hasPendingDisputeForRequest(requestId))) {
             return false;
         }
         boolean receiverGotLeg1WithoutSendingLeg2 =
