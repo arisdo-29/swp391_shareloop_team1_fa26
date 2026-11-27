@@ -106,6 +106,35 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+describe('Nội dung chi tiết sản phẩm', () => {
+  it('hiển thị giá có khung vàng và giá trống bằng chữ xám', async () => {
+    await renderDetail(detail({ referencePrice: 120000 }));
+
+    const referencePrice = screen.getByText(/Giá tham khảo 120\.000/);
+    expect(referencePrice.className).toContain('border-warning');
+
+    cleanup();
+    await renderDetail(detail({ referencePrice: null }));
+
+    const missingPrice = screen.getByText('Chưa có giá tham khảo');
+    expect(missingPrice.className).toContain('text-text-muted');
+    expect(missingPrice.className).not.toContain('border-warning');
+  });
+
+  it('định dạng Markdown an toàn và hiển thị danh sách trong mô tả', async () => {
+    await renderDetail(
+      detail({
+        description: '**Nội dung quan trọng**\n\n- Dòng thứ nhất\n- Dòng thứ hai',
+      }),
+    );
+
+    const description = screen.getByRole('heading', { level: 2, name: 'Mô tả' }).closest('section')!;
+    expect(within(description).getByText('Nội dung quan trọng').tagName).toBe('STRONG');
+    expect(within(description).getByRole('list').children).toHaveLength(2);
+    expect(within(description).queryByText(/\*\*/)).toBeNull();
+  });
+});
+
 describe('Chi tiết bài đã giao dịch', () => {
   it('bài TRADED với requestable false chỉ cho xem: có nhãn Đã giao dịch, không có nút gửi yêu cầu', async () => {
     // when
