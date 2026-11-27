@@ -12,14 +12,6 @@ final class VietnamTime {
 
     private VietnamTime() {}
 
-    private static final DateTimeFormatter DATE_FORMAT =
-            DateTimeFormatter.ofPattern("dd/MM").withZone(ZoneId.of("Asia/Ho_Chi_Minh"));
-
-    /** Chỉ ngày, ví dụ "31/10". */
-    static String formatDate(Instant instant) {
-        return DATE_FORMAT.format(instant);
-    }
-
     static String format(Instant instant) {
         return FORMAT.format(instant);
     }

@@ -221,6 +221,23 @@ class RequestShippingIT extends IntegrationTest {
     }
 
     @Test
+    void shippingReminderIncludesDeadlineHourInVietnam() throws Exception {
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId, "GIVE");
+        long requestId = createGiveShippingRequest(itemId, donorId, receiverId);
+        jdbc.update("UPDATE requests SET meeting_time = '2026-11-25 07:22:00+00' WHERE id = ?", requestId);
+
+        deadlineJobService.remindShipping(Instant.parse("2026-11-26T00:00:00Z"));
+
+        assertThat(jdbc.queryForObject(
+                        "SELECT body FROM notifications WHERE user_id = ? AND type = 'SHIP_DATE_REMINDER'",
+                        String.class,
+                        donorId))
+                .contains("14:22 28/11");
+    }
+
+    @Test
     void jobs_whenNothingSentPastDeadlinePlusStaleDays_cancelsAndNotShippedRequestIsRemindedOnce() throws Exception {
         // given: ngày gửi dự kiến cách đây 4 ngày, đã quá hạn gửi 3 ngày
         long donorId = insertUser("Donor");
