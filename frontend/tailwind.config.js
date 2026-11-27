@@ -30,6 +30,7 @@ export default {
         },
         accent: bottlePalette[500],
         link: bottlePalette[500],
+        exchange: '#176B4B',
         highlight: '#E0B25A',
         admin: {
           sidebar: bottlePalette[900],
@@ -71,7 +72,7 @@ export default {
         info: { DEFAULT: '#3F6475', soft: '#EAF0F1' },
       },
       fontSize: { '2xs': ['0.6875rem', { lineHeight: '1rem' }] },
-      borderRadius: { sm: '6px', md: '10px', lg: '14px', xl: '18px' },
+      borderRadius: { sm: '6px', action: '8px', md: '10px', lg: '14px', xl: '18px' },
       boxShadow: {
         sm: '0 1px 2px rgba(11, 59, 46, 0.08)',
         md: '0 10px 30px rgba(11, 59, 46, 0.12)',

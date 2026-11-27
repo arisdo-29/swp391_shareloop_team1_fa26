@@ -364,9 +364,13 @@ export function ProductDetail() {
           </div>
 
           <div className="space-y-2.5">
-            <div className="flex flex-wrap gap-2">
-              <TypeBadge type={item.type} />
-              <ConditionBadge condition={item.condition} />
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="inline-flex w-fit rounded-sm border border-primary bg-primary-soft [&>span]:bg-transparent [&>span]:px-3 [&>span]:py-1.5 [&>span]:text-sm [&>span]:font-semibold [&>span]:text-primary">
+                <TypeBadge type={item.type} />
+              </span>
+              <span className="inline-flex w-fit rounded-sm border border-info bg-info-soft [&>span]:bg-transparent [&>span]:px-3 [&>span]:py-1.5 [&>span]:text-sm [&>span]:font-semibold [&>span]:text-info">
+                <ConditionBadge condition={item.condition} />
+              </span>
               {isTradedReadOnly ? (
                 <StatusBadge status="TRADED" label="Đã giao dịch" />
               ) : isReservedReadOnly && !existingRequest ? (
@@ -376,7 +380,9 @@ export function ProductDetail() {
               ) : null}
             </div>
             <h1 className="text-2xl font-bold leading-tight sm:text-3xl">{item.title}</h1>
-            <p className="text-sm font-semibold">{formatReferencePrice(item.referencePrice)}</p>
+            <p className="inline-flex w-fit rounded-sm border border-warning bg-warning-soft px-3 py-1.5 text-lg font-bold tabular-nums text-warning">
+              {formatReferencePrice(item.referencePrice)}
+            </p>
             {own && item.hidden && item.hiddenReason ? (
               <Alert tone="warning">{item.hiddenReason}</Alert>
             ) : null}
@@ -565,14 +571,17 @@ export function ProductDetail() {
                       Bạn chưa có món đã duyệt, còn hoạt động và chưa nằm trong giao dịch khác để trao đổi.
                     </p>
                   ) : null}
-                  <Link to="/post" className="inline-flex min-h-11 items-center text-sm font-semibold text-link hover:text-secondary">
+                  <Link
+                    to="/post"
+                    className="flex h-[42px] w-full items-center justify-center rounded-action border border-exchange bg-white text-sm font-semibold text-primary transition-colors hover:bg-primary-soft"
+                  >
                     Đăng món mới để đổi
                   </Link>
                 </fieldset>
               ) : null}
               <Button
                 size="lg"
-                className="w-full"
+                className="!mt-3 w-full"
                 disabled={requestSubmitting}
                 onClick={() => void submitRequest()}
               >
