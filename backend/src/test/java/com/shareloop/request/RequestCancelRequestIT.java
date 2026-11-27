@@ -289,41 +289,6 @@ class RequestCancelRequestIT extends IntegrationTest {
     }
 
     @Test
-    void concludeShippingDispute_whenParcelSentButNotReceived_doesNotNameAnUnverifiedHolder() throws Exception {
-        long donorId = insertUser("Donor");
-        long receiverId = insertUser("Receiver");
-        long itemId = insertItem(donorId);
-        long requestId = createLogisticsConfirmedRequest(itemId, donorId, receiverId, 24);
-        jdbc.update(
-                "UPDATE requests SET delivery_method = 'SHIPPING', meeting_place = NULL, receiver_address = ? WHERE id = ?",
-                "12 Lê Lợi",
-                requestId);
-        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId)
-                        .header("Authorization", token(donorId))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"trackingCode\":\"GHN1111\"}"))
-                .andExpect(status().isOk());
-        mockMvc.perform(post("/api/v1/requests/{id}/handover-failed", requestId)
-                        .header("Authorization", token(receiverId))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"code\":\"OTHER\",\"reason\":\"Tôi chưa nhận được kiện hàng\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("DISPUTED"));
-
-        concludeAsAdmin(
-                        reportOf(requestId),
-                        "{\"decision\":\"UPHOLD\",\"itemOutcomes\":[{\"itemId\":" + itemId
-                                + ",\"choice\":\"TRANSFERRED\"}]}")
-                .andExpect(status().isOk());
-        assertThat(jdbc.queryForObject(
-                        "SELECT body FROM notifications WHERE user_id = ? AND type = 'TRANSACTION_CANCELLED'",
-                        String.class,
-                        receiverId))
-                .contains("chưa xác định ai đang giữ")
-                .doesNotContain("đã nằm ở chỗ Donor");
-    }
-
-    @Test
     void concludeUphold_whenRejectedNoShowCancel_deductsOneStarFromAccusedParty() throws Exception {
         // given: người nhận tố người cho không đến, người cho không đồng ý
         long donorId = insertUser("Donor");
@@ -638,5 +603,40 @@ class RequestCancelRequestIT extends IntegrationTest {
                 areaId);
         itemIds.add(itemId);
         return itemId;
+    }
+
+    @Test
+    void concludeShippingDispute_whenParcelSentButNotReceived_doesNotNameAnUnverifiedHolder() throws Exception {
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId);
+        long requestId = createLogisticsConfirmedRequest(itemId, donorId, receiverId, 24);
+        jdbc.update(
+                "UPDATE requests SET delivery_method = 'SHIPPING', meeting_place = NULL, receiver_address = ? WHERE id = ?",
+                "12 Lê Lợi",
+                requestId);
+        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trackingCode\":\"GHN1111\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/requests/{id}/handover-failed", requestId)
+                        .header("Authorization", token(receiverId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"OTHER\",\"reason\":\"Tôi chưa nhận được kiện hàng\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DISPUTED"));
+
+        concludeAsAdmin(
+                        reportOf(requestId),
+                        "{\"decision\":\"UPHOLD\",\"itemOutcomes\":[{\"itemId\":" + itemId
+                                + ",\"choice\":\"TRANSFERRED\"}]}")
+                .andExpect(status().isOk());
+        assertThat(jdbc.queryForObject(
+                        "SELECT body FROM notifications WHERE user_id = ? AND type = 'TRANSACTION_CANCELLED'",
+                        String.class,
+                        receiverId))
+                .contains("chưa xác định ai đang giữ")
+                .doesNotContain("đã nằm ở chỗ Donor");
     }
 }
