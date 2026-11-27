@@ -324,6 +324,27 @@ class RequestShippingIT extends IntegrationTest {
     }
 
     @Test
+    void shipmentNoticeAttributesDispatchToTheSender() throws Exception {
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long itemId = insertItem(donorId, "GIVE");
+        long requestId = createGiveShippingRequest(itemId, donorId, receiverId);
+
+        ship(requestId, donorId, "GHN1111");
+
+        assertThat(jdbc.queryForObject(
+                        "SELECT title FROM notifications WHERE user_id = ? AND type = 'SHIPMENT_SENT'",
+                        String.class,
+                        receiverId))
+                .isEqualTo("Người gửi báo đã gửi hàng");
+        assertThat(jdbc.queryForObject(
+                        "SELECT body FROM notifications WHERE user_id = ? AND type = 'SHIPMENT_SENT'",
+                        String.class,
+                        receiverId))
+                .contains("Người gửi báo đã gửi hàng", "GHN1111", "tự ghi nhận");
+    }
+
+    @Test
     void jobs_whenNothingSentPastDeadlinePlusStaleDays_cancelsAndNotShippedRequestIsRemindedOnce() throws Exception {
         // given: ngày gửi dự kiến cách đây 4 ngày, đã quá hạn gửi 3 ngày
         long donorId = insertUser("Donor");
