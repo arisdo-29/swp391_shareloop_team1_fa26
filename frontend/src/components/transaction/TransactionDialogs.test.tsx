@@ -198,6 +198,26 @@ describe('CancelRequestDialog', () => {
   });
 });
 
+describe('Báo sự cố gửi hàng', () => {
+  it('chiều đã gửi mở khiếu nại và chỉ hiện lý do phù hợp với kiện đã gửi', () => {
+    render(
+      <HandoverFailedDialog
+        request={{ ...confirmedRequest, status: 'AWAITING_HANDOVER', deliveryMethod: 'SHIPPING', donorShippedAt: '2026-11-26T09:00:00Z' }}
+        currentUserId={12}
+        itemTitle="Máy pha cà phê"
+        partnerName="Bình"
+        viewerIsDonor={false}
+        onClose={vi.fn()}
+        onDone={vi.fn()}
+        onStale={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Gửi khiếu nại' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Chưa nhận được hàng' })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: 'Bên kia chưa gửi hàng' })).toBeNull();
+  });
+});
+
 describe('Lý do khác ngắn hơn 5 ký tự', () => {
   it('đề nghị huỷ: báo lỗi tiếng Việt, khoá nút và không gọi API', async () => {
     const user = userEvent.setup();

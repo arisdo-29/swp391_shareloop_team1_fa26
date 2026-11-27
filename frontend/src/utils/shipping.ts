@@ -96,6 +96,14 @@ export function shippingProgressSummary(request: RequestResponse) {
     .join('. ');
 }
 
+export function shippingFailureContext(request: RequestResponse, viewerIsDonor: boolean) {
+  const legs = shippingLegs(request);
+  const incoming = legs.find((leg) => !viewerSendsLeg(leg, viewerIsDonor));
+  const other = legs.find((leg) => viewerSendsLeg(leg, viewerIsDonor));
+  const incomingShipped = Boolean(incoming && incoming.step !== 'WAITING_SHIP');
+  return { incomingShipped, opensDispute: incomingShipped || other?.step === 'RECEIVED' };
+}
+
 // Hậu quả của "Giao nhận không thành công" khi Giao hàng, theo từng chiều người xem nhận (GN-12). Backend vẫn quyết định.
 export function shippingFailedConsequence(
   request: RequestResponse,
@@ -104,12 +112,7 @@ export function shippingFailedConsequence(
   responseHours: number,
   cancelResponseHours: number,
 ) {
-  const legs = shippingLegs(request);
-  const incoming = legs.find((leg) => !viewerSendsLeg(leg, viewerIsDonor));
-  const other = legs.find((leg) => viewerSendsLeg(leg, viewerIsDonor));
-  const incomingShipped = incoming ? incoming.step !== 'WAITING_SHIP' : false;
-  const otherReceived = other ? other.step === 'RECEIVED' : false;
-  if (incomingShipped || otherReceived) {
+  if (shippingFailureContext(request, viewerIsDonor).opensDispute) {
     return `Giao dịch chuyển sang sự cố giao nhận, chờ Admin xác minh. ${partnerName} có ${responseHours} giờ để giải trình.`;
   }
   const deadline = request.sendDeadlineAt ? ` Hạn gửi đến ${formatDeadline(request.sendDeadlineAt)}.` : '';

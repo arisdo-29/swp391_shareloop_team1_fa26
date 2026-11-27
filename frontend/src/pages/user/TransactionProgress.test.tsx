@@ -794,7 +794,7 @@ describe('Ba nút kết quả giao nhận', () => {
     );
   });
 
-  it('Giao hàng: lý do chưa gửi hàng thay cho không đến điểm hẹn', async () => {
+  it('Giao hàng: chiều đã gửi mở khiếu nại với lý do chưa nhận được hàng', async () => {
     // given: chiều 1 đã gửi nên người nhận báo được
     const userEvents = userEvent.setup();
     await renderProgress(
@@ -812,7 +812,9 @@ describe('Ba nút kết quả giao nhận', () => {
     const dialog = within(await screen.findByRole('dialog'));
 
     // then
-    expect(dialog.getByRole('option', { name: 'Bên kia chưa gửi hàng' })).toBeTruthy();
+    expect(dialog.getByRole('option', { name: 'Chưa nhận được hàng' })).toBeTruthy();
+    expect(dialog.getByRole('button', { name: 'Gửi khiếu nại' })).toBeTruthy();
+    expect(dialog.queryByRole('option', { name: 'Bên kia chưa gửi hàng' })).toBeNull();
     expect(dialog.queryByRole('option', { name: 'Bên kia không đến điểm hẹn' })).toBeNull();
   });
 

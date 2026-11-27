@@ -9,7 +9,7 @@ import { openDispute, type DisputeResponse, type ReportReason } from '../../serv
 import type { ApiError } from '../../services/http';
 import { disputeErrorMessage, disputeReasonLabels } from '../../utils/disputeErrors';
 import { canConfirmHandover, formatDeadline } from '../../utils/request';
-import { shippingFailedConsequence } from '../../utils/shipping';
+import { shippingFailedConsequence, shippingFailureContext } from '../../utils/shipping';
 import {
   afterMeetingReasons,
   BEFORE_MEETING_REASONS,
@@ -155,10 +155,12 @@ export function HandoverFailedDialog({
   const [error, setError] = useState('');
   const config = usePublicConfig();
   const partnerConfirmed = Boolean(viewerIsDonor ? request.receiverHandoverAt : request.donorHandoverAt);
-  const reasons = afterMeetingReasons(request.deliveryMethod === 'SHIPPING');
+  const shipping = request.deliveryMethod === 'SHIPPING' ? shippingFailureContext(request, viewerIsDonor) : null;
+  const opensDispute = shipping?.opensDispute ?? partnerConfirmed;
+  const reasons = afterMeetingReasons(shipping !== null, shipping?.incomingShipped);
   const noteRequired = code === 'OTHER';
   const noteReady = !noteRequired || note.trim().length >= 5;
-  const canSubmit = canConfirmHandover(request.status) && Boolean(code) && noteReady &&
+  const canSubmit = canConfirmHandover(request.status) && reasons.some((reason) => reason.code === code) && noteReady &&
     note.length <= HANDOVER_FAILED_LIMIT;
 
   const submit = async () => {
@@ -239,7 +241,7 @@ export function HandoverFailedDialog({
           Đóng
         </Button>
         <Button disabled={submitting || !canSubmit} onClick={() => void submit()}>
-          {submitting ? 'Đang xử lý...' : partnerConfirmed ? 'Gửi khiếu nại' : 'Gửi đề nghị huỷ'}
+          {submitting ? 'Đang xử lý...' : opensDispute ? 'Gửi khiếu nại' : 'Gửi đề nghị huỷ'}
         </Button>
       </div>
     </DialogFrame>
