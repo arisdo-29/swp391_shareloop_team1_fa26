@@ -22,8 +22,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
@@ -223,10 +221,23 @@ class RequestShippingIT extends IntegrationTest {
                 .isTrue();
     }
 
-    @ParameterizedTest
-    @CsvSource({"AWAITING_RESPONSE, false, false", "DISMISSED, false, true", "DISMISSED, true, false"})
-    void autoReceiveShipping_whenReportExists_respectsItsStatusAndResumeTime(
-            String reportStatus, boolean resumedRecently, boolean shouldReceive) throws Exception {
+    @Test
+    void autoReceiveShipping_whenDisputeIsOpen_keepsShipmentAwaitingHandover() throws Exception {
+        assertAutoReceiveShipping("AWAITING_RESPONSE", false, false);
+    }
+
+    @Test
+    void autoReceiveShipping_whenDisputeIsClosedAndDeadlinePassed_completes() throws Exception {
+        assertAutoReceiveShipping("DISMISSED", false, true);
+    }
+
+    @Test
+    void autoReceiveShipping_whenRecentlyResumed_waitsUntilTheNewDeadline() throws Exception {
+        assertAutoReceiveShipping("DISMISSED", true, false);
+    }
+
+    private void assertAutoReceiveShipping(String reportStatus, boolean resumedRecently, boolean shouldReceive)
+            throws Exception {
         long donorId = insertUser("Donor");
         long receiverId = insertUser("Receiver");
         long itemId = insertItem(donorId, "GIVE");
