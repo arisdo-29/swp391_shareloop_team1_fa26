@@ -444,7 +444,7 @@ class ReportServiceTest {
         });
 
         // when
-        reportService.openHandoverIssueReport(10L, 100L, "Chờ mãi không thấy người giao", List.of(7L));
+        reportService.openHandoverIssueReport(10L, 100L, "Chờ mãi không thấy người giao", List.of(7L), null);
 
         // then
         ArgumentCaptor<Report> captor = ArgumentCaptor.forClass(Report.class);
@@ -469,7 +469,7 @@ class ReportServiceTest {
         when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // when
-        reportService.openHandoverIssueReport(20L, 100L, "Người nhận không đến lấy", null);
+        reportService.openHandoverIssueReport(20L, 100L, "Người nhận không đến lấy", null, null);
 
         // then
         ArgumentCaptor<Report> captor = ArgumentCaptor.forClass(Report.class);
@@ -484,7 +484,7 @@ class ReportServiceTest {
                 .thenReturn(true);
 
         // when
-        reportService.openHandoverIssueReport(10L, 100L, "Chưa nhận được", null);
+        reportService.openHandoverIssueReport(10L, 100L, "Chưa nhận được", null, null);
 
         // then
         verify(reportRepository, never()).save(any(Report.class));
@@ -499,7 +499,7 @@ class ReportServiceTest {
                 .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.APPROVED));
 
         // when / then
-        assertThatThrownBy(() -> reportService.openHandoverIssueReport(99L, 100L, "Ghi chú", null))
+        assertThatThrownBy(() -> reportService.openHandoverIssueReport(99L, 100L, "Ghi chú", null, null))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(ReportErrorCode.DISPUTE_NOT_A_PARTY));

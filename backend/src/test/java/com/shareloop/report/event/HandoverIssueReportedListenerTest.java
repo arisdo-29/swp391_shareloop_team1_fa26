@@ -22,12 +22,13 @@ class HandoverIssueReportedListenerTest {
     @Test
     void onHandoverIssue_opensReportForReporterWithNoteAndEvidence() {
         // given
-        HandoverIssueReportedEvent event = new HandoverIssueReportedEvent(100L, 10L, "Chưa nhận được đồ", List.of(7L));
+        HandoverIssueReportedEvent event =
+                new HandoverIssueReportedEvent(100L, 10L, "Chưa nhận được đồ", List.of(7L), 2L);
 
         // when
         listener.onHandoverIssue(event);
 
         // then
-        verify(reportService).openHandoverIssueReport(10L, 100L, "Chưa nhận được đồ", List.of(7L));
+        verify(reportService).openHandoverIssueReport(10L, 100L, "Chưa nhận được đồ", List.of(7L), 2L);
     }
 }
