@@ -639,6 +639,7 @@ Khi Admin chấp thuận (`UPHOLD`) khiếu nại sự cố giao nhận mà giao
 - Luật giống nhau cho chủ bài và người nhận. Giá trị mặc định ở giao diện: món của bên vi phạm là `HIDE`, món của bên không vi phạm là `REOPEN`. Bản cũ chỉ ẩn khi chủ bài vi phạm đã bị bỏ.
 - Thiếu món, thừa món lạ, trùng món hoặc thiếu `choice` trả `400 REQUEST_ITEM_OUTCOMES_REQUIRED` ("Cần chọn cách xử lý cho từng món của giao dịch trước khi chấp thuận khiếu nại.") và không đổi gì.
 - Bác bỏ (`DISMISS`) không cần `itemOutcomes`: giao dịch `COMPLETED`, các món sang `TRADED` như cũ. Giao dịch không còn `DISPUTED` (khiếu nại mở sau khi hoàn tất) thì bỏ qua `itemOutcomes`.
+- Khi chọn `TRANSFERRED` cho món gửi hàng đã được báo gửi nhưng chưa ghi nhận đã nhận, thông báo kết luận ghi rõ chưa xác định ai đang giữ. Admin có thể ghi kết quả xác minh vị trí kiện hàng trong ghi chú kết luận.
 - Mỗi món ghi một dòng nhật ký: `ADMIN_ITEM_HIDDEN` cho `HIDE` và `TRANSFERRED`, `REQUEST_CANCEL` cho `REOPEN`.
 
 ### Khiếu nại từ đề nghị huỷ bị bên kia không đồng ý (GN-06)
