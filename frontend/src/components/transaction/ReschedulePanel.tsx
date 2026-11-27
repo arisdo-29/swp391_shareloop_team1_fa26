@@ -5,6 +5,7 @@ import { requestApi, type RequestResponse } from '../../services/requestApi';
 import type { ApiError } from '../../services/http';
 import { formatDateTime, formatDeadline } from '../../utils/request';
 import { isBeforeMeetingTime } from '../../utils/handoverOutcome';
+import { anyLegShipped } from '../../utils/shipping';
 import { usePublicConfig } from '../../utils/usePublicConfig';
 import {
   maximumMeetingTimeValue,
@@ -40,11 +41,14 @@ export function ReschedulePanel({ request, currentUserId, partnerName, onUpdated
   const usedCount = request.rescheduleCount ?? 0;
   const remaining = Math.max(0, config.reschedule_max_count - usedCount);
   const someoneCompleted = Boolean(request.donorHandoverAt || request.receiverHandoverAt);
+  const beforeHandoverStart = request.deliveryMethod === 'SHIPPING'
+    ? !anyLegShipped(request)
+    : isBeforeMeetingTime(request.meetingTime);
   const canPropose =
     !pending &&
     !request.cancelRequestedAt &&
     !someoneCompleted &&
-    isBeforeMeetingTime(request.meetingTime) &&
+    beforeHandoverStart &&
     remaining > 0;
 
   const run = async (action: () => Promise<RequestResponse>) => {

@@ -58,6 +58,23 @@ describe('ReschedulePanel', () => {
     expect(screen.queryByRole('button', { name: /Đề nghị dời lịch/ })).toBeNull();
   });
 
+  it('gửi hàng còn dời lịch được sau giờ gửi dự kiến khi chưa chiều nào gửi', () => {
+    renderPanel({ ...confirmed, deliveryMethod: 'SHIPPING', meetingTime: hoursFromNow(-2) });
+    expect(screen.getByRole('button', { name: /Đề nghị dời lịch/ })).toBeTruthy();
+  });
+
+  it('gửi hàng không dời lịch được khi một chiều đã gửi dù chưa tới giờ dự kiến', () => {
+    renderPanel({
+      ...confirmed,
+      type: 'SWAP',
+      offeredItemId: 77,
+      status: 'AWAITING_HANDOVER',
+      deliveryMethod: 'SHIPPING',
+      donorShippedAt: hoursFromNow(-1),
+    });
+    expect(screen.queryByRole('button', { name: /Đề nghị dời lịch/ })).toBeNull();
+  });
+
   it('gửi đề nghị với giờ mới trong giới hạn và địa điểm mới', async () => {
     const user = userEvent.setup();
     vi.spyOn(requestApi, 'proposeReschedule').mockResolvedValue({ ...confirmed });
