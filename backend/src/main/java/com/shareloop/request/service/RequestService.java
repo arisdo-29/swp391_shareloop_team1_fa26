@@ -1080,7 +1080,7 @@ public class RequestService {
         if (sendDeadline != null && now.isBefore(sendDeadline)) {
             throw new BusinessException(
                     RequestErrorCode.REQUEST_SEND_DEADLINE_NOT_PASSED,
-                    "Bên kia chưa gửi hàng, hạn gửi đến " + VietnamTime.formatDate(sendDeadline));
+                    "Bên kia chưa gửi hàng, hạn gửi đến " + VietnamTime.format(sendDeadline));
         }
         Request saved = createCancelRequest(
                 request,
@@ -1980,7 +1980,7 @@ public class RequestService {
                     link,
                     since,
                     "Đã tới ngày gửi hàng dự kiến. Hãy gửi hàng và nhập mã vận đơn trước "
-                            + VietnamTime.formatDate(sendDeadline) + ".");
+                            + VietnamTime.format(sendDeadline) + ".");
             if (!sendDeadline.isAfter(now)) {
                 sent |= remindOnce(
                         sender,
