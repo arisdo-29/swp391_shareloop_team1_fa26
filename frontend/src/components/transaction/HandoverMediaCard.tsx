@@ -57,7 +57,8 @@ export function HandoverMediaCard({ request }: { request: RequestResponse }) {
     setMedia(request.handoverMedia ?? []);
   }, [request.handoverMedia]);
 
-  if (!mediaStatuses.includes(request.status)) return null;
+  const canUpload = mediaStatuses.includes(request.status);
+  if (!canUpload && (!request.exchangeShippingUnsentLeg || media.length === 0)) return null;
 
   const handoverMedia = media.filter((entry) => entry.stage === 'HANDOVER');
   const disputeMedia = media.filter((entry) => entry.stage === 'DISPUTE');
@@ -71,7 +72,7 @@ export function HandoverMediaCard({ request }: { request: RequestResponse }) {
         media={handoverMedia}
         onPreview={setPreview}
       >
-        <MediaUploader requestId={request.id} stage="HANDOVER" onAttached={setMedia} />
+        {canUpload ? <MediaUploader requestId={request.id} stage="HANDOVER" onAttached={setMedia} /> : null}
       </MediaSection>
 
       {/* Hết hạn khiếu nại mà chưa từng gửi ảnh khiếu nại thì ẩn hẳn mục này. */}

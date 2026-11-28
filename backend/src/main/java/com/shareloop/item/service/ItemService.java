@@ -928,6 +928,36 @@ public class ItemService {
         refundReservedTime(itemId, reservedAt);
     }
 
+    @Transactional
+    public void holdForExchangeShipping(long itemId, long requestId) {
+        Item item = requireItemForUpdate(itemId);
+        if (item.holdForExchangeShipping(requestId)) {
+            publishItemUpdate(itemId, item.getDonorId());
+            publishUnavailable(itemId, ItemUnavailableEvent.Reason.HIDDEN);
+        }
+    }
+
+    @Transactional
+    public boolean releaseExchangeShippingHold(long itemId, long requestId, Instant reservedAt, boolean keepHidden) {
+        Item item = itemRepository.findByIdForUpdate(itemId).orElse(null);
+        if (item == null || !item.isHeldForExchangeShipping(requestId)) {
+            return false;
+        }
+        if (keepHidden) {
+            item.hideByAdmin();
+        }
+        boolean wasReserved = item.getStatus() == ItemStatus.RESERVED;
+        if (wasReserved) {
+            release(itemId);
+        }
+        item.releaseExchangeShippingHold(requestId);
+        if (wasReserved) {
+            refundReservedTime(itemId, reservedAt);
+        }
+        publishItemUpdate(itemId, item.getDonorId());
+        return item.isActive() && item.getStatus() == ItemStatus.APPROVED;
+    }
+
     /** Như {@link #releaseAfterCancel} nhưng bỏ qua món không ở RESERVED (món mang đổi của giao dịch SWAP cũ). */
     @Transactional
     public void releaseIfReservedAfterCancel(long itemId, Instant reservedAt) {
@@ -952,7 +982,7 @@ public class ItemService {
                         + ", bạn nhớ gia hạn nếu muốn giữ bài."
                 : "Bài «" + item.getTitle() + "» đã được mở lại và được cộng bù thời gian đã nằm trong giao dịch. "
                         + "Hạn hiển thị mới là " + expireText + ".";
-        if (item.isHiddenByAdmin()) {
+        if (!item.isActive()) {
             body = "Bài «" + item.getTitle() + "» vẫn đang ẩn. Hạn hiển thị đã được cập nhật đến " + expireText + ".";
         }
         notificationService.notify(

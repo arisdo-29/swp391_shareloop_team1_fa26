@@ -162,6 +162,12 @@ giao dịch bị huỷ, không mở report nào. Endpoint cũ `POST /requests/{i
 - Gửi thông báo `DISPUTE_OPENED` cho bên còn lại, dẫn tới `/me/disputes/{reportId}` để giải trình.
 - Chủ bài, người nhận và Admin xử lý như khiếu nại thường (`POST /disputes/{disputeId}/response`, `.../conclude`).
 
+### Sự cố do hết khung gửi của Trao đổi qua giao hàng
+
+Khi hết khung gửi và chỉ một bên xác nhận, hệ thống huỷ giao dịch và mở một hồ sơ `REQUEST` với lý do `NO_SHOW` trong cùng transaction. Hồ sơ liên kết món và tài khoản của bên chưa xác nhận, có 48 giờ để giải trình qua API hiện có. Chi tiết hồ sơ của quản trị viên có `exchangeShippingTimeout: true` để nhận biết hồ sơ do hệ thống tự tạo.
+
+Kết luận giữ nguyên trạng thái `CANCELLED` của giao dịch. Bác khiếu nại thì đặt lịch mở lại bài của người bị báo sau 24 giờ và không trừ sao. Chấp nhận thì bài tiếp tục ẩn, áp dụng mức phạt uy tín hiện có. Nhánh này không cần `itemOutcomes` và bỏ qua cờ `deliberateFalseReport`. Lịch mở lại bài của bên đã gửi tính riêng, từ lúc giao dịch bị huỷ.
+
 ### Báo cáo vi phạm tự mở khi một bên bấm "Từ chối giao nhận" (GN-07, BC-09)
 
 Từ 21/11/2026 từ chối nhận là **báo cáo vi phạm, không phải khiếu nại**. Khiếu nại (`targetType = REQUEST`) chỉ có sau

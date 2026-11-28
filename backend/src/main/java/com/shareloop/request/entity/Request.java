@@ -147,6 +147,56 @@ public class Request extends BaseEntity {
     @Column(name = "receiver_shipped_at")
     private Instant receiverShippedAt;
 
+    @Column(name = "exchange_shipping_window_start")
+    private Instant exchangeShippingWindowStart;
+
+    @Column(name = "exchange_shipping_unsent_leg")
+    private Short exchangeShippingUnsentLeg;
+
+    @Column(name = "donor_item_reopen_at")
+    private Instant donorItemReopenAt;
+
+    @Column(name = "receiver_item_reopen_at")
+    private Instant receiverItemReopenAt;
+
+    public boolean isExchangeShipping() {
+        return isShipping() && requiredLegs() == 2;
+    }
+
+    public Instant getExchangeShippingWindowStart() {
+        return exchangeShippingWindowStart;
+    }
+
+    public void setExchangeShippingWindowStart(Instant start) {
+        exchangeShippingWindowStart = start;
+    }
+
+    public Short getExchangeShippingUnsentLeg() {
+        return exchangeShippingUnsentLeg;
+    }
+
+    public void cancelExchangeShippingWindow(String reason) {
+        cancel(CANCEL_BY_SYSTEM + reason);
+        clearReschedule();
+    }
+
+    public void recordExchangeShippingTimeout(int unsentLeg, Instant senderReopenAt) {
+        exchangeShippingUnsentLeg = (short) unsentLeg;
+        scheduleExchangeItemReopen(unsentLeg == 1 ? 2 : 1, senderReopenAt);
+    }
+
+    public Instant exchangeItemReopenAt(int leg) {
+        return leg == 1 ? donorItemReopenAt : receiverItemReopenAt;
+    }
+
+    public void scheduleExchangeItemReopen(int leg, Instant reopenAt) {
+        if (leg == 1) {
+            donorItemReopenAt = reopenAt;
+        } else {
+            receiverItemReopenAt = reopenAt;
+        }
+    }
+
     protected Request() {}
 
     public Request(Long itemId, Long receiverId, Long offeredItemId, String type) {

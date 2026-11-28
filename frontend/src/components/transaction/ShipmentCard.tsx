@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Button } from '../ui';
 import { DialogFrame } from '../Dialog';
 import { ReportEvidenceField } from '../ReportEvidenceField';
@@ -41,12 +41,25 @@ export function ShipmentCard(props: ShipmentCardProps) {
   const [shipDialogLeg, setShipDialogLeg] = useState<ShippingLeg | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [now, setNow] = useState(Date.now);
+  const windowStart = request.exchangeShippingWindowStart ? Date.parse(request.exchangeShippingWindowStart) : null;
+  const windowEnd = windowStart !== null && request.meetingTime ? Date.parse(request.meetingTime) : null;
+  useEffect(() => {
+    const current = Date.now();
+    setNow(current);
+    const transitions = [windowStart, windowEnd].flatMap((time) =>
+      time !== null && time > current ? [window.setTimeout(() => setNow(Date.now()), time - current)] : [],
+    );
+    return () => transitions.forEach(window.clearTimeout);
+  }, [windowStart, windowEnd]);
 
   if (!canConfirmHandover(request.status) || !request.contactRevealedAt) return null;
 
   const legs = shippingLegs(request);
   const hasPendingCancel = Boolean(request.cancelRequestedAt);
   const noLegShipped = !anyLegShipped(request);
+  const isExchange = legs.length === 2;
+  const shippingOpen = windowStart === null || (windowEnd !== null && now >= windowStart && now < windowEnd);
 
   const receive = async () => {
     if (submitting) return;
@@ -84,6 +97,8 @@ export function ShipmentCard(props: ShipmentCardProps) {
           partnerName={partnerName}
           submitting={submitting}
           hasPendingCancel={hasPendingCancel}
+          shippingOpen={shippingOpen}
+          isExchange={isExchange}
           responseHours={config.response_window_hours}
           cancelResponseHours={config.cancel_request_response_hours}
           onShip={() => setShipDialogLeg(leg)}
@@ -93,6 +108,17 @@ export function ShipmentCard(props: ShipmentCardProps) {
           legs={legs}
         />
       ))}
+      {isExchange && !noLegShipped ? (
+        <div className="space-y-1">
+          <Button variant="outline" disabled={submitting} onClick={props.onOpenFailed}>
+            Giao nhận không thành công
+          </Button>
+          <p className="text-xs leading-5 text-text-secondary">
+            {shippingFailedConsequence(request, viewerIsDonor, partnerName, config.response_window_hours,
+              config.cancel_request_response_hours)}
+          </p>
+        </div>
+      ) : null}
       {!hasPendingCancel && noLegShipped ? (
         <div className="space-y-1">
           <Button variant="outline" disabled={submitting} onClick={props.onOpenCancelRequest}>
@@ -116,6 +142,8 @@ export function ShipmentCard(props: ShipmentCardProps) {
           request={request}
           currentUserId={currentUserId}
           leg={shipDialogLeg}
+          receiptRequired={isExchange}
+          shippingOpen={shippingOpen}
           onClose={() => setShipDialogLeg(null)}
           onDone={(updated) => {
             setShipDialogLeg(null);
@@ -135,6 +163,8 @@ function LegBlock({
   partnerName,
   submitting,
   hasPendingCancel,
+  shippingOpen,
+  isExchange,
   responseHours,
   cancelResponseHours,
   onShip,
@@ -149,6 +179,8 @@ function LegBlock({
   partnerName: string;
   submitting: boolean;
   hasPendingCancel: boolean;
+  shippingOpen: boolean;
+  isExchange: boolean;
   responseHours: number;
   cancelResponseHours: number;
   onShip: () => void;
@@ -161,7 +193,8 @@ function LegBlock({
   const otherLeg = legs.find((item) => item.leg !== leg.leg);
   const otherReceived = otherLeg?.step === 'RECEIVED';
   const open = canConfirmHandover(request.status);
-  const receiveDeadline = leg.leg === 1 ? request.leg1AutoReceiveAt : request.leg2AutoReceiveAt;
+  const hasExchangeReport = isExchange && Boolean(request.disputes?.length);
+  const receiveDeadline = hasExchangeReport ? null : leg.leg === 1 ? request.leg1AutoReceiveAt : request.leg2AutoReceiveAt;
   // Chỉ chọn nút để hiện, backend vẫn kiểm hạn gửi: chiều chưa gửi chỉ báo được khi quá hạn gửi hoặc chiều kia đã nhận.
   const pastSendDeadline = request.sendDeadlineAt ? new Date(request.sendDeadlineAt).getTime() <= Date.now() : false;
   const canReportNotShipped = otherReceived || pastSendDeadline;
@@ -188,8 +221,11 @@ function LegBlock({
         ) : null}
         {leg.step === 'WAITING_SHIP' && request.sendDeadlineAt ? (
           <div>
-            <dt className="label">Hạn gửi</dt>
-            <dd>{formatDeadline(request.sendDeadlineAt)}</dd>
+            <dt className="label">{request.exchangeShippingWindowStart ? 'Khung gửi hàng' : 'Hạn gửi'}</dt>
+            <dd>
+              {request.exchangeShippingWindowStart ? `${formatDeadline(request.exchangeShippingWindowStart)} đến ` : ''}
+              {formatDeadline(request.sendDeadlineAt)}
+            </dd>
           </div>
         ) : null}
         {leg.step === 'SHIPPED' && receiveDeadline ? (
@@ -214,11 +250,12 @@ function LegBlock({
 
       {sends && leg.step === 'WAITING_SHIP' && open ? (
         <div className="space-y-1">
-          <Button disabled={submitting} onClick={onShip}>
-            Tôi đã gửi hàng
+          <Button disabled={submitting || !shippingOpen} onClick={onShip}>
+            {isExchange ? 'Đã gửi hàng' : 'Tôi đã gửi hàng'}
           </Button>
           <p className="text-xs leading-5 text-text-secondary">
-            Bạn có thể kèm ảnh biên nhận. {partnerName} sẽ được thông báo khi bạn xác nhận.
+            {isExchange ? 'Bạn cần đính kèm ảnh biên nhận.' : 'Bạn có thể kèm ảnh biên nhận.'}
+            {' '}{partnerName} sẽ được thông báo khi bạn xác nhận.
             {hasPendingCancel ? ' Nếu bên kia đã báo chưa nhận được hàng thì đề nghị huỷ của họ tự rút.' : ''}
           </p>
         </div>
@@ -240,12 +277,13 @@ function LegBlock({
         <ul className="space-y-3">
           <li className="space-y-1">
             <Button disabled={submitting} onClick={onReceive}>
-              Tôi đã nhận được hàng
+              {isExchange ? 'Đã nhận hàng' : 'Tôi đã nhận được hàng'}
             </Button>
             <p className="text-xs leading-5 text-text-secondary">
               Chỉ bấm khi bạn đã cầm hàng. Giao dịch hoàn tất khi mọi chiều đều Đã nhận.
             </p>
           </li>
+          {!isExchange ? (
           <li className="space-y-1">
             <Button variant="outline" disabled={submitting} onClick={onOpenFailed}>
               Giao nhận không thành công
@@ -254,6 +292,7 @@ function LegBlock({
               {shippingFailedConsequence(request, viewerIsDonor, partnerName, responseHours, cancelResponseHours)}
             </p>
           </li>
+          ) : null}
           {canRefuseHandover(viewerIsDonor, request.offeredItemId) ? (
             <li className="space-y-1">
               <Button variant="warning" disabled={submitting} onClick={onOpenRefuse}>
@@ -272,7 +311,7 @@ function LegBlock({
             {partnerName} chưa gửi hàng
             {request.sendDeadlineAt ? `, hạn gửi đến ${formatDeadline(request.sendDeadlineAt)}` : ''}.
           </p>
-          {canReportNotShipped ? (
+          {isExchange ? null : canReportNotShipped ? (
             <>
               <Button variant="outline" disabled={submitting} onClick={onOpenFailed}>
                 Giao nhận không thành công
@@ -315,12 +354,16 @@ function ShipDialog({
   request,
   currentUserId,
   leg,
+  receiptRequired,
+  shippingOpen,
   onClose,
   onDone,
 }: {
   request: RequestResponse;
   currentUserId: number;
   leg: ShippingLeg;
+  receiptRequired: boolean;
+  shippingOpen: boolean;
   onClose: () => void;
   onDone: (request: RequestResponse) => void;
 }) {
@@ -328,8 +371,9 @@ function ShipDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  const canSubmit = shippingOpen && (!receiptRequired || photos.length > 0);
   const submit = async () => {
-    if (submitting) return;
+    if (submitting || !canSubmit) return;
     setSubmitting(true);
     setError('');
     try {
@@ -350,14 +394,20 @@ function ShipDialog({
   return (
     <DialogFrame labelledBy="ship-title" busy={submitting} onClose={onClose}>
       <h2 id="ship-title" className="text-xl font-bold">
-        Tôi đã gửi hàng
+        {receiptRequired ? 'Đã gửi hàng' : 'Tôi đã gửi hàng'}
       </h2>
       <p className="mt-1 text-sm text-text-muted">{leg.itemTitle}</p>
       <p className="mt-3 text-sm leading-6 text-text-secondary">
-        Bạn có thể đính kèm ảnh biên nhận. Chỉ hai bên và quản trị viên xem được ảnh.
+        {receiptRequired ? 'Bạn cần đính kèm ảnh biên nhận.' : 'Bạn có thể đính kèm ảnh biên nhận.'}
+        {' '}Chỉ hai bên và quản trị viên xem được ảnh.
       </p>
       <div className="mt-4">
-        <ReportEvidenceField files={photos} onChange={setPhotos} disabled={submitting} />
+        <ReportEvidenceField
+          files={photos}
+          onChange={setPhotos}
+          disabled={submitting || !shippingOpen}
+          receiptRequired={receiptRequired}
+        />
       </div>
       {error ? (
         <div role="alert" className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">
@@ -368,7 +418,7 @@ function ShipDialog({
         <Button variant="outline" disabled={submitting} onClick={onClose}>
           Đóng
         </Button>
-        <Button disabled={submitting} onClick={() => void submit()}>
+        <Button disabled={submitting || !canSubmit} onClick={() => void submit()}>
           {submitting ? 'Đang gửi...' : 'Xác nhận đã gửi'}
         </Button>
       </div>

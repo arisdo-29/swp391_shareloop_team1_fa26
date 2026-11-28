@@ -12,7 +12,9 @@ import { SCHEDULE_SECTION_ID } from '../../utils/chatMessages';
 import { ReschedulePanel } from './ReschedulePanel';
 import { ownShippingAddress, partnerAddressProvided, partnerNeedsAddress, viewerNeedsOwnAddress } from '../../utils/shipping';
 import {
+  exchangeShippingWindowMinutes,
   hasConfirmedMeetingSchedule,
+  validateExchangeShippingMeeting,
   maximumMeetingTimeValue,
   minimumMeetingTimeValue,
   parseLocalMeetingTime,
@@ -45,7 +47,7 @@ export function ScheduleCard(props: ScheduleCardProps) {
   const currentPartyWaiverAt = viewerIsDonor ? request.donorWaiverAt : request.receiverWaiverAt;
   const scheduleKey = JSON.stringify([
     request.id, currentUserId, request.scheduleRevision, request.meetingTime, request.meetingPlace,
-    request.deliveryMethod, ownShippingAddress(request, viewerIsDonor), currentPartyWaiverAt,
+    request.deliveryMethod, request.offeredItemId, ownShippingAddress(request, viewerIsDonor), currentPartyWaiverAt,
   ]);
 
   return (
@@ -163,7 +165,10 @@ function ScheduleForm({
   const savedMethod = request.deliveryMethod === 'SHIPPING' ? 'SHIPPING' : 'IN_PERSON';
   const savedPlace = request.meetingPlace ?? '';
   const savedAddress = ownShippingAddress(request, viewerIsDonor);
-  const savedTime = request.meetingTime ? toLocalMeetingTimeValue(request.meetingTime) : '';
+  const isExchange = Boolean(request.offeredItemId);
+  const savedTime = request.meetingTime
+    ? toLocalMeetingTimeValue(request.meetingTime, isExchange && savedMethod === 'SHIPPING')
+    : '';
   const [deliveryMethod, setDeliveryMethod] = useState<'IN_PERSON' | 'SHIPPING'>(savedMethod);
   const [meetingPlace, setMeetingPlace] = useState(savedPlace);
   const [shippingAddress, setShippingAddress] = useState(savedAddress);
@@ -172,11 +177,12 @@ function ScheduleForm({
   const [now, setNow] = useState(() => new Date());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const config = usePublicConfig();
   const {
     meeting_max_days_ahead: maxDays,
     shipping_send_deadline_days: sendDays,
     auto_confirm_days_shipping: receiveDays,
-  } = usePublicConfig();
+  } = config;
 
   // Cập nhật mốc "bây giờ" mỗi 30 giây để kiểm giờ hẹn không lùi về quá khứ.
   useEffect(() => {
@@ -193,6 +199,7 @@ function ScheduleForm({
     viewerIsDonor ? request.receiverWaiverAt : request.donorWaiverAt,
   );
   const isShipping = deliveryMethod === 'SHIPPING';
+  const isExchangeShipping = isExchange && isShipping;
   const needsOwnAddress = isShipping && viewerNeedsOwnAddress(request, viewerIsDonor);
   const hasSavedSchedule = request.status === 'AWAITING_LOGISTICS' && Boolean(savedTime && request.deliveryMethod);
   const sharedChanges = deliveryMethod !== savedMethod || meetingTime !== savedTime ||
@@ -210,9 +217,24 @@ function ScheduleForm({
         ? 'Địa chỉ tối đa 255 ký tự.'
         : null
     : null;
-  const timeError = proposes
-    ? validateLocalMeetingTime(meetingTime, now, maxDays)
-    : validateStoredMeetingTime(request.meetingTime, now);
+  const parsedTime = parseLocalMeetingTime(meetingTime, isExchangeShipping);
+  const exchangeTimeError = isExchangeShipping ? validateExchangeShippingMeeting(parsedTime, now, config) : null;
+  const timeError = exchangeTimeError ?? (proposes
+    ? validateLocalMeetingTime(meetingTime, now, maxDays, isExchangeShipping)
+    : validateStoredMeetingTime(request.meetingTime, now));
+  const shippingWindow = parsedTime && isExchangeShipping
+    ? {
+      start: toLocalMeetingTimeValue(new Date(parsedTime.getTime() - exchangeShippingWindowMinutes(config) * 60_000), true).slice(11),
+      end: meetingTime.slice(11),
+      date: formatDateTime(parsedTime.toISOString()).split(' ')[1],
+    }
+    : null;
+  const chooseMethod = (method: 'IN_PERSON' | 'SHIPPING') => {
+    if (method === deliveryMethod) return;
+    if (parsedTime) setMeetingTime(toLocalMeetingTimeValue(parsedTime, isExchange && method === 'SHIPPING'));
+    setDeliveryMethod(method);
+    setAgreeToWaiver(false);
+  };
   const requirements = [
     placeError ? 'Nhập địa điểm gặp hợp lệ.' : null,
     addressError ? 'Nhập địa chỉ nhận hàng hợp lệ.' : null,
@@ -237,9 +259,10 @@ function ScheduleForm({
     if (!agreeToWaiver || submitting) return;
 
     const checkNow = new Date();
-    const parsedMeetingTime = parseLocalMeetingTime(meetingTime);
-    const validationError =
-      placeError || addressError || validateLocalMeetingTime(meetingTime, checkNow, maxDays);
+    const parsedMeetingTime = parseLocalMeetingTime(meetingTime, isExchangeShipping);
+    const validationError = placeError || addressError ||
+      (isExchangeShipping && validateExchangeShippingMeeting(parsedMeetingTime, checkNow, config)) ||
+      validateLocalMeetingTime(meetingTime, checkNow, maxDays, isExchangeShipping);
     if (validationError || !parsedMeetingTime) {
       setNow(checkNow);
       setError(validationError || 'Thời gian giao nhận không hợp lệ.');
@@ -268,7 +291,9 @@ function ScheduleForm({
     if (waiting || submitting || requirements.length) return;
     const { scheduleRevision } = request;
     const checkNow = new Date();
-    const validationError = validateStoredMeetingTime(request.meetingTime, checkNow);
+    const validationError =
+      (isExchangeShipping && validateExchangeShippingMeeting(parsedTime, checkNow, config)) ||
+      validateStoredMeetingTime(request.meetingTime, checkNow);
     if (validationError) {
       setNow(checkNow);
       setError(validationError);
@@ -331,11 +356,7 @@ function ScheduleForm({
             type="button"
             aria-pressed={deliveryMethod === value}
             disabled={submitting}
-            onClick={() => {
-              if (value === deliveryMethod) return;
-              setDeliveryMethod(value);
-              setAgreeToWaiver(false);
-            }}
+            onClick={() => chooseMethod(value)}
             className={`flex min-h-11 flex-col gap-0.5 rounded-md border p-2.5 text-left transition disabled:opacity-40 ${deliveryMethod === value ? 'border-primary bg-primary-faint' : 'border-border hover:bg-primary-faint'}`}
           >
             <strong className="text-sm">{label}</strong>
@@ -343,6 +364,11 @@ function ScheduleForm({
           </button>
         ))}
       </fieldset>
+      {isExchange ? (
+        <p className="text-xs leading-5 text-text-secondary">
+          Gặp trực tiếp là cách ít rủi ro hơn. Hai bạn được xem món đồ tận tay và trao đổi ngay tại chỗ.
+        </p>
+      ) : null}
       <p className="text-xs leading-5 text-text-secondary">
         {isShipping
           ? 'Nên quay video khi mở kiện và giữ lại để đối chiếu nếu có sự cố.'
@@ -389,11 +415,11 @@ function ScheduleForm({
             </div>
           )}
           <Field
-            label={isShipping ? 'Ngày gửi hàng dự kiến' : 'Thời gian gặp'}
+            label={isExchangeShipping ? 'Giờ hẹn gửi hàng theo giờ Việt Nam' : isShipping ? 'Ngày gửi hàng dự kiến' : 'Thời gian gặp'}
             type="datetime-local"
             value={meetingTime}
-            min={minimumMeetingTimeValue(now)}
-            max={maximumMeetingTimeValue(now, maxDays)}
+            min={minimumMeetingTimeValue(now, isExchangeShipping)}
+            max={maximumMeetingTimeValue(now, maxDays, isExchangeShipping)}
             hint={`Chỉ hẹn trong vòng ${maxDays} ngày tới.`}
             error={meetingTime ? (timeError ?? undefined) : undefined}
             disabled={submitting}
@@ -414,7 +440,7 @@ function ScheduleForm({
             Địa chỉ nhận hàng sẽ hiện sau khi hai bên chốt lịch.
           </p>
         ) : null}
-        {isShipping ? (
+        {isShipping && !isExchangeShipping ? (
           <div className="space-y-1 border-t border-border pt-3 text-xs leading-5 text-text-secondary">
             <p><strong>Hạn gửi</strong> đến {sendDays} ngày sau ngày gửi dự kiến.</p>
             <p>
@@ -424,6 +450,26 @@ function ScheduleForm({
           </div>
         ) : null}
       </div>
+      {isExchangeShipping ? (
+        <div className="space-y-2 rounded-md border border-border bg-surface-low p-3 text-sm text-text-secondary">
+          <h3 className="font-semibold text-text-primary">Một chút lưu ý để bạn yên tâm hơn</h3>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>
+              {shippingWindow
+                ? `Bạn mang hàng ra bưu cục và gửi trong khung ${shippingWindow.start} đến ${shippingWindow.end} ngày ${shippingWindow.date} nhé.`
+                : 'Bạn chọn giờ hẹn để xem khung gửi hàng tại bưu cục nhé.'}
+              {' '}Đợi đúng khung giờ rồi hãy gửi, gửi sớm sẽ khó được bảo vệ khi có trục trặc.
+            </li>
+            <li>Hãy chọn giao thường thay vì hỏa tốc, để còn thời gian thu hồi nếu cần.</li>
+            <li>Hàng đã đến tay người nhận thì không thu hồi được. Phí thu hồi do người gửi trả.</li>
+            <li>ShareLoop không vận chuyển và không bồi thường tiền hàng, phí gửi.</li>
+          </ul>
+          <p>Nếu muốn nhẹ lòng hơn, bạn có thể chọn gặp trực tiếp.</p>
+          <Button variant="outline" disabled={submitting} onClick={() => chooseMethod('IN_PERSON')}>
+            Chọn gặp trực tiếp
+          </Button>
+        </div>
+      ) : null}
       <label className="flex items-start gap-2 py-1 text-sm leading-5 text-text-secondary">
         <input
           type="checkbox"
@@ -433,9 +479,11 @@ function ScheduleForm({
           onChange={(event) => setAgreeToWaiver(event.target.checked)}
         />
         <span>
-          {isShipping
-            ? 'Tôi đồng ý lịch gửi hàng dự kiến và cam kết trách nhiệm giao nhận.'
-            : 'Tôi đồng ý cam kết trách nhiệm giao nhận.'}
+          {isExchangeShipping
+            ? 'Mình đã hiểu các lưu ý, tin tưởng người trao đổi cùng và cam kết gửi đúng món, đúng giờ.'
+            : isShipping
+              ? 'Tôi đồng ý lịch gửi hàng dự kiến và cam kết trách nhiệm giao nhận.'
+              : 'Tôi đồng ý cam kết trách nhiệm giao nhận.'}
         </span>
       </label>
       {error ? (

@@ -23,6 +23,27 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
     @Query("SELECT r FROM Request r WHERE r.id = :id")
     Optional<Request> findByIdForUpdate(@Param("id") long id);
 
+    @Query("""
+            SELECT r FROM Request r
+            WHERE r.exchangeShippingWindowStart <= :now
+            AND r.status IN (com.shareloop.request.entity.RequestStatus.LOGISTICS_CONFIRMED,
+                             com.shareloop.request.entity.RequestStatus.AWAITING_HANDOVER)
+            AND (r.donorShippedAt IS NULL OR r.receiverShippedAt IS NULL)
+            AND r.id > :afterId
+            ORDER BY r.id
+            """)
+    List<Request> findExchangeShippingWindows(
+            @Param("now") Instant now, @Param("afterId") long afterId, org.springframework.data.domain.Pageable page);
+
+    @Query("""
+            SELECT r FROM Request r
+            WHERE (r.donorItemReopenAt <= :now OR r.receiverItemReopenAt <= :now)
+            AND r.id > :afterId
+            ORDER BY r.id
+            """)
+    List<Request> findExchangeShippingItemsToReopen(
+            @Param("now") Instant now, @Param("afterId") long afterId, org.springframework.data.domain.Pageable page);
+
     /**
      * Đề nghị huỷ đã quá hạn phản hồi (GN-06). Phân trang kiểu keyset theo id như các việc nền khác.
      */
@@ -128,26 +149,6 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
         ORDER BY r.id ASC
     """)
     List<Request> findShippingNothingSent(
-            @Param("cutoff") Instant cutoff,
-            @Param("afterId") long afterId,
-            org.springframework.data.domain.Pageable pageable);
-
-    /**
-     * Giao dịch Giao hàng đã có chiều Đã nhận mà chiều còn lại chưa gửi, ngày gửi dự kiến trước cutoff (GN-12): kẹt một
-     * chiều, việc nền sẽ chuyển sang DISPUTED để Admin xử lý.
-     */
-    @Query("""
-        SELECT r FROM Request r
-        WHERE r.status = com.shareloop.request.entity.RequestStatus.AWAITING_HANDOVER
-        AND r.deliveryMethod = 'SHIPPING'
-        AND r.offeredItemId IS NOT NULL
-        AND ((r.receiverHandoverAt IS NOT NULL AND r.receiverShippedAt IS NULL)
-             OR (r.donorHandoverAt IS NOT NULL AND r.donorShippedAt IS NULL))
-        AND r.meetingTime < :cutoff
-        AND r.id > :afterId
-        ORDER BY r.id ASC
-    """)
-    List<Request> findShippingOneLegStuck(
             @Param("cutoff") Instant cutoff,
             @Param("afterId") long afterId,
             org.springframework.data.domain.Pageable pageable);

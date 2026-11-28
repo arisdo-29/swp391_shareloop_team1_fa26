@@ -612,9 +612,16 @@ public class ReportService {
                 reporterId, requestId, note, null, CancelNotice.silent(issuePhrase), ReportReason.NO_SHOW, null);
     }
 
+    @Transactional
+    public void openExchangeShippingTimeoutReport(long reporterId, long requestId, String note, Long affectedItemId) {
+        openNoShowDispute(
+                reporterId, requestId, note, null, CancelNotice.EXCHANGE_SHIPPING, ReportReason.NO_SHOW, affectedItemId);
+    }
+
     // Cách báo cho bên bị khiếu nại: null là câu của sự cố giao nhận (bên kia đã bấm hoàn tất), NONE là không báo.
     private record CancelNotice(String issuePhrase) {
         static final CancelNotice NONE = new CancelNotice(null);
+        static final CancelNotice EXCHANGE_SHIPPING = new CancelNotice(null);
 
         static CancelNotice silent(String issuePhrase) {
             return new CancelNotice(issuePhrase);
@@ -664,6 +671,9 @@ public class ReportService {
                 note,
                 evidenceService.attach(evidenceMediaIds, reporterId),
                 responseDueAt);
+        if (notice == CancelNotice.EXCHANGE_SHIPPING) {
+            report.markExchangeShippingTimeout();
+        }
         Report saved = reportRepository.save(report);
         publishDisputeOpened(saved, responseHours);
 
@@ -681,6 +691,12 @@ public class ReportService {
             Instant responseDueAt) {
         String windowSentence = responseWindowSentence(responseHours, responseDueAt);
         String link = "/me/disputes/" + saved.getId();
+        if (notice == CancelNotice.EXCHANGE_SHIPPING) {
+            notificationService.notify(respondentId, "DISPUTE_OPENED", "Bạn chưa xác nhận gửi hàng đúng giờ",
+                    "Bạn chưa xác nhận gửi hàng đúng giờ. Nếu chưa gửi, bạn tạm giữ lại món đồ nhé. "
+                            + windowSentence, link);
+            return;
+        }
         if (notice != null) {
             notificationService.notify(
                     respondentId,
@@ -1027,6 +1043,7 @@ public class ReportService {
                     Map.of("responseDueAt", report.getResponseDueAt().toString()));
         }
 
+        boolean exchangeShippingTimeout = report.isExchangeShippingTimeout();
         ReportDecision decision = request.decision();
         String note = request.note() != null ? request.note().trim() : null;
 
@@ -1059,7 +1076,8 @@ public class ReportService {
                 reopenItemIfNoPendingReports(report.getItemId(), reportId, title);
             }
             // F7: Admin tích "Báo cáo sai có chủ ý" (không áp cho Từ chối giao nhận vì đã tự trừ sao ở dưới)
-            if (!report.isRefusalReport()
+            if (!exchangeShippingTimeout
+                    && !report.isRefusalReport()
                     && Boolean.TRUE.equals(request.deliberateFalseReport())
                     && reputationService != null) {
                 reputationService.deductStar(
@@ -1167,7 +1185,10 @@ public class ReportService {
         // Khiếu nại sự cố giao nhận (handover-failed khi bên kia đã bấm hoàn tất) đưa giao dịch vào DISPUTED; kết luận
         // xong phải đưa nó ra. Giao dịch không ở DISPUTED (khiếu nại mở sau COMPLETED) thì RequestService bỏ qua. Báo
         // cáo từ chối nhận là báo cáo bài, giao dịch đã huỷ từ trước nên không đi qua đây.
-        if (requestService != null && report.getTargetType() == TargetType.REQUEST && report.getRequestId() != null) {
+        if (exchangeShippingTimeout) {
+            requestService.resolveExchangeShippingTimeoutReport(
+                    report.getRequestId(), decision == ReportDecision.UPHOLD);
+        } else if (requestService != null && report.getTargetType() == TargetType.REQUEST && report.getRequestId() != null) {
             requestService.resolveDisputedRequest(
                     report.getRequestId(), decision == ReportDecision.UPHOLD, adminId, request.itemOutcomes());
         }

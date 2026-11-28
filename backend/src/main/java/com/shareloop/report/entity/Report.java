@@ -75,6 +75,17 @@ public class Report extends BaseEntity {
     @Column(name = "resolved_at")
     private Instant resolvedAt;
 
+    @Column(name = "exchange_shipping_timeout", nullable = false)
+    private boolean exchangeShippingTimeout;
+
+    public boolean isExchangeShippingTimeout() {
+        return exchangeShippingTimeout;
+    }
+
+    public void markExchangeShippingTimeout() {
+        exchangeShippingTimeout = true;
+    }
+
     protected Report() {}
 
     public Report(

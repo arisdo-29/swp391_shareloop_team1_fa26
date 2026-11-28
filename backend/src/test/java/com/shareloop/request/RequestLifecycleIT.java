@@ -11,10 +11,13 @@ import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.HandoverConfirmRequest;
 import com.shareloop.request.dto.ScheduleRequest;
+import com.shareloop.request.dto.ShipmentRequest;
 import com.shareloop.request.service.RequestJobService;
 import com.shareloop.support.IntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -59,14 +62,20 @@ class RequestLifecycleIT extends IntegrationTest {
     private final List<Long> createdRequestIds = new ArrayList<>();
     private final List<Long> createdItemIds = new ArrayList<>();
     private final List<Long> createdUserIds = new ArrayList<>();
+    private final List<Long> createdReceiptIds = new ArrayList<>();
 
     @AfterEach
     void cleanUp() {
         for (Long requestId : createdRequestIds) {
+            jdbc.update("DELETE FROM request_media_mappings WHERE request_id = ?", requestId);
             jdbc.update("DELETE FROM messages WHERE request_id = ?", requestId);
             jdbc.update("DELETE FROM requests WHERE id = ?", requestId);
         }
         createdRequestIds.clear();
+        for (long receiptId : createdReceiptIds) {
+            jdbc.update("DELETE FROM media_files WHERE id = ?", receiptId);
+        }
+        createdReceiptIds.clear();
 
         for (Long itemId : createdItemIds) {
             jdbc.update("DELETE FROM items WHERE id = ?", itemId);
@@ -244,7 +253,8 @@ class RequestLifecycleIT extends IntegrationTest {
                 .andExpect(jsonPath("$.status").value("RESERVED"));
 
         // Chốt lịch giao hàng (GN-12): meetingTime là ngày gửi hàng dự kiến, Trao đổi cần địa chỉ của cả hai bên
-        Instant futureTime = Instant.now().plus(3, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        Instant futureTime = Instant.now().atZone(ZoneId.of("Asia/Ho_Chi_Minh"))
+                .plusDays(3).with(LocalTime.of(10, 0)).toInstant();
         ScheduleRequest scheduleReq = new ScheduleRequest("SHIPPING", null, futureTime, true, "34 Trần Phú");
         mockMvc.perform(post("/api/v1/requests/{id}/schedule", requestId)
                         .header("Authorization", donorToken)
@@ -270,10 +280,13 @@ class RequestLifecycleIT extends IntegrationTest {
                 .andExpect(jsonPath("$.status").value("LOGISTICS_CONFIRMED"));
 
         // Mỗi bên gửi chiều của mình rồi bên nhận bấm đã nhận được hàng
-        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId).header("Authorization", donorToken))
-                .andExpect(status().isOk());
-        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId).header("Authorization", receiverToken))
-                .andExpect(status().isOk());
+        jdbc.update("UPDATE requests SET meeting_time = now() + interval '10 minutes', "
+                + "exchange_shipping_window_start = now() - interval '20 minutes' WHERE id = ?", requestId);
+        Long donorReceiptId = confirmShipmentWithReceipt(requestId, donorId, donorToken);
+        mockMvc.perform(get("/api/v1/requests/{id}", requestId).header("Authorization", receiverToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.handoverMedia[0].mediaId").value(donorReceiptId.intValue()));
+        confirmShipmentWithReceipt(requestId, receiverId, receiverToken);
 
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
                         .header("Authorization", donorToken))
@@ -289,6 +302,20 @@ class RequestLifecycleIT extends IntegrationTest {
         // Cả 2 bài đăng đều sang TRADED
         assertThat(queryItemStatus(item1Id)).isEqualTo("TRADED");
         assertThat(queryItemStatus(item2Id)).isEqualTo("TRADED");
+    }
+
+    private Long confirmShipmentWithReceipt(long requestId, long userId, String token) throws Exception {
+        Long receiptId = jdbc.queryForObject("""
+                INSERT INTO media_files (storage_key, mime_type, size_bytes, created_by)
+                VALUES (?, 'image/jpeg', 4, ?) RETURNING id
+                """, Long.class, "lifecycle-receipt-" + requestId + "-" + userId, userId);
+        createdReceiptIds.add(receiptId);
+        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId)
+                        .header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ShipmentRequest(List.of(receiptId)))))
+                .andExpect(status().isOk());
+        return receiptId;
     }
 
     @Test

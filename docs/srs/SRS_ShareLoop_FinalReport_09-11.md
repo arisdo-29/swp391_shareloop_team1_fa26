@@ -4443,3 +4443,29 @@ Phụ lục này **thay luật ngày 21/11** ở các chỗ sau: (1) "Giao nhậ
 **Sơ đồ trạng thái kèm cột phụ.** Đề nghị huỷ đang chờ là `cancel_requested_at` khác null khi giao dịch ở `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER`. Đề nghị dời lịch đang chờ là `reschedule_proposed_at` khác null. Tiến độ Giao hàng là các cặp `*_shipped_at` và `*_handover_at` (chiều 1: `donor_shipped_at` rồi `receiver_handover_at`, chiều 2: `receiver_shipped_at` rồi `donor_handover_at`).
 
 Luật chi tiết nằm ở Business Rule GN-06 tới GN-14 và `docs/api/request.md` mục 16 đến 21.
+
+# Phụ lục D Cập nhật Trao đổi qua giao hàng
+
+Phụ lục cập nhật các quy tắc GN-06, GN-09, GN-11, GN-12, BC-08 và UC-25 cho Trao đổi qua giao hàng. Cho tặng và Gặp trực tiếp tiếp tục theo quy tắc hiện có.
+
+## Chọn lịch và xác nhận gửi
+
+Hai bên chọn lịch theo giờ Việt Nam vào bất kỳ ngày nào, kể cả ngày lễ. Giờ hẹn nằm trong 08:30–12:00 hoặc 13:30–17:00 và cách lúc lưu hay chốt lịch ít nhất 1 tiếng. Áp dụng lại khi dời lịch và khi Cho tặng chuyển thành Trao đổi trước lúc chốt.
+
+Hệ thống nhắc hai bên khi mở khung 30 phút trước giờ hẹn. Mỗi bên cần ảnh biên nhận để xác nhận Đã gửi hàng trong khung này. Đối phương xem được ảnh trong chi tiết giao dịch. Mã vận đơn được bỏ khỏi luồng.
+
+## Hết khung gửi và xử lý khiếu nại
+
+Tác vụ chạy mỗi 5 phút. Cả hai đã gửi thì tiếp tục giao nhận. Cả hai chưa gửi thì hủy giao dịch, mở lại hai bài và không phạt. Chỉ một bên đã gửi thì hủy giao dịch, ẩn hai bài và mở hồ sơ Sự cố giao nhận. Bên chưa xác nhận có 48 giờ từ lúc mở hồ sơ để giải trình.
+
+Bài của người đã gửi tự mở sau 24 giờ kể từ lúc hủy, kể cả khi kiện chưa về. Chi tiết giao dịch và thông báo ghi giờ mở lại và nhắc thu hồi hàng sớm. Nếu quản trị viên bác khiếu nại, bài của bên bị báo cáo tự mở sau 24 giờ kể từ lúc bác và không bị trừ sao. Nếu chấp nhận khiếu nại, bài bên vi phạm tiếp tục ẩn và áp dụng mức phạt hiện có. Giao dịch vẫn ở trạng thái Đã hủy.
+
+## Nhận hàng và hoàn tất
+
+Mỗi bên chỉ xác nhận Đã nhận hàng sau khi bên kia đã gửi. Hoàn tất thủ công khi đủ hai lượt gửi và hai lượt nhận. Khi giao dịch còn diễn ra và đã có lượt gửi, người dùng có thể báo Giao nhận không thành công để quản trị viên xử lý.
+
+Nếu không có báo cáo và một bên im lặng, hệ thống xét tự hoàn tất sau 7 ngày kể từ lúc có đủ hai lượt gửi và lượt xác nhận nhận đầu tiên. Khi cả hai đã gửi mà một bên từ chối nhận, cả hai bài tiếp tục ẩn.
+
+## Chuyển tiếp lịch cũ
+
+Giữ các xác nhận đã ghi nhận. Lịch cũ còn ít nhất 1 tiếng chuẩn bị và đúng khung giờ áp dụng luật mới. Lịch cũ còn lại dùng hạn gửi cũ cho đến khi có lịch mới hợp lệ. Hệ thống không mở khiếu nại hồi tố theo khung gửi mới.

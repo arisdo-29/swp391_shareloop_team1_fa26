@@ -117,6 +117,13 @@ class RequestShippingTest {
                 .when(configService.getInt(ConfigKey.CONFIRMED_STALE_CANCEL_DAYS))
                 .thenReturn(3);
         lenient().when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS)).thenReturn(24);
+        lenient().when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_WINDOW_MINUTES)).thenReturn(30);
+        lenient().when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_LEAD_MINUTES)).thenReturn(60);
+        lenient().when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_MORNING_START)).thenReturn(480);
+        lenient().when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_MORNING_END)).thenReturn(720);
+        lenient().when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_AFTERNOON_START)).thenReturn(780);
+        lenient().when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_AFTERNOON_END)).thenReturn(1020);
+        lenient().when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_REOPEN_HOURS)).thenReturn(24);
     }
 
     /** Giao dịch Giao hàng đã chốt lịch, ngày gửi dự kiến cách bây giờ sendDateOffsetDays ngày (âm là đã qua). */
@@ -445,28 +452,23 @@ class RequestShippingTest {
     }
 
     @Test
-    void acceptCancelRequest_whenOtherLegAlreadyShipped_noticeSaysItemShippedAndContactToReturn() {
-        // given: chủ bài đã gửi chiều 1, người nhận chưa gửi chiều 2 quá hạn, chủ bài báo và người nhận đồng ý huỷ
-        Request request = shippingRequest(OFFERED_ITEM_ID, -4);
-        request.markShipped(true, Instant.now());
-        requestService.handoverFailed(
+    void handoverFailed_whenOnlyMyItemWasSent_opensDisputeWhileTransactionIsActive() {
+        Request request = shippingRequest(OFFERED_ITEM_ID, -1);
+        Instant cutoff = request.getMeetingTime();
+        request.setExchangeShippingWindowStart(cutoff.minus(30, ChronoUnit.MINUTES));
+        request.markShipped(true, cutoff.minusSeconds(1));
+
+        RequestResponse response = requestService.handoverFailed(
                 REQUEST_ID, DONOR_ID, new HandoverFailedRequest(CancelRequestCode.COUNTERPART_NOT_SHIPPED, null, null));
 
-        // when
-        requestService.acceptCancelRequest(REQUEST_ID, RECEIVER_ID);
-
-        // then
-        assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
-        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
-        verify(notificationService)
-                .notify(eq(DONOR_ID), eq("TRANSACTION_CANCELLED"), anyString(), body.capture(), anyString());
-        assertThat(body.getValue()).contains("đã được gửi, hai bên liên hệ để hoàn trả");
+        assertThat(response.status()).isEqualTo("DISPUTED");
+        assertThat(request.hasPendingCancelRequest()).isFalse();
     }
 
     // ---------- tự hoàn tất và kẹt một chiều ----------
 
     @Test
-    void autoReceiveShippingLegs_whenOnlyShippedLegIsOverdue_receivesOnlyThatLeg() {
+    void autoReceiveShippingLegs_whenOnlyOneLegWasShipped_doesNotConfirmReceipt() {
         // given: Trao đổi, chiều 1 gửi 8 ngày trước, chiều 2 chưa gửi
         Request request = shippingRequest(OFFERED_ITEM_ID, -9);
         request.markShipped(true, Instant.now().minus(8, ChronoUnit.DAYS));
@@ -475,8 +477,8 @@ class RequestShippingTest {
         boolean changed = requestService.autoReceiveShippingLegs(REQUEST_ID, Instant.now());
 
         // then
-        assertThat(changed).isTrue();
-        assertThat(request.isLegReceived(1)).isTrue();
+        assertThat(changed).isFalse();
+        assertThat(request.isLegReceived(1)).isFalse();
         assertThat(request.isLegReceived(2)).isFalse();
         assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
     }
@@ -518,38 +520,118 @@ class RequestShippingTest {
     }
 
     @Test
-    void openShippingOneLegStuck_whenOneLegReceivedAndOtherNotSentPastDeadline_movesToDisputedWithNoShowReport() {
-        // given: A đã nhận chiều 1, B chưa gửi chiều 2, ngày gửi dự kiến cách đây 7 ngày (hạn 3 + chờ 3 ngày đã qua)
-        Request request = shippingRequest(OFFERED_ITEM_ID, -7);
-        request.markShipped(true, Instant.now().minus(6, ChronoUnit.DAYS));
-        request.markReceived(false, Instant.now().minus(5, ChronoUnit.DAYS));
+    void exchangeShippingWindow_whenOnlyOnePartySent_cancelsAndHoldsBothItems() {
+        Request request = shippingRequest(OFFERED_ITEM_ID, -1);
+        Instant cutoff = request.getMeetingTime();
+        request.setExchangeShippingWindowStart(cutoff.minus(30, ChronoUnit.MINUTES));
+        request.markShipped(true, cutoff.minus(10, ChronoUnit.MINUTES));
 
-        // when
-        boolean opened = requestService.openShippingOneLegStuck(REQUEST_ID, Instant.now());
-
-        // then: không tự huỷ, không tự trừ sao
-        assertThat(opened).isTrue();
-        assertThat(request.getStatus()).isEqualTo(RequestStatus.DISPUTED);
+        assertThat(requestService.processExchangeShippingWindow(REQUEST_ID, cutoff)).isTrue();
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        assertThat(request.exchangeItemReopenAt(1)).isEqualTo(cutoff.plus(24, ChronoUnit.HOURS));
+        assertThat(request.exchangeItemReopenAt(2)).isNull();
+        verify(itemService).holdForExchangeShipping(ITEM_ID, REQUEST_ID);
+        verify(itemService).holdForExchangeShipping(OFFERED_ITEM_ID, REQUEST_ID);
         ArgumentCaptor<HandoverIssueReportedEvent> event = ArgumentCaptor.forClass(HandoverIssueReportedEvent.class);
         verify(eventPublisher).publishEvent(event.capture());
-        // Bên đang chờ hàng (chủ bài) là người báo, bên chưa gửi (người nhận) là người bị báo
+        assertThat(event.getValue().exchangeShippingTimeout()).isTrue();
         assertThat(event.getValue().reporterId()).isEqualTo(DONOR_ID);
-        verify(itemService, never()).releaseAfterCancel(any(Long.class), any());
+        assertThat(event.getValue().affectedItemId()).isEqualTo(OFFERED_ITEM_ID);
+        assertThat(requestService.processExchangeShippingWindow(REQUEST_ID, cutoff)).isFalse();
     }
 
     @Test
-    void openShippingOneLegStuck_whenNotYetPastDeadlinePlusWaitDays_doesNothing() {
-        // given: mới 5 ngày kể từ ngày gửi dự kiến, chưa tới 3 + 3 ngày
-        Request request = shippingRequest(OFFERED_ITEM_ID, -5);
-        request.markShipped(true, Instant.now().minus(4, ChronoUnit.DAYS));
-        request.markReceived(false, Instant.now().minus(3, ChronoUnit.DAYS));
+    void exchangeShippingWindow_whenNobodySent_cancelsAndReleasesBothItems() {
+        Request request = shippingRequest(OFFERED_ITEM_ID, -1);
+        Instant cutoff = request.getMeetingTime();
+        request.setExchangeShippingWindowStart(cutoff.minus(30, ChronoUnit.MINUTES));
 
-        // when
-        boolean opened = requestService.openShippingOneLegStuck(REQUEST_ID, Instant.now());
+        assertThat(requestService.processExchangeShippingWindow(REQUEST_ID, cutoff)).isTrue();
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        verify(itemService).releaseAfterCancel(eq(ITEM_ID), any());
+        verify(itemService).releaseIfReservedAfterCancel(eq(OFFERED_ITEM_ID), any());
+        verify(eventPublisher, never()).publishEvent(any(HandoverIssueReportedEvent.class));
+    }
 
-        // then
-        assertThat(opened).isFalse();
+    @Test
+    void exchangeShippingWindow_whenBothSent_leavesHandoverOpen() {
+        Request request = shippingRequest(OFFERED_ITEM_ID, -1);
+        Instant cutoff = request.getMeetingTime();
+        request.setExchangeShippingWindowStart(cutoff.minus(30, ChronoUnit.MINUTES));
+        request.markShipped(true, cutoff.minusSeconds(20));
+        request.markShipped(false, cutoff.minusSeconds(10));
+
+        assertThat(requestService.processExchangeShippingWindow(REQUEST_ID, cutoff)).isFalse();
         assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
+    }
+
+    @Test
+    void exchangeShippingShipment_requiresWindowAndReceipt() {
+        Request request = shippingRequest(OFFERED_ITEM_ID, 1);
+        request.setExchangeShippingWindowStart(request.getMeetingTime().minus(30, ChronoUnit.MINUTES));
+        assertThat(expectError(() -> requestService.markShipped(REQUEST_ID, DONOR_ID, new ShipmentRequest(List.of(42L))))
+                        .getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_EXCHANGE_SHIPPING_WINDOW_CLOSED);
+
+        request.setExchangeShippingWindowStart(Instant.now().minusSeconds(1));
+        assertThat(expectError(() -> requestService.markShipped(REQUEST_ID, DONOR_ID, new ShipmentRequest(null)))
+                        .getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_SHIPMENT_RECEIPT_REQUIRED);
+
+        ReflectionTestUtils.setField(request, "meetingTime", Instant.now().minusSeconds(1));
+        assertThat(expectError(() -> requestService.markShipped(REQUEST_ID, DONOR_ID, new ShipmentRequest(List.of(42L))))
+                        .getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_EXCHANGE_SHIPPING_WINDOW_CLOSED);
+        assertThat(request.isAnyLegShipped()).isFalse();
+    }
+
+    @Test
+    void exchangeShippingSchedule_allowsWeekendAndInclusiveBoundsInVietnam() {
+        var calculator = new RequestDeadlineCalculator(configService);
+        Instant dayEarlier = Instant.parse("2026-11-27T00:00:00Z");
+        for (String time : List.of("01:30", "05:00", "06:30", "10:00")) {
+            Instant meeting = Instant.parse("2026-11-28T" + time + ":00Z");
+            assertThat(calculator.exchangeShippingWindowStart(meeting, dayEarlier))
+                    .isEqualTo(meeting.minus(30, ChronoUnit.MINUTES));
+        }
+        assertThat(expectError(() -> calculator.exchangeShippingWindowStart(
+                        Instant.parse("2026-11-28T05:01:00Z"), dayEarlier)).getErrorCode())
+                .isEqualTo(RequestErrorCode.REQUEST_EXCHANGE_SHIPPING_HOURS);
+        Instant meeting = Instant.parse("2026-11-28T01:30:00Z");
+        assertThat(expectError(() -> calculator.exchangeShippingWindowStart(
+                        meeting, meeting.minus(59, ChronoUnit.MINUTES))).getErrorCode())
+                .isEqualTo(RequestErrorCode.REQUEST_EXCHANGE_SHIPPING_TOO_SOON);
+    }
+
+    @Test
+    void confirmLogistics_whenGiftBecameExchange_rechecksTheRequiredLeadTime() {
+        Instant now = Instant.now();
+        Request request = new Request(ITEM_ID, RECEIVER_ID, null, "GIVE");
+        ReflectionTestUtils.setField(request, "id", REQUEST_ID);
+        request.select(now);
+        request.proposeSchedule("SHIPPING", null, now.plus(30, ChronoUnit.MINUTES), false, true, now, "12 Lê Lợi");
+        request.convertType("SWAP");
+        ReflectionTestUtils.setField(request, "offeredItemId", OFFERED_ITEM_ID);
+        when(requestRepository.findByIdForScheduleUpdate(REQUEST_ID)).thenReturn(Optional.of(request));
+
+        ConfirmLogisticsRequest confirmation = new ConfirmLogisticsRequest(true, "34 Trần Phú", request.getScheduleRevision());
+        assertThat(expectError(() -> requestService.confirmLogistics(REQUEST_ID, DONOR_ID, confirmation))
+                        .getErrorCode())
+                .isEqualTo(RequestErrorCode.REQUEST_EXCHANGE_SHIPPING_TOO_SOON);
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_LOGISTICS);
+    }
+
+    @Test
+    void exchangeShippingAutoReceipt_countsSevenDaysFromBothSentAndFirstReceipt() {
+        Request request = shippingRequest(OFFERED_ITEM_ID, -20);
+        Instant firstReceipt = Instant.now().minus(3, ChronoUnit.DAYS);
+        request.markShipped(true, firstReceipt.minus(3, ChronoUnit.DAYS));
+        request.markShipped(false, firstReceipt.minus(2, ChronoUnit.DAYS));
+
+        assertThat(requestService.autoReceiveShippingLegs(REQUEST_ID, firstReceipt.plus(8, ChronoUnit.DAYS)))
+                .isFalse();
+        request.markReceived(false, firstReceipt);
+        Instant due = firstReceipt.plus(7, ChronoUnit.DAYS);
+        assertThat(requestService.autoReceiveShippingLegs(REQUEST_ID, due.minusSeconds(1))).isFalse();
+        assertThat(requestService.autoReceiveShippingLegs(REQUEST_ID, due)).isTrue();
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.COMPLETED);
     }
 
     @Test

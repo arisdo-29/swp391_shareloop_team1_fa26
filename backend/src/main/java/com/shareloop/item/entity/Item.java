@@ -146,6 +146,53 @@ public class Item extends BaseEntity {
         return status;
     }
 
+    @Column(name = "exchange_shipping_hold_request_id")
+    private Long exchangeShippingHoldRequestId;
+
+    @Column(name = "exchange_shipping_restore_visibility", nullable = false)
+    private boolean exchangeShippingRestoreVisibility;
+
+    public boolean holdForExchangeShipping(long requestId) {
+        if (exchangeShippingHoldRequestId != null || (status != ItemStatus.RESERVED && status != ItemStatus.APPROVED)) {
+            return false;
+        }
+        exchangeShippingRestoreVisibility = isActive();
+        exchangeShippingHoldRequestId = requestId;
+        super.deactivate();
+        return true;
+    }
+
+    public boolean releaseExchangeShippingHold(long requestId) {
+        if (!java.util.Objects.equals(exchangeShippingHoldRequestId, requestId)) {
+            return false;
+        }
+        exchangeShippingHoldRequestId = null;
+        if (exchangeShippingRestoreVisibility && !hiddenByAdmin && status == ItemStatus.APPROVED) {
+            super.activate();
+        }
+        exchangeShippingRestoreVisibility = false;
+        return true;
+    }
+
+    public boolean isHeldForExchangeShipping(long requestId) {
+        return java.util.Objects.equals(exchangeShippingHoldRequestId, requestId);
+    }
+
+    @Override
+    public void activate() {
+        if (exchangeShippingHoldRequestId == null) {
+            super.activate();
+        }
+    }
+
+    @Override
+    public void deactivate() {
+        if (exchangeShippingHoldRequestId != null) {
+            exchangeShippingRestoreVisibility = false;
+        }
+        super.deactivate();
+    }
+
     public boolean isHiddenByAdmin() {
         return hiddenByAdmin;
     }

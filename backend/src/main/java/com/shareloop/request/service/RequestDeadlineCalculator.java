@@ -1,11 +1,16 @@
 package com.shareloop.request.service;
 
+import com.shareloop.common.exception.BusinessException;
+import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.RequestDeadlines;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 
 /**
@@ -14,10 +19,50 @@ import java.time.temporal.ChronoUnit;
  */
 final class RequestDeadlineCalculator {
 
+    private static final ZoneId VIETNAM = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final DateTimeFormatter HOUR_MINUTE = DateTimeFormatter.ofPattern("HH:mm");
+
     private final ConfigService configService;
 
     RequestDeadlineCalculator(ConfigService configService) {
         this.configService = configService;
+    }
+
+    Instant exchangeShippingWindowStart(Instant meeting, Instant now) {
+        int lead = configService.getInt(ConfigKey.EXCHANGE_SHIPPING_LEAD_MINUTES);
+        if (meeting.isBefore(now.plus(lead, ChronoUnit.MINUTES))) {
+            throw new BusinessException(
+                    RequestErrorCode.REQUEST_EXCHANGE_SHIPPING_TOO_SOON,
+                    "Giờ hẹn hơi gấp rồi. Bạn chọn giờ cách hiện tại ít nhất "
+                            + (lead == 60 ? "1 tiếng" : lead + " phút") + " để cả hai kịp chuẩn bị nhé.");
+        }
+        int window = configService.getInt(ConfigKey.EXCHANGE_SHIPPING_WINDOW_MINUTES);
+        LocalTime time = meeting.atZone(VIETNAM).toLocalTime();
+        LocalTime morningStart = minutes(ConfigKey.EXCHANGE_SHIPPING_MORNING_START, window);
+        LocalTime morningEnd = minutes(ConfigKey.EXCHANGE_SHIPPING_MORNING_END, 0);
+        LocalTime afternoonStart = minutes(ConfigKey.EXCHANGE_SHIPPING_AFTERNOON_START, window);
+        LocalTime afternoonEnd = minutes(ConfigKey.EXCHANGE_SHIPPING_AFTERNOON_END, 0);
+        if (!inRange(time, morningStart, morningEnd) && !inRange(time, afternoonStart, afternoonEnd)) {
+            throw new BusinessException(
+                    RequestErrorCode.REQUEST_EXCHANGE_SHIPPING_HOURS,
+                    "Bạn chọn giúp một giờ trong khoảng " + HOUR_MINUTE.format(morningStart) + " đến "
+                            + HOUR_MINUTE.format(morningEnd) + " hoặc " + HOUR_MINUTE.format(afternoonStart) + " đến "
+                            + HOUR_MINUTE.format(afternoonEnd) + " nhé.");
+        }
+        return meeting.minus(window, ChronoUnit.MINUTES);
+    }
+
+    private LocalTime minutes(ConfigKey key, int extra) {
+        int minute = Math.min(configService.getInt(key) + extra, 24 * 60 - 1);
+        return LocalTime.of(minute / 60, minute % 60);
+    }
+
+    private boolean inRange(LocalTime time, LocalTime start, LocalTime end) {
+        return !time.isBefore(start) && !time.isAfter(end);
+    }
+
+    Instant exchangeShippingReopenAt(Instant now) {
+        return now.plus(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_REOPEN_HOURS), ChronoUnit.HOURS);
     }
 
     RequestDeadlines of(Request request) {
@@ -43,7 +88,9 @@ final class RequestDeadlineCalculator {
         if (status == RequestStatus.LOGISTICS_CONFIRMED
                 && request.getMeetingTime() != null
                 && !request.hasPendingCancelRequest()) {
-            return staleThreshold(request);
+            return request.getExchangeShippingWindowStart() == null
+                    ? staleThreshold(request)
+                    : request.getMeetingTime();
         }
         return null;
     }
@@ -95,6 +142,15 @@ final class RequestDeadlineCalculator {
             return null;
         }
         int days = configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS_SHIPPING);
+        if (request.isExchangeShipping()) {
+            Instant otherShipment = leg == 1 ? request.getReceiverShippedAt() : request.getDonorShippedAt();
+            Instant otherReceived = leg == 1 ? request.getDonorHandoverAt() : request.getReceiverHandoverAt();
+            if (otherShipment == null || otherReceived == null) {
+                return null;
+            }
+            Instant readyAt = shippedAt.isAfter(otherShipment) ? shippedAt : otherShipment;
+            return (readyAt.isAfter(otherReceived) ? readyAt : otherReceived).plus(days, ChronoUnit.DAYS);
+        }
         return afterResumption(shippedAt, request).plus(days, ChronoUnit.DAYS);
     }
 
@@ -109,6 +165,9 @@ final class RequestDeadlineCalculator {
         if (!request.isShipping() || request.getMeetingTime() == null) {
             return null;
         }
+        if (request.getExchangeShippingWindowStart() != null) {
+            return request.getMeetingTime();
+        }
         int days = configService.getInt(ConfigKey.SHIPPING_SEND_DEADLINE_DAYS);
         return request.getMeetingTime().plus(days, ChronoUnit.DAYS);
     }
@@ -121,7 +180,8 @@ final class RequestDeadlineCalculator {
         int hours = configService.getInt(ConfigKey.CANCEL_REQUEST_RESPONSE_HOURS);
         Instant byResponse = request.getRescheduleProposedAt().plus(hours, ChronoUnit.HOURS);
         Instant meeting = request.getMeetingTime();
-        boolean meetingIsDeadline = !request.isShipping() && meeting != null && meeting.isBefore(byResponse);
+        boolean meetingIsDeadline = (!request.isShipping() || request.getExchangeShippingWindowStart() != null)
+                && meeting != null && meeting.isBefore(byResponse);
         return meetingIsDeadline ? meeting : byResponse;
     }
 

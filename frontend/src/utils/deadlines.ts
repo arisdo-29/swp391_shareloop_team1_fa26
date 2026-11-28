@@ -32,7 +32,7 @@ export function deadlineLines(
   };
 
   const waitingSchedule = request.status === 'RESERVED' || request.status === 'AWAITING_LOGISTICS';
-  add('autoCancel', request.autoCancelAt, (when) =>
+  add('autoCancel', request.exchangeShippingWindowStart ? null : request.autoCancelAt, (when) =>
     waitingSchedule
       ? `Tự huỷ nếu chưa chốt lịch trước ${when}`
       : request.deliveryMethod === 'SHIPPING'
@@ -48,10 +48,18 @@ export function deadlineLines(
 
   const anyUnsent = shippingLegs(request).some((leg) => leg.step === 'WAITING_SHIP');
   if (request.deliveryMethod === 'SHIPPING' && anyUnsent) {
-    add('sendDeadline', request.sendDeadlineAt, (when) => `Hạn gửi hàng là ${when}`);
+    const windowStart = request.exchangeShippingWindowStart;
+    if (windowStart) {
+      if (request.status === 'LOGISTICS_CONFIRMED' || request.status === 'AWAITING_HANDOVER') {
+        add('sendDeadline', request.sendDeadlineAt, (when) => `Khung gửi hàng từ ${clockAndDate(windowStart)} đến ${when}`);
+      }
+    } else {
+      add('sendDeadline', request.sendDeadlineAt, (when) => `Hạn gửi hàng là ${when}`);
+    }
   }
 
   if (request.deliveryMethod === 'SHIPPING') {
+    if (request.offeredItemId && request.disputes?.length) return lines;
     const autoAt = [request.leg1AutoReceiveAt, request.leg2AutoReceiveAt];
     shippingLegs(request).forEach((leg, index) => {
       const viewerReceives = leg.senderIsDonor === !viewerIsDonor;

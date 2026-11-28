@@ -18,6 +18,11 @@ public class HandoverIssueReportedListener {
     // nại lỗi thì cả hai cùng rollback, tránh giao dịch DISPUTED mà không có report nào để Admin xử lý.
     @EventListener
     public void onHandoverIssue(HandoverIssueReportedEvent event) {
+        if (event.exchangeShippingTimeout()) {
+            reportService.openExchangeShippingTimeoutReport(
+                    event.reporterId(), event.requestId(), event.note(), event.affectedItemId());
+            return;
+        }
         reportService.openHandoverIssueReport(
                 event.reporterId(), event.requestId(), event.note(), event.evidenceMediaIds(), event.affectedItemId());
     }

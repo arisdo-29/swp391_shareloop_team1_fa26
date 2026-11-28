@@ -98,6 +98,10 @@ export interface RequestResponse {
   donorAddress?: string | null;
   receiverAddressProvided?: boolean | null;
   donorAddressProvided?: boolean | null;
+  exchangeShippingWindowStart?: string | null;
+  exchangeShippingUnsentLeg?: 1 | 2 | null;
+  donorItemReopenAt?: string | null;
+  receiverItemReopenAt?: string | null;
   donorShippedAt?: string | null;
   receiverShippedAt?: string | null;
   // Mốc hạn do backend tính, FE chỉ hiện.
