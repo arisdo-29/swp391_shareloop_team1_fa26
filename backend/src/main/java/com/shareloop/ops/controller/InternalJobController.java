@@ -83,12 +83,15 @@ public class InternalJobController {
         if (!isAuthorized(jobToken)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        return ResponseEntity.ok(Map.of(
-                "exchangeShippingJob", executeJob(requestJob::runExchangeShipping, "exchangeShippingJob")));
+        return ResponseEntity.ok(
+                Map.of("exchangeShippingJob", executeJob(requestJob::runExchangeShipping, "exchangeShippingJob")));
     }
 
     private boolean isAuthorized(String jobToken) {
-        return triggerToken != null && !triggerToken.isBlank() && jobToken != null && !jobToken.isBlank()
+        return triggerToken != null
+                && !triggerToken.isBlank()
+                && jobToken != null
+                && !jobToken.isBlank()
                 && MessageDigest.isEqual(
                         triggerToken.getBytes(StandardCharsets.UTF_8), jobToken.getBytes(StandardCharsets.UTF_8));
     }

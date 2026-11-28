@@ -96,8 +96,8 @@ class InternalJobControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.exchangeShippingJob").value("ok"));
         verify(requestJob).runExchangeShipping();
-        verifyNoInteractions(itemExpiryJob, pendingAccountCleanupJob, paymentExpiryJob, boostNotificationJob,
-                mediaOrphanCleanupJob);
+        verifyNoInteractions(
+                itemExpiryJob, pendingAccountCleanupJob, paymentExpiryJob, boostNotificationJob, mediaOrphanCleanupJob);
     }
 
     @Test

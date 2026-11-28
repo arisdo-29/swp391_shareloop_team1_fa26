@@ -253,8 +253,11 @@ class RequestLifecycleIT extends IntegrationTest {
                 .andExpect(jsonPath("$.status").value("RESERVED"));
 
         // Chốt lịch giao hàng (GN-12): meetingTime là ngày gửi hàng dự kiến, Trao đổi cần địa chỉ của cả hai bên
-        Instant futureTime = Instant.now().atZone(ZoneId.of("Asia/Ho_Chi_Minh"))
-                .plusDays(3).with(LocalTime.of(10, 0)).toInstant();
+        Instant futureTime = Instant.now()
+                .atZone(ZoneId.of("Asia/Ho_Chi_Minh"))
+                .plusDays(3)
+                .with(LocalTime.of(10, 0))
+                .toInstant();
         ScheduleRequest scheduleReq = new ScheduleRequest("SHIPPING", null, futureTime, true, "34 Trần Phú");
         mockMvc.perform(post("/api/v1/requests/{id}/schedule", requestId)
                         .header("Authorization", donorToken)
@@ -280,8 +283,10 @@ class RequestLifecycleIT extends IntegrationTest {
                 .andExpect(jsonPath("$.status").value("LOGISTICS_CONFIRMED"));
 
         // Mỗi bên gửi chiều của mình rồi bên nhận bấm đã nhận được hàng
-        jdbc.update("UPDATE requests SET meeting_time = now() + interval '10 minutes', "
-                + "exchange_shipping_window_start = now() - interval '20 minutes' WHERE id = ?", requestId);
+        jdbc.update(
+                "UPDATE requests SET meeting_time = now() + interval '10 minutes', "
+                        + "exchange_shipping_window_start = now() - interval '20 minutes' WHERE id = ?",
+                requestId);
         Long donorReceiptId = confirmShipmentWithReceipt(requestId, donorId, donorToken);
         mockMvc.perform(get("/api/v1/requests/{id}", requestId).header("Authorization", receiverToken))
                 .andExpect(status().isOk())

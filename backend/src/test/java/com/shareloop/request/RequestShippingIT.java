@@ -209,13 +209,15 @@ class RequestShippingIT extends IntegrationTest {
         assertThat(isItemActive(offeredId)).isFalse();
         long reportId = jdbc.queryForObject(
                 "SELECT id FROM reports WHERE request_id = ? AND reason = 'NO_SHOW' AND exchange_shipping_timeout",
-                Long.class, requestId);
+                Long.class,
+                requestId);
         assertThat(jdbc.queryForObject("SELECT target_user_id FROM reports WHERE id = ?", Long.class, reportId))
                 .isEqualTo(receiverId);
         assertThat(trustStarsOf(donorId)).isEqualTo(donorStars);
         assertThat(trustStarsOf(receiverId)).isEqualTo(receiverStars);
 
-        deadlineJobService.processExchangeShipping(cancelledAt.plus(24, ChronoUnit.HOURS).minusSeconds(1));
+        deadlineJobService.processExchangeShipping(
+                cancelledAt.plus(24, ChronoUnit.HOURS).minusSeconds(1));
         assertThat(isItemActive(itemId)).isFalse();
         deadlineJobService.processExchangeShipping(cancelledAt.plus(24, ChronoUnit.HOURS));
         assertThat(isItemActive(itemId)).isTrue();
@@ -245,7 +247,8 @@ class RequestShippingIT extends IntegrationTest {
     }
 
     private boolean isItemActive(long itemId) {
-        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT is_active FROM items WHERE id = ?", Boolean.class, itemId));
+        return Boolean.TRUE.equals(
+                jdbc.queryForObject("SELECT is_active FROM items WHERE id = ?", Boolean.class, itemId));
     }
 
     private int trustStarsOf(long userId) {
@@ -434,8 +437,11 @@ class RequestShippingIT extends IntegrationTest {
     // ---------- helpers ----------
 
     private void propose(long requestId, long userId, String address) throws Exception {
-        Instant sendDate = Instant.now().atZone(ZoneId.of("Asia/Ho_Chi_Minh"))
-                .plusDays(2).with(LocalTime.of(10, 0)).toInstant();
+        Instant sendDate = Instant.now()
+                .atZone(ZoneId.of("Asia/Ho_Chi_Minh"))
+                .plusDays(2)
+                .with(LocalTime.of(10, 0))
+                .toInstant();
         mockMvc.perform(post("/api/v1/requests/{id}/schedule", requestId)
                         .header("Authorization", token(userId))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -446,13 +452,16 @@ class RequestShippingIT extends IntegrationTest {
     }
 
     private void ship(long requestId, long userId) throws Exception {
-        Long offeredItemId = jdbc.queryForObject(
-                "SELECT offered_item_id FROM requests WHERE id = ?", Long.class, requestId);
+        Long offeredItemId =
+                jdbc.queryForObject("SELECT offered_item_id FROM requests WHERE id = ?", Long.class, requestId);
         var shipment = post("/api/v1/requests/{id}/shipment", requestId).header("Authorization", token(userId));
         if (offeredItemId != null) {
-            jdbc.update("UPDATE requests SET meeting_time = now() + interval '10 minutes', "
-                    + "exchange_shipping_window_start = now() - interval '20 minutes' WHERE id = ?", requestId);
-            Long receiptId = jdbc.queryForObject("""
+            jdbc.update(
+                    "UPDATE requests SET meeting_time = now() + interval '10 minutes', "
+                            + "exchange_shipping_window_start = now() - interval '20 minutes' WHERE id = ?",
+                    requestId);
+            Long receiptId =
+                    jdbc.queryForObject("""
                     INSERT INTO media_files (storage_key, mime_type, size_bytes, created_by)
                     VALUES (?, 'image/jpeg', 4, ?) RETURNING id
                     """, Long.class, "test-shipping-receipt-" + SEQ.incrementAndGet(), userId);

@@ -117,13 +117,27 @@ class RequestShippingTest {
                 .when(configService.getInt(ConfigKey.CONFIRMED_STALE_CANCEL_DAYS))
                 .thenReturn(3);
         lenient().when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS)).thenReturn(24);
-        lenient().when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_WINDOW_MINUTES)).thenReturn(30);
-        lenient().when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_LEAD_MINUTES)).thenReturn(60);
-        lenient().when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_MORNING_START)).thenReturn(480);
-        lenient().when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_MORNING_END)).thenReturn(720);
-        lenient().when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_AFTERNOON_START)).thenReturn(780);
-        lenient().when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_AFTERNOON_END)).thenReturn(1020);
-        lenient().when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_REOPEN_HOURS)).thenReturn(24);
+        lenient()
+                .when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_WINDOW_MINUTES))
+                .thenReturn(30);
+        lenient()
+                .when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_LEAD_MINUTES))
+                .thenReturn(60);
+        lenient()
+                .when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_MORNING_START))
+                .thenReturn(480);
+        lenient()
+                .when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_MORNING_END))
+                .thenReturn(720);
+        lenient()
+                .when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_AFTERNOON_START))
+                .thenReturn(780);
+        lenient()
+                .when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_AFTERNOON_END))
+                .thenReturn(1020);
+        lenient()
+                .when(configService.getInt(ConfigKey.EXCHANGE_SHIPPING_REOPEN_HOURS))
+                .thenReturn(24);
     }
 
     /** Giao dịch Giao hàng đã chốt lịch, ngày gửi dự kiến cách bây giờ sendDateOffsetDays ngày (âm là đã qua). */
@@ -526,7 +540,8 @@ class RequestShippingTest {
         request.setExchangeShippingWindowStart(cutoff.minus(30, ChronoUnit.MINUTES));
         request.markShipped(true, cutoff.minus(10, ChronoUnit.MINUTES));
 
-        assertThat(requestService.processExchangeShippingWindow(REQUEST_ID, cutoff)).isTrue();
+        assertThat(requestService.processExchangeShippingWindow(REQUEST_ID, cutoff))
+                .isTrue();
         assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
         assertThat(request.exchangeItemReopenAt(1)).isEqualTo(cutoff.plus(24, ChronoUnit.HOURS));
         assertThat(request.exchangeItemReopenAt(2)).isNull();
@@ -537,7 +552,8 @@ class RequestShippingTest {
         assertThat(event.getValue().exchangeShippingTimeout()).isTrue();
         assertThat(event.getValue().reporterId()).isEqualTo(DONOR_ID);
         assertThat(event.getValue().affectedItemId()).isEqualTo(OFFERED_ITEM_ID);
-        assertThat(requestService.processExchangeShippingWindow(REQUEST_ID, cutoff)).isFalse();
+        assertThat(requestService.processExchangeShippingWindow(REQUEST_ID, cutoff))
+                .isFalse();
     }
 
     @Test
@@ -546,7 +562,8 @@ class RequestShippingTest {
         Instant cutoff = request.getMeetingTime();
         request.setExchangeShippingWindowStart(cutoff.minus(30, ChronoUnit.MINUTES));
 
-        assertThat(requestService.processExchangeShippingWindow(REQUEST_ID, cutoff)).isTrue();
+        assertThat(requestService.processExchangeShippingWindow(REQUEST_ID, cutoff))
+                .isTrue();
         assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
         verify(itemService).releaseAfterCancel(eq(ITEM_ID), any());
         verify(itemService).releaseIfReservedAfterCancel(eq(OFFERED_ITEM_ID), any());
@@ -561,7 +578,8 @@ class RequestShippingTest {
         request.markShipped(true, cutoff.minusSeconds(20));
         request.markShipped(false, cutoff.minusSeconds(10));
 
-        assertThat(requestService.processExchangeShippingWindow(REQUEST_ID, cutoff)).isFalse();
+        assertThat(requestService.processExchangeShippingWindow(REQUEST_ID, cutoff))
+                .isFalse();
         assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
     }
 
@@ -569,16 +587,21 @@ class RequestShippingTest {
     void exchangeShippingShipment_requiresWindowAndReceipt() {
         Request request = shippingRequest(OFFERED_ITEM_ID, 1);
         request.setExchangeShippingWindowStart(request.getMeetingTime().minus(30, ChronoUnit.MINUTES));
-        assertThat(expectError(() -> requestService.markShipped(REQUEST_ID, DONOR_ID, new ShipmentRequest(List.of(42L))))
-                        .getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_EXCHANGE_SHIPPING_WINDOW_CLOSED);
+        assertThat(expectError(() ->
+                                requestService.markShipped(REQUEST_ID, DONOR_ID, new ShipmentRequest(List.of(42L))))
+                        .getErrorCode())
+                .isEqualTo(RequestErrorCode.REQUEST_EXCHANGE_SHIPPING_WINDOW_CLOSED);
 
         request.setExchangeShippingWindowStart(Instant.now().minusSeconds(1));
         assertThat(expectError(() -> requestService.markShipped(REQUEST_ID, DONOR_ID, new ShipmentRequest(null)))
-                        .getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_SHIPMENT_RECEIPT_REQUIRED);
+                        .getErrorCode())
+                .isEqualTo(RequestErrorCode.REQUEST_SHIPMENT_RECEIPT_REQUIRED);
 
         ReflectionTestUtils.setField(request, "meetingTime", Instant.now().minusSeconds(1));
-        assertThat(expectError(() -> requestService.markShipped(REQUEST_ID, DONOR_ID, new ShipmentRequest(List.of(42L))))
-                        .getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_EXCHANGE_SHIPPING_WINDOW_CLOSED);
+        assertThat(expectError(() ->
+                                requestService.markShipped(REQUEST_ID, DONOR_ID, new ShipmentRequest(List.of(42L))))
+                        .getErrorCode())
+                .isEqualTo(RequestErrorCode.REQUEST_EXCHANGE_SHIPPING_WINDOW_CLOSED);
         assertThat(request.isAnyLegShipped()).isFalse();
     }
 
@@ -592,11 +615,13 @@ class RequestShippingTest {
                     .isEqualTo(meeting.minus(30, ChronoUnit.MINUTES));
         }
         assertThat(expectError(() -> calculator.exchangeShippingWindowStart(
-                        Instant.parse("2026-11-28T05:01:00Z"), dayEarlier)).getErrorCode())
+                                Instant.parse("2026-11-28T05:01:00Z"), dayEarlier))
+                        .getErrorCode())
                 .isEqualTo(RequestErrorCode.REQUEST_EXCHANGE_SHIPPING_HOURS);
         Instant meeting = Instant.parse("2026-11-28T01:30:00Z");
-        assertThat(expectError(() -> calculator.exchangeShippingWindowStart(
-                        meeting, meeting.minus(59, ChronoUnit.MINUTES))).getErrorCode())
+        assertThat(expectError(() ->
+                                calculator.exchangeShippingWindowStart(meeting, meeting.minus(59, ChronoUnit.MINUTES)))
+                        .getErrorCode())
                 .isEqualTo(RequestErrorCode.REQUEST_EXCHANGE_SHIPPING_TOO_SOON);
     }
 
@@ -611,7 +636,8 @@ class RequestShippingTest {
         ReflectionTestUtils.setField(request, "offeredItemId", OFFERED_ITEM_ID);
         when(requestRepository.findByIdForScheduleUpdate(REQUEST_ID)).thenReturn(Optional.of(request));
 
-        ConfirmLogisticsRequest confirmation = new ConfirmLogisticsRequest(true, "34 Trần Phú", request.getScheduleRevision());
+        ConfirmLogisticsRequest confirmation =
+                new ConfirmLogisticsRequest(true, "34 Trần Phú", request.getScheduleRevision());
         assertThat(expectError(() -> requestService.confirmLogistics(REQUEST_ID, DONOR_ID, confirmation))
                         .getErrorCode())
                 .isEqualTo(RequestErrorCode.REQUEST_EXCHANGE_SHIPPING_TOO_SOON);
@@ -629,7 +655,8 @@ class RequestShippingTest {
                 .isFalse();
         request.markReceived(false, firstReceipt);
         Instant due = firstReceipt.plus(7, ChronoUnit.DAYS);
-        assertThat(requestService.autoReceiveShippingLegs(REQUEST_ID, due.minusSeconds(1))).isFalse();
+        assertThat(requestService.autoReceiveShippingLegs(REQUEST_ID, due.minusSeconds(1)))
+                .isFalse();
         assertThat(requestService.autoReceiveShippingLegs(REQUEST_ID, due)).isTrue();
         assertThat(request.getStatus()).isEqualTo(RequestStatus.COMPLETED);
     }

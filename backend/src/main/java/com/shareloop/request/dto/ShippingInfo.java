@@ -20,10 +20,24 @@ public record ShippingInfo(
         Instant donorItemReopenAt,
         Instant receiverItemReopenAt) {
 
-    public ShippingInfo(String receiverAddress, String donorAddress, Instant donorShippedAt,
-            Instant receiverShippedAt, Boolean receiverAddressProvided, Boolean donorAddressProvided) {
-        this(receiverAddress, donorAddress, donorShippedAt, receiverShippedAt, receiverAddressProvided,
-                donorAddressProvided, null, null, null, null);
+    public ShippingInfo(
+            String receiverAddress,
+            String donorAddress,
+            Instant donorShippedAt,
+            Instant receiverShippedAt,
+            Boolean receiverAddressProvided,
+            Boolean donorAddressProvided) {
+        this(
+                receiverAddress,
+                donorAddress,
+                donorShippedAt,
+                receiverShippedAt,
+                receiverAddressProvided,
+                donorAddressProvided,
+                null,
+                null,
+                null,
+                null);
     }
 
     public static final ShippingInfo EMPTY = new ShippingInfo(null, null, null, null, null, null);

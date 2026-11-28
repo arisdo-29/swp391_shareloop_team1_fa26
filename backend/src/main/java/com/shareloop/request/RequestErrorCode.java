@@ -50,7 +50,8 @@ public enum RequestErrorCode implements ErrorCode {
     REQUEST_CANCEL_REASON_INVALID(HttpStatus.BAD_REQUEST, "Lý do huỷ không hợp lệ ở thời điểm này."),
     REQUEST_EXCHANGE_SHIPPING_HOURS(HttpStatus.BAD_REQUEST, "Giờ hẹn nằm ngoài khung gửi hàng."),
     REQUEST_EXCHANGE_SHIPPING_TOO_SOON(
-            HttpStatus.BAD_REQUEST, "Giờ hẹn hơi gấp rồi. Bạn chọn giờ cách hiện tại ít nhất 1 tiếng để cả hai kịp chuẩn bị nhé."),
+            HttpStatus.BAD_REQUEST,
+            "Giờ hẹn hơi gấp rồi. Bạn chọn giờ cách hiện tại ít nhất 1 tiếng để cả hai kịp chuẩn bị nhé."),
     REQUEST_EXCHANGE_SHIPPING_WINDOW_CLOSED(
             HttpStatus.CONFLICT, "Bạn chỉ có thể xác nhận gửi hàng trong khung giờ đã hẹn."),
     REQUEST_SHIPMENT_RECEIPT_REQUIRED(HttpStatus.BAD_REQUEST, "Bạn đính kèm ảnh biên nhận để xác nhận gửi hàng nhé."),

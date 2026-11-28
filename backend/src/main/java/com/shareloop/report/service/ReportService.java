@@ -615,7 +615,13 @@ public class ReportService {
     @Transactional
     public void openExchangeShippingTimeoutReport(long reporterId, long requestId, String note, Long affectedItemId) {
         openNoShowDispute(
-                reporterId, requestId, note, null, CancelNotice.EXCHANGE_SHIPPING, ReportReason.NO_SHOW, affectedItemId);
+                reporterId,
+                requestId,
+                note,
+                null,
+                CancelNotice.EXCHANGE_SHIPPING,
+                ReportReason.NO_SHOW,
+                affectedItemId);
     }
 
     // Cách báo cho bên bị khiếu nại: null là câu của sự cố giao nhận (bên kia đã bấm hoàn tất), NONE là không báo.
@@ -692,9 +698,12 @@ public class ReportService {
         String windowSentence = responseWindowSentence(responseHours, responseDueAt);
         String link = "/me/disputes/" + saved.getId();
         if (notice == CancelNotice.EXCHANGE_SHIPPING) {
-            notificationService.notify(respondentId, "DISPUTE_OPENED", "Bạn chưa xác nhận gửi hàng đúng giờ",
-                    "Bạn chưa xác nhận gửi hàng đúng giờ. Nếu chưa gửi, bạn tạm giữ lại món đồ nhé. "
-                            + windowSentence, link);
+            notificationService.notify(
+                    respondentId,
+                    "DISPUTE_OPENED",
+                    "Bạn chưa xác nhận gửi hàng đúng giờ",
+                    "Bạn chưa xác nhận gửi hàng đúng giờ. Nếu chưa gửi, bạn tạm giữ lại món đồ nhé. " + windowSentence,
+                    link);
             return;
         }
         if (notice != null) {
@@ -1188,7 +1197,9 @@ public class ReportService {
         if (exchangeShippingTimeout) {
             requestService.resolveExchangeShippingTimeoutReport(
                     report.getRequestId(), decision == ReportDecision.UPHOLD);
-        } else if (requestService != null && report.getTargetType() == TargetType.REQUEST && report.getRequestId() != null) {
+        } else if (requestService != null
+                && report.getTargetType() == TargetType.REQUEST
+                && report.getRequestId() != null) {
             requestService.resolveDisputedRequest(
                     report.getRequestId(), decision == ReportDecision.UPHOLD, adminId, request.itemOutcomes());
         }

@@ -181,7 +181,8 @@ final class RequestDeadlineCalculator {
         Instant byResponse = request.getRescheduleProposedAt().plus(hours, ChronoUnit.HOURS);
         Instant meeting = request.getMeetingTime();
         boolean meetingIsDeadline = (!request.isShipping() || request.getExchangeShippingWindowStart() != null)
-                && meeting != null && meeting.isBefore(byResponse);
+                && meeting != null
+                && meeting.isBefore(byResponse);
         return meetingIsDeadline ? meeting : byResponse;
     }
 

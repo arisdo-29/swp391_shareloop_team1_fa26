@@ -1013,8 +1013,7 @@ public class RequestService {
         Request request = loadRequestForUpdate(requestId);
         ItemSnapshot item = loadItemSnapshot(request);
         boolean isDonor = requireParty(request, item, currentUserId);
-        if (!request.isHandoverOpen()
-                || (request.hasConfirmedHandover(isDonor) && !request.isExchangeShipping())) {
+        if (!request.isHandoverOpen() || (request.hasConfirmedHandover(isDonor) && !request.isExchangeShipping())) {
             throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
         }
 
@@ -1060,7 +1059,8 @@ public class RequestService {
         int otherLeg = incomingLeg == 1 ? 2 : 1;
         boolean otherLegReceived = request.requiredLegs() == 2 && request.isLegReceived(otherLeg);
 
-        if (request.isLegShipped(incomingLeg) || otherLegReceived
+        if (request.isLegShipped(incomingLeg)
+                || otherLegReceived
                 || (request.isExchangeShipping() && request.isAnyLegShipped())) {
             String note = describeLeg(request, incomingLeg)
                     + (typedReason.isEmpty() ? "" : ". " + typedReason)
@@ -1145,7 +1145,9 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_EXCHANGE_SHIPPING_WINDOW_CLOSED);
         }
         if (request.isExchangeShipping()
-                && (requestDto == null || requestDto.mediaIds() == null || requestDto.mediaIds().isEmpty()
+                && (requestDto == null
+                        || requestDto.mediaIds() == null
+                        || requestDto.mediaIds().isEmpty()
                         || requestDto.mediaIds().stream().anyMatch(java.util.Objects::isNull))) {
             throw new BusinessException(RequestErrorCode.REQUEST_SHIPMENT_RECEIPT_REQUIRED);
         }
@@ -1166,10 +1168,10 @@ public class RequestService {
                         ? nameOrDefault(currentUserId)
                                 + " đã gửi hàng. Bạn có thể xem ảnh biên nhận trong chi tiết giao dịch nhé."
                         : "Người gửi báo đã gửi hàng. Khi nhận được hàng, hãy bấm Tôi đã nhận được hàng."
-                        + " Nếu bạn không phản hồi, hệ thống sẽ tự"
-                        + " ghi nhận bạn đã nhận lúc "
-                        + VietnamTime.format(deadlineCalculator.legAutoReceiveAt(saved, isDonor ? 1 : 2))
-                        + ".",
+                                + " Nếu bạn không phản hồi, hệ thống sẽ tự"
+                                + " ghi nhận bạn đã nhận lúc "
+                                + VietnamTime.format(deadlineCalculator.legAutoReceiveAt(saved, isDonor ? 1 : 2))
+                                + ".",
                 link);
         if (hadPendingCancel && !saved.hasPendingCancelRequest() && cancelRequester != null) {
             notificationService.notify(
@@ -1900,9 +1902,10 @@ public class RequestService {
         if (request == null || !request.isShipping() || request.getStatus() != RequestStatus.AWAITING_HANDOVER) {
             return false;
         }
-        if (reportService != null && (request.isExchangeShipping()
-                ? reportService.hasReportForRequest(requestId)
-                : reportService.hasPendingDisputeForRequest(requestId))) {
+        if (reportService != null
+                && (request.isExchangeShipping()
+                        ? reportService.hasReportForRequest(requestId)
+                        : reportService.hasPendingDisputeForRequest(requestId))) {
             return false;
         }
         int days = configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS_SHIPPING);
@@ -2050,7 +2053,9 @@ public class RequestService {
     @Transactional
     public boolean processExchangeShippingWindow(long requestId, Instant now) {
         Request request = requestRepository.findByIdForUpdate(requestId).orElse(null);
-        if (request == null || !request.isExchangeShipping() || !request.isHandoverOpen()
+        if (request == null
+                || !request.isExchangeShipping()
+                || !request.isHandoverOpen()
                 || request.getExchangeShippingWindowStart() == null
                 || now.isBefore(request.getExchangeShippingWindowStart())
                 || (request.isLegShipped(1) && request.isLegShipped(2))) {
@@ -2064,8 +2069,12 @@ public class RequestService {
                     + VietnamTime.format(request.getMeetingTime()) + " nhé.";
             boolean donorNotified = remindOnce(
                     item.donorId(), "EXCHANGE_SHIPPING_OPEN", link, request.getExchangeShippingWindowStart(), reminder);
-            boolean receiverNotified = remindOnce(request.getReceiverId(), "EXCHANGE_SHIPPING_OPEN", link,
-                    request.getExchangeShippingWindowStart(), reminder);
+            boolean receiverNotified = remindOnce(
+                    request.getReceiverId(),
+                    "EXCHANGE_SHIPPING_OPEN",
+                    link,
+                    request.getExchangeShippingWindowStart(),
+                    reminder);
             return donorNotified || receiverNotified;
         }
 
@@ -2075,7 +2084,9 @@ public class RequestService {
             releaseReservedItems(request);
             publishNegotiationEnded(request);
             notifyItemReopened(request);
-            notifyBothParties(request, "TRANSACTION_CANCELLED",
+            notifyBothParties(
+                    request,
+                    "TRANSACTION_CANCELLED",
                     "Giao dịch đã được huỷ vì chưa bên nào gửi hàng. Bài của bạn đã mở lại. "
                             + "Lần sau bạn có thể thử gặp trực tiếp cho thoải mái hơn nhé.");
             return true;
@@ -2091,16 +2102,24 @@ public class RequestService {
         itemService.holdForExchangeShipping(request.getItemId(), requestId);
         itemService.holdForExchangeShipping(request.getOfferedItemId(), requestId);
         publishNegotiationEnded(request);
-        eventPublisher.publishEvent(new HandoverIssueReportedEvent(requestId, sender,
+        eventPublisher.publishEvent(new HandoverIssueReportedEvent(
+                requestId,
+                sender,
                 "Hệ thống ghi nhận chỉ một bên xác nhận gửi hàng trong khung giờ đã chốt.",
-                null, itemOfLeg(request, unsentLeg), true));
+                null,
+                itemOfLeg(request, unsentLeg),
+                true));
         notificationService.publishRealtimeUpdate(respondent, "REQUEST", requestId);
-        notificationService.notify(sender, "TRANSACTION_CANCELLED", "Giao dịch đã huỷ và cần thu hồi hàng",
+        notificationService.notify(
+                sender,
+                "TRANSACTION_CANCELLED",
+                "Giao dịch đã huỷ và cần thu hồi hàng",
                 "Rất tiếc, " + nameOrDefault(respondent)
                         + " chưa xác nhận gửi hàng đúng giờ. Bạn liên hệ hãng vận chuyển để thu hồi sớm nhé."
                         + " Quản trị viên sẽ xem xét giao dịch này. Bài của bạn sẽ tự mở lại lúc "
                         + VietnamTime.format(reopenAt)
-                        + ". Nếu chưa nhận lại món, bạn có thể chủ động ẩn bài nhé.", link);
+                        + ". Nếu chưa nhận lại món, bạn có thể chủ động ẩn bài nhé.",
+                link);
         return true;
     }
 
@@ -2124,7 +2143,10 @@ public class RequestService {
                     notifyItemReopened(request);
                 }
                 long owner = leg == 1 ? loadItemSnapshot(request).donorId() : request.getReceiverId();
-                notificationService.notify(owner, "ITEM_REOPENED", "Bài trao đổi đã mở lại",
+                notificationService.notify(
+                        owner,
+                        "ITEM_REOPENED",
+                        "Bài trao đổi đã mở lại",
                         "Bài của bạn đã mở lại. Nếu món hàng chưa về, bạn có thể chủ động ẩn bài nhé.",
                         "/requests/" + requestId);
             }
@@ -2139,14 +2161,19 @@ public class RequestService {
         int leg = request.getExchangeShippingUnsentLeg();
         if (upheld) {
             itemService.releaseExchangeShippingHold(itemOfLeg(request, leg), requestId, request.getReservedAt(), true);
-            notifyBothParties(request, "REPORT_CONCLUDED",
+            notifyBothParties(
+                    request,
+                    "REPORT_CONCLUDED",
                     "Quản trị viên đã xác nhận sự cố giao nhận. Giao dịch vẫn ở trạng thái đã huỷ.");
             return;
         }
         Instant reopenAt = deadlineCalculator.exchangeShippingReopenAt(Instant.now());
         request.scheduleExchangeItemReopen(leg, reopenAt);
         long owner = leg == 1 ? loadItemSnapshot(request).donorId() : request.getReceiverId();
-        notificationService.notify(owner, "EXCHANGE_SHIPPING_ITEM_REOPEN_SCHEDULED", "Bài sẽ được mở lại",
+        notificationService.notify(
+                owner,
+                "EXCHANGE_SHIPPING_ITEM_REOPEN_SCHEDULED",
+                "Bài sẽ được mở lại",
                 "Quản trị viên đã bác khiếu nại. Bài của bạn sẽ tự mở lại lúc " + VietnamTime.format(reopenAt) + ".",
                 "/requests/" + requestId);
         notificationService.publishRealtimeUpdate(findOtherPartyId(request, owner), "REQUEST", requestId);
@@ -3348,7 +3375,8 @@ public class RequestService {
     // Hạn giải trình của khiếu nại đang mở thuộc giao dịch (U5-BE, D-04, GN-07).
     // Chỉ có giá trị khi status == DISPUTED, ngược lại là null.
     private Instant findDisputeResponseDueAt(Request request) {
-        if (request == null || request.getId() == null
+        if (request == null
+                || request.getId() == null
                 || (request.getStatus() != RequestStatus.DISPUTED && request.getExchangeShippingUnsentLeg() == null)) {
             return null;
         }

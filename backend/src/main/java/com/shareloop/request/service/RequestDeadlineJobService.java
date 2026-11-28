@@ -153,9 +153,10 @@ public class RequestDeadlineJobService {
         int windows = forEach(
                 (after, page) -> requestRepository.findExchangeShippingWindows(now, after, page),
                 requestId -> requestService.processExchangeShippingWindow(requestId, now));
-        return windows + forEach(
-                (after, page) -> requestRepository.findExchangeShippingItemsToReopen(now, after, page),
-                requestId -> requestService.reopenExchangeShippingItems(requestId, now));
+        return windows
+                + forEach(
+                        (after, page) -> requestRepository.findExchangeShippingItemsToReopen(now, after, page),
+                        requestId -> requestService.reopenExchangeShippingItems(requestId, now));
     }
 
     // Duyệt theo lô nhỏ các giao dịch do truy vấn trả về, mỗi giao dịch một transaction riêng.
