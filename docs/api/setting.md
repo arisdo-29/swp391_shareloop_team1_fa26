@@ -385,8 +385,8 @@ Các khóa dưới đây được trả trong cấu hình công khai. Khung làm
 
 | Khóa | Mặc định | Ý nghĩa |
 |---|---|---|
-| `exchange_shipping_window_minutes` | 30 | Số phút được xác nhận gửi trước giờ hẹn |
-| `exchange_shipping_lead_minutes` | 60 | Số phút tối thiểu giữa lúc lưu hoặc chốt lịch với giờ hẹn |
+| `exchange_shipping_window_minutes` | 30 | Số phút được xác nhận gửi trước giờ hẹn (Admin chỉnh được từ 1 đến 120) |
+| `exchange_shipping_lead_minutes` | 60 | Số phút tối thiểu giữa lúc lưu hoặc chốt lịch với giờ hẹn (Admin chỉnh được từ 1 đến 1440, đặt 1 khi demo) |
 | `exchange_shipping_morning_start` | 480 | Bắt đầu khung làm việc buổi sáng lúc 08:00 |
 | `exchange_shipping_morning_end` | 720 | Kết thúc khung làm việc buổi sáng lúc 12:00 |
 | `exchange_shipping_afternoon_start` | 780 | Bắt đầu khung làm việc buổi chiều lúc 13:00 |

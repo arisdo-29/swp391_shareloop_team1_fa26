@@ -2,6 +2,7 @@ package com.shareloop.setting;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -47,5 +48,13 @@ class ConfigKeyTest {
         assertThat(ConfigKey.REPUTATION_PAIR_ALERT_THRESHOLD.group()).isEqualTo(ConfigGroup.REPUTATION);
         assertThat(ConfigKey.IP_ALERT_WINDOW_DAYS.group()).isEqualTo(ConfigGroup.REPUTATION);
         assertThat(ConfigKey.IP_ALERT_MIN_ACCOUNTS.group()).isEqualTo(ConfigGroup.REPUTATION);
+    }
+
+    @Test
+    void exchangeShippingLeadAndWindow_canBeLoweredToOneMinuteForDemo() {
+        assertThat(ConfigKey.EXCHANGE_SHIPPING_LEAD_MINUTES.minValue()).isEqualByComparingTo(BigDecimal.ONE);
+        assertThat(ConfigKey.EXCHANGE_SHIPPING_WINDOW_MINUTES.minValue()).isEqualByComparingTo(BigDecimal.ONE);
+        assertThat(ConfigKey.EXCHANGE_SHIPPING_LEAD_MINUTES.defaultValue()).isEqualTo("60");
+        assertThat(ConfigKey.EXCHANGE_SHIPPING_WINDOW_MINUTES.defaultValue()).isEqualTo("30");
     }
 }
