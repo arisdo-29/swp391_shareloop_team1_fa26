@@ -200,8 +200,8 @@ class RequestDeadlineTest {
     }
 
     @Test
-    void autoConfirmAt_whenShipping_isEarliestShippedLegPlusShippingDays() {
-        // given: chiều 1 gửi sớm hơn chiều 2
+    void autoConfirmAt_whenExchangeShipping_usesFirstReceiptAndRequiresBothShipments() {
+        // given: cả hai chiều đã gửi, chưa ai xác nhận nhận
         Instant first = Instant.parse("2026-12-01T08:00:00Z");
         Instant second = Instant.parse("2026-12-02T08:00:00Z");
         Request request = request(RequestStatus.AWAITING_HANDOVER, "SHIPPING", first);
@@ -209,13 +209,14 @@ class RequestDeadlineTest {
         ReflectionTestUtils.setField(request, "donorShippedAt", first);
         ReflectionTestUtils.setField(request, "receiverShippedAt", second);
 
-        // when
-        RequestDeadlines deadlines = calculator.of(request);
+        assertThat(calculator.of(request).autoConfirmAt()).isNull();
 
-        // then
-        assertThat(deadlines.leg1AutoReceiveAt()).isEqualTo(first.plus(7, ChronoUnit.DAYS));
-        assertThat(deadlines.leg2AutoReceiveAt()).isEqualTo(second.plus(7, ChronoUnit.DAYS));
-        assertThat(deadlines.autoConfirmAt()).isEqualTo(first.plus(7, ChronoUnit.DAYS));
+        Instant received = second.plus(1, ChronoUnit.DAYS);
+        ReflectionTestUtils.setField(request, "receiverHandoverAt", received);
+        RequestDeadlines deadlines = calculator.of(request);
+        assertThat(deadlines.leg1AutoReceiveAt()).isNull();
+        assertThat(deadlines.leg2AutoReceiveAt()).isEqualTo(received.plus(7, ChronoUnit.DAYS));
+        assertThat(deadlines.autoConfirmAt()).isEqualTo(received.plus(7, ChronoUnit.DAYS));
     }
 
     // ---------- nhắc hạn ----------

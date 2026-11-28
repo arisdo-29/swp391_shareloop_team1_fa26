@@ -377,4 +377,18 @@ Admin xem và sửa ở trang Cấu hình (nhóm Giao dịch), mô tả tiếng 
 | `shipping_send_deadline_days` | 3 | có | Hạn gửi của mỗi chiều = ngày gửi dự kiến cộng số ngày này |
 | `deadline_reminder_hours_before_response` | 6 | có | Nhắc bên được hỏi khi còn số giờ này trước hạn phản hồi |
 
-`auto_confirm_days_shipping` (7) nay tính theo từng chiều kể từ lúc gửi. Cột mới ở bảng `requests` (ERD vẫn 17 bảng): `cancel_requested_by`, `cancel_requested_at`, `cancel_request_code`, `cancel_request_reason`, `reschedule_proposed_by`, `reschedule_proposed_at`, `reschedule_meeting_time`, `reschedule_meeting_place`, `reschedule_count`, `receiver_address`, `donor_address`, `donor_shipped_at`, `receiver_shipped_at`. Hai cột mã vận đơn `donor_tracking_code` và `receiver_tracking_code` chỉ lưu lịch sử.
+`auto_confirm_days_shipping` (7) tính từ lúc gửi với Cho tặng. Với Trao đổi, tính từ lúc đủ hai lượt gửi và lượt xác nhận nhận đầu tiên. Cột mới ở bảng `requests` (ERD vẫn 17 bảng): `cancel_requested_by`, `cancel_requested_at`, `cancel_request_code`, `cancel_request_reason`, `reschedule_proposed_by`, `reschedule_proposed_at`, `reschedule_meeting_time`, `reschedule_meeting_place`, `reschedule_count`, `receiver_address`, `donor_address`, `donor_shipped_at`, `receiver_shipped_at`. Hai cột mã vận đơn `donor_tracking_code` và `receiver_tracking_code` chỉ lưu lịch sử.
+
+## Cấu hình Trao đổi qua giao hàng
+
+Các khóa dưới đây được trả trong cấu hình công khai. Khung làm việc được lưu dưới dạng số phút tính từ 00:00 theo giờ Việt Nam.
+
+| Khóa | Mặc định | Ý nghĩa |
+|---|---|---|
+| `exchange_shipping_window_minutes` | 30 | Số phút được xác nhận gửi trước giờ hẹn |
+| `exchange_shipping_lead_minutes` | 60 | Số phút tối thiểu giữa lúc lưu hoặc chốt lịch với giờ hẹn |
+| `exchange_shipping_morning_start` | 480 | Bắt đầu khung làm việc buổi sáng lúc 08:00 |
+| `exchange_shipping_morning_end` | 720 | Kết thúc khung làm việc buổi sáng lúc 12:00 |
+| `exchange_shipping_afternoon_start` | 780 | Bắt đầu khung làm việc buổi chiều lúc 13:00 |
+| `exchange_shipping_afternoon_end` | 1020 | Kết thúc khung làm việc buổi chiều lúc 17:00 |
+| `exchange_shipping_reopen_hours` | 24 | Số giờ tính từ lúc hủy hoặc bác khiếu nại cho đến khi bài được mở lại |

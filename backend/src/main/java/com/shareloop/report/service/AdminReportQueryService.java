@@ -146,7 +146,8 @@ public class AdminReportQueryService {
                 // Cùng luật với ReportService.conclude, tính theo giờ server để FE không phải tự so giờ máy
                 report.isResponseWindowOpen(Instant.now(clock)),
                 openTransactionPartnerName(report, itemId, briefs),
-                isSeriousReason(report));
+                isSeriousReason(report),
+                report.isExchangeShippingTimeout());
     }
 
     // Báo cáo bài mà bài đang có giao dịch mở: tên bên còn lại để hộp kết luận báo trước (F1).

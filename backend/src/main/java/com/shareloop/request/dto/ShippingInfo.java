@@ -14,7 +14,31 @@ public record ShippingInfo(
         Instant receiverShippedAt,
         // Đã nhập địa chỉ hay chưa, luôn trả đúng kể cả khi nội dung địa chỉ của bên kia bị ẩn trước khi chốt lịch.
         Boolean receiverAddressProvided,
-        Boolean donorAddressProvided) {
+        Boolean donorAddressProvided,
+        Instant exchangeShippingWindowStart,
+        Short exchangeShippingUnsentLeg,
+        Instant donorItemReopenAt,
+        Instant receiverItemReopenAt) {
+
+    public ShippingInfo(
+            String receiverAddress,
+            String donorAddress,
+            Instant donorShippedAt,
+            Instant receiverShippedAt,
+            Boolean receiverAddressProvided,
+            Boolean donorAddressProvided) {
+        this(
+                receiverAddress,
+                donorAddress,
+                donorShippedAt,
+                receiverShippedAt,
+                receiverAddressProvided,
+                donorAddressProvided,
+                null,
+                null,
+                null,
+                null);
+    }
 
     public static final ShippingInfo EMPTY = new ShippingInfo(null, null, null, null, null, null);
 }

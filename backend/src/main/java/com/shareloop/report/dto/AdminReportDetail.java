@@ -31,7 +31,8 @@ public record AdminReportDetail(
         String resolvedByName,
         boolean responseWindowOpen,
         String openTransactionPartnerName,
-        boolean seriousReason) {
+        boolean seriousReason,
+        boolean exchangeShippingTimeout) {
     public record Participant(Long id, String fullName) {}
 
     public record Evidence(Long id, String url, boolean available) {}

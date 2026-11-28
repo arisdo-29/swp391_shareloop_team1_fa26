@@ -238,7 +238,7 @@ describe('ScheduleCard giao hàng', () => {
     render(card({ ...shippingRequest, type: 'SWAP', offeredItemId: 77, receiverAddressProvided: true }, true));
     expect(screen.getByText(/Bình đã nhập địa chỉ nhận hàng/)).toBeTruthy();
     expect(screen.getByText(/Địa chỉ nhận hàng sẽ hiện sau khi hai bên chốt lịch/)).toBeTruthy();
-    expect(screen.getByRole('checkbox', { name: /đồng ý lịch gửi hàng dự kiến/ })).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: /cam kết gửi đúng món, đúng giờ/ })).toBeTruthy();
     cleanup();
     render(card({ ...shippingRequest, receiverAddressProvided: false }, true));
     expect(screen.getByText(/Bình chưa nhập địa chỉ nhận hàng/)).toBeTruthy();
@@ -272,13 +272,16 @@ describe('ScheduleCard giao hàng', () => {
     const request = { ...shippingRequest, type: 'SWAP' as const, offeredItemId: 77, donorAddress: '5 Lê Lai' };
     const update = vi.spyOn(requestApi, 'updateSchedule').mockResolvedValue(request);
     render(card(request, true));
-    fireEvent.change(screen.getByLabelText(/Ngày gửi hàng dự kiến/), {
-      target: { value: toLocalMeetingTimeValue(new Date(Date.now() + 172_800_000)) },
-    });
+    const day = toLocalMeetingTimeValue(new Date(Date.now() + 172_800_000), true).slice(0, 10);
+    const time = screen.getByLabelText(/Giờ hẹn gửi hàng theo giờ Việt Nam/);
+    fireEvent.change(time, { target: { value: `${day}T12:30` } });
+    expect(screen.getAllByText(/Bạn chọn giúp một giờ trong khoảng/).length).toBeGreaterThan(0);
+    fireEvent.change(time, { target: { value: `${day}T13:30` } });
+    expect(screen.getByText(/trong khung 13:00 đến 13:30/)).toBeTruthy();
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'Gửi lại lịch gửi hàng' }));
     await waitFor(() => expect(update).toHaveBeenCalledWith(101, 9, expect.objectContaining({
-      deliveryMethod: 'SHIPPING', shippingAddress: '5 Lê Lai',
+      deliveryMethod: 'SHIPPING', shippingAddress: '5 Lê Lai', meetingTime: `${day}T06:30:00.000Z`,
     })));
   });
 

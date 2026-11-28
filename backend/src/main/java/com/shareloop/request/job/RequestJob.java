@@ -35,6 +35,14 @@ public class RequestJob {
         this.clock = clock;
     }
 
+    @Scheduled(cron = "0 */5 * * * *")
+    public void runExchangeShipping() {
+        int processed = requestDeadlineJobService.processExchangeShipping(clock.instant());
+        if (processed > 0) {
+            log.info("Exchange shipping job processed {} requests", processed);
+        }
+    }
+
     /**
      * Chạy định kỳ vào phút 15 của mỗi giờ (tránh trùng phút 00 và 30 của các job khác).
      */
@@ -50,13 +58,12 @@ public class RequestJob {
         int staleReminded = requestDeadlineJobService.remindStaleConfirmed(now);
         int shippingLegsAutoReceived = requestDeadlineJobService.autoReceiveShippingLegs(now);
         int shippingReminded = requestDeadlineJobService.remindShipping(now);
-        int shippingStuck = requestDeadlineJobService.openShippingOneLegStuck(now);
         int reminded = requestDeadlineJobService.remindDeadlines(now);
 
         log.info(
                 "RequestJob finished: {} pending expired, {} silent reserved expired, {} auto confirmed,"
                         + " {} cancel requests expired, {} reschedules expired, {} stale cancelled, {} stale reminded,"
-                        + " {} shipping legs auto received, {} shipping reminded, {} shipping stuck, {} deadline reminders",
+                        + " {} shipping legs auto received, {} shipping reminded, {} deadline reminders",
                 pendingExpired,
                 silentReservedExpired,
                 autoConfirmed,
@@ -66,7 +73,6 @@ public class RequestJob {
                 staleReminded,
                 shippingLegsAutoReceived,
                 shippingReminded,
-                shippingStuck,
                 reminded);
     }
 }

@@ -5,10 +5,12 @@ export function ReportEvidenceField({
   files,
   onChange,
   disabled,
+  receiptRequired = false,
 }: {
   files: File[];
   onChange: (files: File[]) => void;
   disabled: boolean;
+  receiptRequired?: boolean;
 }) {
   const labelId = useId();
   const hintId = useId();
@@ -17,10 +19,12 @@ export function ReportEvidenceField({
     <div className="space-y-3 rounded-lg border border-dashed border-border bg-surface p-4">
       <div>
         <p id={labelId} className="label">
-          Ảnh minh chứng (không bắt buộc)
+          {receiptRequired ? "Ảnh biên nhận (bắt buộc)" : "Ảnh minh chứng (không bắt buộc)"}
         </p>
         <p id={hintId} className="text-xs leading-5 text-text-secondary">
-          Ví dụ: ảnh món đồ, ảnh lúc giao nhận hoặc ảnh chụp đoạn trao đổi liên quan.
+          {receiptRequired
+            ? 'Chọn ảnh chụp biên nhận từ đơn vị vận chuyển.'
+            : 'Ví dụ: ảnh món đồ, ảnh lúc giao nhận hoặc ảnh chụp đoạn trao đổi liên quan.'}
         </p>
       </div>
       <label

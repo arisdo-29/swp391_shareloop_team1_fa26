@@ -98,7 +98,8 @@ export function shippingFailureContext(request: RequestResponse, viewerIsDonor: 
   const incoming = legs.find((leg) => !viewerSendsLeg(leg, viewerIsDonor));
   const other = legs.find((leg) => viewerSendsLeg(leg, viewerIsDonor));
   const incomingShipped = Boolean(incoming && incoming.step !== 'WAITING_SHIP');
-  return { incomingShipped, opensDispute: incomingShipped || other?.step === 'RECEIVED' };
+  const sentByViewer = Boolean(other && other.step !== 'WAITING_SHIP');
+  return { incomingShipped, opensDispute: incomingShipped || sentByViewer };
 }
 
 // Hậu quả của "Giao nhận không thành công" khi Giao hàng, theo từng chiều người xem nhận (GN-12). Backend vẫn quyết định.

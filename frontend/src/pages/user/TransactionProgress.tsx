@@ -151,6 +151,9 @@ function TransactionProgressView({
   const partnerName = requestParticipantName(conversation, currentUserId);
   const partnerId = partnerIdOf(conversation, currentUserId);
   const title = conversationTitle(conversation);
+  const reopenAt = viewerIsDonor ? request.donorItemReopenAt : request.receiverItemReopenAt;
+  const affectedByShipmentTimeout = Boolean(request.exchangeShippingUnsentLeg);
+  const missedShipmentWindow = request.exchangeShippingUnsentLeg === (viewerIsDonor ? 1 : 2);
   const finishAction = (updated: RequestResponse, message: string) => {
     applyUpdate(updated);
     setOpenDialog(null);
@@ -177,7 +180,18 @@ function TransactionProgressView({
           <Alert tone="success">{notice}</Alert>
         </div>
       ) : null}
-      {request.flags?.includes('ITEM_UNDER_REVIEW') ? (
+      {affectedByShipmentTimeout ? (
+        <div className="mb-4">
+          <Alert tone="warning">
+            {missedShipmentWindow
+              ? 'Giao dịch đã huỷ vì bạn chưa xác nhận gửi hàng đúng giờ.'
+              : `Giao dịch đã huỷ vì ${partnerName} chưa xác nhận gửi hàng đúng giờ. Bạn liên hệ hãng vận chuyển để thu hồi sớm nhé.`}
+            {reopenAt ? ` Bài của bạn sẽ tự mở lại lúc ${formatDeadline(reopenAt)}.` : ''}
+            {!missedShipmentWindow ? ' Nếu chưa nhận lại món, bạn có thể chủ động ẩn bài nhé.' : ''}
+          </Alert>
+        </div>
+      ) : null}
+      {request.flags?.includes('ITEM_UNDER_REVIEW') && !affectedByShipmentTimeout ? (
         <div className="mb-4">
           <Alert tone="warning">
             Bài đang bị xem xét vi phạm. Giao dịch vẫn tiếp tục, bạn nên cẩn thận khi bàn giao.
@@ -306,7 +320,7 @@ function TransactionProgressView({
             finishAction(
               updated,
               updated.status === 'DISPUTED'
-                ? 'Đã báo sự cố giao nhận. Admin sẽ xác minh.'
+                ? 'Đã báo sự cố giao nhận. Quản trị viên sẽ xác minh.'
                 : `Đã gửi đề nghị huỷ. Đang chờ ${partnerName} phản hồi.`,
             )
           }

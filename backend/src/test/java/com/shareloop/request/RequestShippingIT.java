@@ -11,6 +11,8 @@ import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.service.RequestDeadlineJobService;
 import com.shareloop.support.IntegrationTest;
 import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,6 +57,7 @@ class RequestShippingIT extends IntegrationTest {
     private final List<Long> requestIds = new ArrayList<>();
     private final List<Long> itemIds = new ArrayList<>();
     private final List<Long> userIds = new ArrayList<>();
+    private final List<Long> receiptIds = new ArrayList<>();
 
     @AfterEach
     void cleanUp() {
@@ -64,6 +67,9 @@ class RequestShippingIT extends IntegrationTest {
             jdbc.update("DELETE FROM messages WHERE request_id = ?", requestId);
             jdbc.update("DELETE FROM requests WHERE id = ?", requestId);
         }
+        for (Long mediaId : receiptIds) {
+            jdbc.update("DELETE FROM media_files WHERE id = ?", mediaId);
+        }
         for (Long itemId : itemIds) {
             jdbc.update("DELETE FROM items WHERE id = ?", itemId);
         }
@@ -72,6 +78,7 @@ class RequestShippingIT extends IntegrationTest {
             jdbc.update("DELETE FROM activity_logs WHERE actor_id = ?", userId);
             jdbc.update("DELETE FROM users WHERE id = ?", userId);
         }
+        receiptIds.clear();
         requestIds.clear();
         itemIds.clear();
         userIds.clear();
@@ -174,10 +181,9 @@ class RequestShippingIT extends IntegrationTest {
                 .isEqualTo(otherItemShipped);
     }
 
-    @Test
-    void jobs_whenSwapOneLegReceivedAndOtherNeverSentPastDeadlinePlusStaleDays_opensNoShowDisputeWithoutCancelOrStars()
-            throws Exception {
-        // given: Trao đổi, chiều 1 đã gửi và đã nhận, chiều 2 chưa gửi và đã quá hạn gửi cộng số ngày chờ
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void exchangeTimeout_cancelsAndHandlesBothReopenSchedulesAfterAdminDecision(boolean upheld) throws Exception {
         long donorId = insertUser("Donor");
         long receiverId = insertUser("Receiver");
         long itemId = insertItem(donorId, "SWAP");
@@ -190,28 +196,59 @@ class RequestShippingIT extends IntegrationTest {
                         .content("{\"scheduleRevision\":1,\"agreeToWaiver\":true,\"shippingAddress\":\"34 Trần Phú\"}"))
                 .andExpect(status().isOk());
         ship(requestId, donorId);
-        mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
-                        .header("Authorization", token(receiverId)))
-                .andExpect(status().isOk());
-        jdbc.update("UPDATE requests SET meeting_time = now() - interval '10 days' WHERE id = ?", requestId);
-        insertEarlierReport(donorId, itemId, receiverId, requestId, "DISMISSED");
+
+        // Mô phỏng giờ hẹn vừa qua trong DB và chạy tác vụ hai lần.
+        jdbc.update("UPDATE requests SET meeting_time = now() - interval '1 second' WHERE id = ?", requestId);
+        Instant cancelledAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
         int donorStars = trustStarsOf(donorId);
         int receiverStars = trustStarsOf(receiverId);
-
-        // when: các việc nền chạy, gồm cả việc tự huỷ giao dịch kẹt
-        deadlineJobService.cancelStaleConfirmed(Instant.now());
-        deadlineJobService.openShippingOneLegStuck(Instant.now());
-
-        // then: sang DISPUTED với khiếu nại NO_SHOW, không tự huỷ và không tự trừ sao
-        assertThat(jdbc.queryForObject("SELECT status FROM requests WHERE id = ?", String.class, requestId))
-                .isEqualTo("DISPUTED");
-        assertThat(jdbc.queryForList(
-                        "SELECT item_id FROM reports WHERE request_id = ? AND reason = 'NO_SHOW'",
-                        Long.class,
-                        requestId))
-                .containsExactly(offeredId);
+        deadlineJobService.processExchangeShipping(cancelledAt);
+        deadlineJobService.processExchangeShipping(cancelledAt);
+        assertThat(requestStatus(requestId)).isEqualTo("CANCELLED");
+        assertThat(isItemActive(itemId)).isFalse();
+        assertThat(isItemActive(offeredId)).isFalse();
+        long reportId = jdbc.queryForObject(
+                "SELECT id FROM reports WHERE request_id = ? AND reason = 'NO_SHOW' AND exchange_shipping_timeout",
+                Long.class,
+                requestId);
+        assertThat(jdbc.queryForObject("SELECT target_user_id FROM reports WHERE id = ?", Long.class, reportId))
+                .isEqualTo(receiverId);
         assertThat(trustStarsOf(donorId)).isEqualTo(donorStars);
         assertThat(trustStarsOf(receiverId)).isEqualTo(receiverStars);
+
+        deadlineJobService.processExchangeShipping(
+                cancelledAt.plus(24, ChronoUnit.HOURS).minusSeconds(1));
+        assertThat(isItemActive(itemId)).isFalse();
+        deadlineJobService.processExchangeShipping(cancelledAt.plus(24, ChronoUnit.HOURS));
+        assertThat(isItemActive(itemId)).isTrue();
+        assertThat(isItemActive(offeredId)).isFalse();
+
+        jdbc.update("UPDATE reports SET response_due_at = now() - interval '1 hour' WHERE id = ?", reportId);
+        long adminId = insertUser("Admin");
+        String decision = upheld ? "UPHOLD" : "DISMISS";
+        mockMvc.perform(post("/api/v1/admin/reports/{id}/conclude", reportId)
+                        .header("Authorization", "Bearer " + jwtService.issue(adminId, true))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"" + decision + "\",\"deliberateFalseReport\":true}"))
+                .andExpect(status().isOk());
+        assertThat(requestStatus(requestId)).isEqualTo("CANCELLED");
+        assertThat(trustStarsOf(donorId)).isEqualTo(donorStars);
+        assertThat(trustStarsOf(receiverId)).isEqualTo(receiverStars - (upheld ? 1 : 0));
+        assertThat(isItemActive(offeredId)).isFalse();
+
+        deadlineJobService.processExchangeShipping(Instant.now().plus(25, ChronoUnit.HOURS));
+        assertThat(isItemActive(offeredId)).isEqualTo(!upheld);
+        assertThat(jdbc.queryForObject("SELECT hidden_by_admin FROM items WHERE id = ?", Boolean.class, offeredId))
+                .isEqualTo(upheld);
+    }
+
+    private String requestStatus(long requestId) {
+        return jdbc.queryForObject("SELECT status FROM requests WHERE id = ?", String.class, requestId);
+    }
+
+    private boolean isItemActive(long itemId) {
+        return Boolean.TRUE.equals(
+                jdbc.queryForObject("SELECT is_active FROM items WHERE id = ?", Boolean.class, itemId));
     }
 
     private int trustStarsOf(long userId) {
@@ -246,7 +283,7 @@ class RequestShippingIT extends IntegrationTest {
 
         // when: chạy mọi việc nền của Giao hàng, các câu truy vấn đều phải chạy được trên PostgreSQL
         deadlineJobService.remindShipping(Instant.now());
-        deadlineJobService.openShippingOneLegStuck(Instant.now());
+        deadlineJobService.processExchangeShipping(Instant.now());
         deadlineJobService.cancelStaleConfirmed(Instant.now());
         int received = deadlineJobService.autoReceiveShippingLegs(Instant.now());
 
@@ -400,7 +437,11 @@ class RequestShippingIT extends IntegrationTest {
     // ---------- helpers ----------
 
     private void propose(long requestId, long userId, String address) throws Exception {
-        Instant sendDate = Instant.now().plus(1, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        Instant sendDate = Instant.now()
+                .atZone(ZoneId.of("Asia/Ho_Chi_Minh"))
+                .plusDays(2)
+                .with(LocalTime.of(10, 0))
+                .toInstant();
         mockMvc.perform(post("/api/v1/requests/{id}/schedule", requestId)
                         .header("Authorization", token(userId))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -411,8 +452,23 @@ class RequestShippingIT extends IntegrationTest {
     }
 
     private void ship(long requestId, long userId) throws Exception {
-        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId).header("Authorization", token(userId)))
-                .andExpect(status().isOk());
+        Long offeredItemId =
+                jdbc.queryForObject("SELECT offered_item_id FROM requests WHERE id = ?", Long.class, requestId);
+        var shipment = post("/api/v1/requests/{id}/shipment", requestId).header("Authorization", token(userId));
+        if (offeredItemId != null) {
+            jdbc.update(
+                    "UPDATE requests SET meeting_time = now() + interval '10 minutes', "
+                            + "exchange_shipping_window_start = now() - interval '20 minutes' WHERE id = ?",
+                    requestId);
+            Long receiptId =
+                    jdbc.queryForObject("""
+                    INSERT INTO media_files (storage_key, mime_type, size_bytes, created_by)
+                    VALUES (?, 'image/jpeg', 4, ?) RETURNING id
+                    """, Long.class, "test-shipping-receipt-" + SEQ.incrementAndGet(), userId);
+            receiptIds.add(receiptId);
+            shipment.contentType(MediaType.APPLICATION_JSON).content("{\"mediaIds\":[" + receiptId + "]}");
+        }
+        mockMvc.perform(shipment).andExpect(status().isOk());
     }
 
     private int shipStatus(long requestId, long userId) throws Exception {

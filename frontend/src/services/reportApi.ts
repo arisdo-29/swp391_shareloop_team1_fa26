@@ -87,6 +87,7 @@ export interface AdminReportDetail {
   openTransactionPartnerName?: string | null;
   /** Lý do thuộc nhóm nghiêm trọng: chấp thuận sẽ huỷ giao dịch đang mở của bài. */
   seriousReason?: boolean;
+  exchangeShippingTimeout?: boolean;
 }
 export interface ReportEvidence {
   id: number;

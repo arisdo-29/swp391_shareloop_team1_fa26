@@ -26,6 +26,7 @@ import {
 import type { ApiError } from '../../services/http';
 import { formatDeadline } from '../../utils/request';
 import { adminRequestApi, type AdminRequestDetail } from '../../services/adminRequestApi';
+import { usePublicConfig } from '../../utils/usePublicConfig';
 import { adminItemApi, type AdminItemRow } from '../../services/adminItemApi';
 import { DisputeItemOutcomes } from '../../components/admin/DisputeItemOutcomes';
 import {
@@ -389,6 +390,7 @@ function ComplaintTarget({
 }
 
 export function AdminComplaints() {
+  const { exchange_shipping_reopen_hours: reopenHours } = usePublicConfig();
   const [status, setStatus] = useState<ReportStatus | ''>('');
   const [targetType, setTargetType] = useState<ReportTargetType | ''>('');
   const [page, setPage] = useState(0);
@@ -595,7 +597,7 @@ export function AdminComplaints() {
       await reportApi.conclude(detail.report.id, {
         decision,
         note: note.trim(),
-        deliberateFalseReport: decision === 'DISMISS' && deliberateFalse ? true : undefined,
+        deliberateFalseReport: decision === 'DISMISS' && deliberateFalse && !detail.exchangeShippingTimeout ? true : undefined,
         itemOutcomes:
           decision === 'UPHOLD' && requestDetail
             ? disputeItemRows(requestDetail).map((row) => ({
@@ -1212,7 +1214,14 @@ export function AdminComplaints() {
                           </option>
                         </Select>
                       ) : null}
-                      {decision === 'DISMISS' && !isRefusalReport(detail.report) ? (
+                      {detail.exchangeShippingTimeout ? (
+                        <Alert tone="warning">
+                          {decision === 'DISMISS'
+                            ? `Giao dịch đã hủy. Bài của người bị báo cáo sẽ tự mở lại sau ${reopenHours} giờ. Người này không bị trừ sao.`
+                            : 'Giao dịch đã hủy. Bài của bên vi phạm tiếp tục bị ẩn và hệ thống áp dụng mức phạt khi kết luận.'}
+                        </Alert>
+                      ) : null}
+                      {decision === 'DISMISS' && !detail.exchangeShippingTimeout && !isRefusalReport(detail.report) ? (
                         <label className="flex items-center gap-2 text-sm">
                           <input
                             type="checkbox"

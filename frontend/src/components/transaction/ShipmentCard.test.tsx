@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mediaApi } from '../../services/mediaApi';
@@ -162,14 +162,29 @@ describe('ShipmentCard Trao đổi', () => {
     expect(received.getByText(formatDeadline(leg2AutoReceiveAt))).toBeTruthy();
   });
 
-  it('cả hai bên có hai khối, chiều chưa gửi chỉ bên gửi có nút Tôi đã gửi hàng', () => {
+  it('cả hai bên có hai khối, chiều chưa gửi chỉ bên gửi có nút Đã gửi hàng', () => {
     renderCard(swapBase, true);
     expect(screen.getByText('Món bạn gửi')).toBeTruthy();
     expect(screen.getByText('Món bạn nhận')).toBeTruthy();
     const sendBlock = screen.getByTestId('shipment-leg-1');
-    expect(within(sendBlock).getByRole('button', { name: 'Tôi đã gửi hàng' })).toBeTruthy();
+    expect(within(sendBlock).getByRole('button', { name: 'Đã gửi hàng' })).toBeTruthy();
     const receiveBlock = screen.getByTestId('shipment-leg-2');
-    expect(within(receiveBlock).queryByRole('button', { name: 'Tôi đã gửi hàng' })).toBeNull();
+    expect(within(receiveBlock).queryByRole('button', { name: 'Đã gửi hàng' })).toBeNull();
+  });
+
+  it('mở và đóng nút gửi theo khung giờ kể cả khi đang mở trang', () => {
+    vi.useFakeTimers();
+    try {
+      renderCard({ ...swapBase, exchangeShippingWindowStart: hoursFromNow(0.5), meetingTime: hoursFromNow(1) }, true);
+      const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Đã gửi hàng' });
+      expect(button.disabled).toBe(true);
+      act(() => vi.advanceTimersByTime(30 * 60_000 + 25));
+      expect(button.disabled).toBe(false);
+      act(() => vi.advanceTimersByTime(30 * 60_000));
+      expect(button.disabled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('A đã nhận còn B chưa thì A thấy dòng đang chờ bên kia nhận hàng của họ', () => {
@@ -186,16 +201,19 @@ describe('ShipmentCard Trao đổi', () => {
     expect(screen.getByText('Bạn đã nhận, đang chờ Bình nhận hàng của họ.')).toBeTruthy();
   });
 
-  it('người gửi món đổi có thể xác nhận kèm ảnh biên nhận', async () => {
+  it('người gửi món đổi chỉ xác nhận được sau khi chọn ảnh biên nhận', async () => {
     const user = userEvent.setup();
     const updated: RequestResponse = { ...swapBase, status: 'AWAITING_HANDOVER', receiverShippedAt: hoursFromNow(0) };
     const markShipped = vi.spyOn(requestApi, 'markShipped').mockResolvedValue(updated);
     const upload = vi.spyOn(mediaApi, 'upload').mockResolvedValue({ mediaId: 42, url: '/api/v1/media/42' });
     const handlers = renderCard(swapBase, false);
     const photo = new File(['receipt'], 'bien-nhan.png', { type: 'image/png' });
-    await user.click(screen.getByRole('button', { name: 'Tôi đã gửi hàng' }));
-    const dialog = screen.getByRole('dialog', { name: 'Tôi đã gửi hàng' });
-    await user.upload(within(dialog).getByLabelText('Ảnh minh chứng (không bắt buộc)'), photo);
+    await user.click(screen.getByRole('button', { name: 'Đã gửi hàng' }));
+    const dialog = screen.getByRole('dialog', { name: 'Đã gửi hàng' });
+    const confirm = within(dialog).getByRole<HTMLButtonElement>('button', { name: 'Xác nhận đã gửi' });
+    expect(confirm.disabled).toBe(true);
+    await user.upload(within(dialog).getByLabelText('Ảnh biên nhận (bắt buộc)'), photo);
+    expect(confirm.disabled).toBe(false);
     await user.click(within(dialog).getByRole('button', { name: 'Xác nhận đã gửi' }));
 
     await waitFor(() => expect(handlers.onUpdated).toHaveBeenCalledWith(updated));

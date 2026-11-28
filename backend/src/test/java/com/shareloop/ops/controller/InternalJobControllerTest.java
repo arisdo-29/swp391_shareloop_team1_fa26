@@ -87,6 +87,20 @@ class InternalJobControllerTest {
     }
 
     @Test
+    void runExchangeShipping_requiresTokenAndRunsOnlyExchangeShipping() throws Exception {
+        String url = "/internal/jobs/exchange-shipping";
+        mockMvc.perform(post(url)).andExpect(status().isForbidden());
+        verifyNoInteractions(requestJob);
+
+        mockMvc.perform(post(url).header("X-Job-Token", VALID_TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.exchangeShippingJob").value("ok"));
+        verify(requestJob).runExchangeShipping();
+        verifyNoInteractions(
+                itemExpiryJob, pendingAccountCleanupJob, paymentExpiryJob, boostNotificationJob, mediaOrphanCleanupJob);
+    }
+
+    @Test
     @DisplayName("Đúng token trả 200, đủ 6 job được gọi và trả về ok")
     void runJobs_withValidToken_runsAllJobsSuccessfully() throws Exception {
         mockMvc.perform(post(URL).header("X-Job-Token", VALID_TOKEN))

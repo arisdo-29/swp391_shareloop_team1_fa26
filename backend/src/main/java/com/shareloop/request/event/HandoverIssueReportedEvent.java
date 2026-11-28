@@ -13,4 +13,15 @@ import java.util.List;
  * @param evidenceMediaIds id media minh chứng, có thể rỗng hoặc null
  */
 public record HandoverIssueReportedEvent(
-        long requestId, long reporterId, String note, List<Long> evidenceMediaIds, Long affectedItemId) {}
+        long requestId,
+        long reporterId,
+        String note,
+        List<Long> evidenceMediaIds,
+        Long affectedItemId,
+        boolean exchangeShippingTimeout) {
+
+    public HandoverIssueReportedEvent(
+            long requestId, long reporterId, String note, List<Long> evidenceMediaIds, Long affectedItemId) {
+        this(requestId, reporterId, note, evidenceMediaIds, affectedItemId, false);
+    }
+}

@@ -60,12 +60,7 @@ public class InternalJobController {
     @PostMapping("/run")
     public ResponseEntity<Map<String, String>> runJobs(
             @RequestHeader(value = "X-Job-Token", required = false) String jobToken) {
-        if (triggerToken == null || triggerToken.isBlank() || jobToken == null || jobToken.isBlank()) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-
-        if (!MessageDigest.isEqual(
-                triggerToken.getBytes(StandardCharsets.UTF_8), jobToken.getBytes(StandardCharsets.UTF_8))) {
+        if (!isAuthorized(jobToken)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
@@ -80,6 +75,25 @@ public class InternalJobController {
         results.put("mediaOrphanCleanupJob", executeJob(mediaOrphanCleanupJob::run, "mediaOrphanCleanupJob"));
 
         return ResponseEntity.ok(results);
+    }
+
+    @PostMapping("/exchange-shipping")
+    public ResponseEntity<Map<String, String>> runExchangeShipping(
+            @RequestHeader(value = "X-Job-Token", required = false) String jobToken) {
+        if (!isAuthorized(jobToken)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        return ResponseEntity.ok(
+                Map.of("exchangeShippingJob", executeJob(requestJob::runExchangeShipping, "exchangeShippingJob")));
+    }
+
+    private boolean isAuthorized(String jobToken) {
+        return triggerToken != null
+                && !triggerToken.isBlank()
+                && jobToken != null
+                && !jobToken.isBlank()
+                && MessageDigest.isEqual(
+                        triggerToken.getBytes(StandardCharsets.UTF_8), jobToken.getBytes(StandardCharsets.UTF_8));
     }
 
     // B24: job lỗi thì vẫn chạy các job sau, nhưng trả "error: <lý do>" để người gọi thấy ngay lỗi gì, không chỉ

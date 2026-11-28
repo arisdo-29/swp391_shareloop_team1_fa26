@@ -120,21 +120,6 @@ public class RequestDeadlineJobService {
     }
 
     /**
-     * Giao dịch Giao hàng kẹt một chiều: chiều kia đã nhận, chiều này chưa gửi quá hạn cộng số ngày chờ thì chuyển sang
-     * DISPUTED và mở báo cáo để Admin xử lý (GN-12).
-     *
-     * @return số giao dịch đã chuyển sang DISPUTED
-     */
-    public int openShippingOneLegStuck(Instant now) {
-        int staleDays = configService.getInt(ConfigKey.CONFIRMED_STALE_CANCEL_DAYS);
-        int sendDays = configService.getInt(ConfigKey.SHIPPING_SEND_DEADLINE_DAYS);
-        Instant cutoff = now.minus(staleDays + sendDays, ChronoUnit.DAYS);
-        return forEach(
-                (after, page) -> requestRepository.findShippingOneLegStuck(cutoff, after, page),
-                requestId -> requestService.openShippingOneLegStuck(requestId, now));
-    }
-
-    /**
      * Tự huỷ giao dịch Gặp trực tiếp đã chốt lịch mà quá giờ hẹn confirmed_stale_cancel_days ngày không ai bấm gì
      * (GN-12).
      *
@@ -162,6 +147,16 @@ public class RequestDeadlineJobService {
     public int remindStaleConfirmed(Instant now) {
         return forEachConfirmedPastMeeting(
                 now.minus(1, ChronoUnit.DAYS), requestId -> requestService.remindStaleConfirmed(requestId, now));
+    }
+
+    public int processExchangeShipping(Instant now) {
+        int windows = forEach(
+                (after, page) -> requestRepository.findExchangeShippingWindows(now, after, page),
+                requestId -> requestService.processExchangeShippingWindow(requestId, now));
+        return windows
+                + forEach(
+                        (after, page) -> requestRepository.findExchangeShippingItemsToReopen(now, after, page),
+                        requestId -> requestService.reopenExchangeShippingItems(requestId, now));
     }
 
     // Duyệt theo lô nhỏ các giao dịch do truy vấn trả về, mỗi giao dịch một transaction riêng.

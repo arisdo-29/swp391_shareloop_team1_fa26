@@ -12,6 +12,7 @@ import {
   minimumMeetingTimeValue,
   parseLocalMeetingTime,
   scheduleApiErrorMessage,
+  validateExchangeShippingMeeting,
   validateLocalMeetingTime,
   validateMeetingPlace,
 } from '../../utils/meetingSchedule';
@@ -150,15 +151,22 @@ function RescheduleDialog({
   const config = usePublicConfig();
   const [now] = useState(() => new Date());
   const isShipping = request.deliveryMethod === 'SHIPPING';
+  const isExchangeShipping = isShipping && Boolean(request.offeredItemId);
+  const parsed = parseLocalMeetingTime(meetingTime, isExchangeShipping);
   const timeError = meetingTime
-    ? validateLocalMeetingTime(meetingTime, now, config.meeting_max_days_ahead)
+    ? (isExchangeShipping && validateExchangeShippingMeeting(parsed, now, config)) ||
+      validateLocalMeetingTime(meetingTime, now, config.meeting_max_days_ahead, isExchangeShipping)
     : 'Vui lòng chọn thời gian mới.';
   // Địa điểm mới không bắt buộc, nhưng đã nhập thì phải hợp lệ.
   const placeError = meetingPlace.trim() ? validateMeetingPlace(meetingPlace) : null;
 
   const submit = async () => {
-    const parsed = parseLocalMeetingTime(meetingTime);
     if (submitting || timeError || placeError || !parsed) return;
+    const freshError = isExchangeShipping ? validateExchangeShippingMeeting(parsed, new Date(), config) : null;
+    if (freshError) {
+      setError(freshError);
+      return;
+    }
     setSubmitting(true);
     setError('');
     try {
@@ -185,11 +193,11 @@ function RescheduleDialog({
       </p>
       <div className="mt-4 space-y-3">
         <Field
-          label={isShipping ? 'Ngày gửi hàng dự kiến mới' : 'Thời gian mới'}
+          label={isExchangeShipping ? 'Giờ hẹn gửi hàng mới theo giờ Việt Nam' : isShipping ? 'Ngày gửi hàng dự kiến mới' : 'Thời gian mới'}
           type="datetime-local"
           value={meetingTime}
-          min={minimumMeetingTimeValue(now)}
-          max={maximumMeetingTimeValue(now, config.meeting_max_days_ahead)}
+          min={minimumMeetingTimeValue(now, isExchangeShipping)}
+          max={maximumMeetingTimeValue(now, config.meeting_max_days_ahead, isExchangeShipping)}
           hint={`Chỉ hẹn trong vòng ${config.meeting_max_days_ahead} ngày tới.`}
           error={meetingTime ? (timeError ?? undefined) : undefined}
           disabled={submitting}
