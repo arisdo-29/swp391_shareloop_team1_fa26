@@ -409,7 +409,7 @@ public enum ConfigKey {
             "Thời lượng khung xác nhận gửi hàng",
             "Áp dụng cho trao đổi qua giao hàng.",
             ValueType.INTEGER,
-            BigDecimal.valueOf(5),
+            BigDecimal.valueOf(1),
             BigDecimal.valueOf(120)),
     EXCHANGE_SHIPPING_LEAD_MINUTES(
             "exchange_shipping_lead_minutes",
@@ -418,7 +418,7 @@ public enum ConfigKey {
             "Thời gian chuẩn bị gửi hàng",
             "Áp dụng cho trao đổi qua giao hàng.",
             ValueType.INTEGER,
-            BigDecimal.valueOf(5),
+            BigDecimal.valueOf(1),
             BigDecimal.valueOf(1440)),
     EXCHANGE_SHIPPING_MORNING_START(
             "exchange_shipping_morning_start",
